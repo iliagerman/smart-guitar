@@ -1,0 +1,17 @@
+environment: "local"
+
+db:
+  url: null
+
+aws:
+  region: "us-east-1"
+  use_iam_role: false
+
+storage:
+  backend: "local"
+  base_path: "../local_bucket"
+
+youtube:
+  proxy: null
+  cookies_file: null
+  use_cookies_for_public_videos: false

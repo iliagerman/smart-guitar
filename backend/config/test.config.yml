@@ -1,0 +1,12 @@
+environment: "test"
+
+db:
+  url: "sqlite+aiosqlite:///test_guitar_player.db"
+
+aws:
+  region: "us-east-1"
+  use_iam_role: false
+
+storage:
+  backend: "local"
+  base_path: "../local_bucket_test"

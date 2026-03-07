@@ -1,0 +1,24 @@
+{
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "venvPath": "backend",
+      "venv": ".venv",
+      "extraPaths": [
+        "src"
+      ]
+    },
+    {
+      "root": "inference_demucs",
+      "extraPaths": [
+        "src"
+      ]
+    },
+    {
+      "root": "chords_generator",
+      "extraPaths": [
+        "src"
+      ]
+    }
+  ]
+}

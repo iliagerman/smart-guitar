@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Guitar — Separate stems. Extract chords. Play any song.</title>
+  <meta name="description" content="Upload any song and instantly separate it into vocals, guitar, bass, drums, and piano. See chords in real time. Practice your way." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+
+  <!-- Skip link -->
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <!-- ============================== -->
+  <!-- NAVIGATION                     -->
+  <!-- ============================== -->
+  <header class="site-nav" role="banner">
+    <nav class="nav-inner" aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#pricing" class="nav-link">Pricing</a></li>
+        <li><a href="https://app.smart-guitar.com/login" class="btn btn-ghost btn-nav">Log In</a></li>
+        <li><a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-nav">Sign Up Free</a></li>
+      </ul>
+
+      <button class="hamburger" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Mobile menu -->
+  <div id="mobile-menu" class="mobile-menu" role="dialog" aria-label="Mobile navigation">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://app.smart-guitar.com/login">Log In</a>
+    <a href="https://app.smart-guitar.com/register" class="fire-text">Sign Up Free</a>
+    <div class="mobile-menu-legal">
+      <a href="/terms.html">Terms</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/refund.html">Refunds</a>
+    </div>
+  </div>
+
+  <!-- ============================== -->
+  <!-- MAIN                           -->
+  <!-- ============================== -->
+  <main id="main">
+
+    <!-- ============================== -->
+    <!-- HERO                           -->
+    <!-- ============================== -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-bg" aria-hidden="true">
+        <video src="assets/guitar.mp4" autoplay muted loop playsinline></video>
+      </div>
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-overlay" aria-hidden="true"></div>
+
+
+      <div class="hero-content">
+        <h1 id="hero-heading" class="hero-headline animate-fade-in-up delay-1">
+          <span id="hero-typed" data-texts="SPLIT ANY SONG. PLAY YOUR PART.|ISOLATE THE GUITAR. LEARN THE RIFF.|MUTE THE VOCALS. SING ALONG.|SEE EVERY CHORD AS IT PLAYS.|SEPARATE BASS, DRUMS, PIANO.|PRACTICE ANY SONG. YOUR WAY."></span>
+        </h1>
+
+        <div class="hero-ctas animate-fade-in-up delay-3">
+          <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-lg">Get Started Free</a>
+          <a href="https://app.smart-guitar.com/login" class="btn btn-ghost btn-lg">Sign In</a>
+        </div>
+      </div>
+
+      <div class="scroll-indicator animate-bounce" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- FEATURES                       -->
+    <!-- ============================== -->
+    <section id="features" aria-labelledby="features-heading" style="background:var(--charcoal-900);">
+      <div class="container">
+        <div class="section-header reveal">
+          <h2 id="features-heading" class="fire-text">WHAT YOU CAN DO</h2>
+          <p>Everything you need to learn and practice any song.</p>
+        </div>
+
+        <div class="features-grid">
+          <!-- Card 1 -->
+          <div class="feature-card reveal reveal-delay-1">
+            <div class="feature-icon" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round">
+                <path d="M2 12h2l3-7 4 14 4-10 3 6h4"/>
+              </svg>
+            </div>
+            <h3>Separate Songs Into Stems</h3>
+            <p>Split any song into vocals, guitar, bass, drums, and piano. Play along with the singer, hear the guitar and join in, or replace the guitar entirely. You control every instrument.</p>
+            <div class="stem-badges">
+              <span class="stem-badge stem-badge--vocals">Vocals</span>
+              <span class="stem-badge stem-badge--guitar">Guitar</span>
+              <span class="stem-badge stem-badge--bass">Bass</span>
+              <span class="stem-badge stem-badge--drums">Drums</span>
+              <span class="stem-badge stem-badge--piano">Piano</span>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="feature-card reveal reveal-delay-2">
+            <div class="feature-icon" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <h3>Search and Play Any Song</h3>
+            <p>Find any song by title or artist. Yes, any song. Our catalog has no limits — search, pick, and start playing in seconds.</p>
+            <div class="mock-search" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <span>Search for any song...</span>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="feature-card reveal reveal-delay-3">
+            <div class="feature-icon" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+                <path d="M20 3v4"/><path d="M22 5h-4"/>
+              </svg>
+            </div>
+            <h3>Powered by AI</h3>
+            <p>Our AI engine separates stems, detects chords in real time, and syncs lyrics to the music. The best practice experience, powered by cutting-edge machine learning.</p>
+            <div class="stem-badges">
+              <span class="stem-badge stem-badge--vocals">Stem Separation</span>
+              <span class="stem-badge stem-badge--guitar">Chord Detection</span>
+              <span class="stem-badge stem-badge--bass">Lyrics Sync</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- HOW IT WORKS                   -->
+    <!-- ============================== -->
+    <section id="how-it-works" aria-labelledby="hiw-heading">
+      <div class="container">
+        <div class="section-header reveal">
+          <h2 id="hiw-heading" class="fire-text">HOW IT WORKS</h2>
+          <p>Three steps. That's it.</p>
+        </div>
+
+        <div class="timeline" role="list">
+          <div class="timeline-line" aria-hidden="true"></div>
+          <div class="timeline-line-fill" aria-hidden="true"></div>
+
+          <div class="timeline-step reveal" role="listitem">
+            <div class="timeline-badge" aria-hidden="true">1</div>
+            <h3>Search for Any Song</h3>
+            <p>Type in the artist or song title. Our catalog covers everything — pick any track you want to learn.</p>
+          </div>
+
+          <div class="timeline-step reveal" role="listitem">
+            <div class="timeline-badge" aria-hidden="true">2</div>
+            <h3>AI Processes Everything</h3>
+            <p>Our AI engine separates every instrument, detects all chords, and syncs lyrics — automatically.</p>
+          </div>
+
+          <div class="timeline-step reveal" role="listitem">
+            <div class="timeline-badge" aria-hidden="true">3</div>
+            <h3>Play Your Way</h3>
+            <p>Solo the guitar to learn a riff. Mute vocals and sing along. Follow chords in real time. You are in control.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SHOWCASE                       -->
+    <!-- ============================== -->
+    <section id="showcase" aria-labelledby="showcase-heading" style="background:var(--charcoal-900);">
+      <div class="container">
+        <div class="section-header reveal">
+          <h2 id="showcase-heading" class="fire-text">SEE IT IN ACTION</h2>
+          <p>A player built for musicians who want to learn by playing.</p>
+        </div>
+
+        <!-- Row 1: Stem Separation -->
+        <div class="value-row reveal">
+          <div class="value-text">
+            <h3 class="fire-text">Separate Every Instrument</h3>
+            <p>Split any song into five stems — vocals, guitar, bass, drums, and piano. Mute the guitar and play along. Solo the vocals to learn the melody. Every stem at your fingertips.</p>
+          </div>
+          <div class="value-visual">
+            <div class="screenshot-composite">
+              <div class="device-frame">
+                <div class="device-titlebar" aria-hidden="true">
+                  <div class="device-dot device-dot--red"></div>
+                  <div class="device-dot device-dot--yellow"></div>
+                  <div class="device-dot device-dot--green"></div>
+                </div>
+                <img src="assets/screenshots/desktop_song.png"
+                     alt="Smart Guitar player showing Knockin On Heavens Door with stem controls and chord progression"
+                     loading="lazy" width="1280" height="720" />
+              </div>
+              <div class="phone-frame">
+                <img src="assets/screenshots/mobile_song.png"
+                     alt="Smart Guitar mobile player view"
+                     loading="lazy" width="375" height="812" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Search Any Song -->
+        <div class="value-row reveal">
+          <div class="value-text">
+            <h3 class="fire-text">Search and Play Any Song</h3>
+            <p>Type any artist or title and get instant results. From Metallica to Bob Dylan, your entire catalog is one search away. Save favorites and build your practice library.</p>
+          </div>
+          <div class="value-visual">
+            <div class="screenshot-composite">
+              <div class="device-frame">
+                <div class="device-titlebar" aria-hidden="true">
+                  <div class="device-dot device-dot--red"></div>
+                  <div class="device-dot device-dot--yellow"></div>
+                  <div class="device-dot device-dot--green"></div>
+                </div>
+                <img src="assets/screenshots/desktop_search.png"
+                     alt="Smart Guitar search results for Metallica showing Enter Sandman, Nothing Else Matters, and more"
+                     loading="lazy" width="1280" height="720" />
+              </div>
+              <div class="phone-frame">
+                <img src="assets/screenshots/mobile_search.png"
+                     alt="Smart Guitar mobile search view"
+                     loading="lazy" width="375" height="812" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: AI-Powered -->
+        <div class="value-row reveal">
+          <div class="value-text">
+            <h3 class="fire-text">AI Does the Heavy Lifting</h3>
+            <p>Our AI engine detects chords, extracts lyrics, and separates stems automatically. See chord progressions synchronized to the music, with diagrams showing you exactly where to put your fingers.</p>
+          </div>
+          <div class="value-visual">
+            <div class="screenshot-composite">
+              <div class="device-frame">
+                <div class="device-titlebar" aria-hidden="true">
+                  <div class="device-dot device-dot--red"></div>
+                  <div class="device-dot device-dot--yellow"></div>
+                  <div class="device-dot device-dot--green"></div>
+                </div>
+                <img src="assets/screenshots/desktop_library.png"
+                     alt="Smart Guitar library showing song collection with album artwork"
+                     loading="lazy" width="1280" height="720" />
+              </div>
+              <div class="phone-frame">
+                <img src="assets/screenshots/mobile_library.png"
+                     alt="Smart Guitar mobile library view"
+                     loading="lazy" width="375" height="812" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- TAGLINE                        -->
+    <!-- ============================== -->
+    <section class="tagline-section" aria-labelledby="tagline-heading">
+      <div class="container">
+        <h2 id="tagline-heading" class="shimmer-text reveal" style="font-size:clamp(1.5rem,5vw,3.5rem);max-width:700px;margin:0 auto;">
+          STOP WATCHING TUTORIALS.<br/>START PLAYING.
+        </h2>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- PRICING                        -->
+    <!-- ============================== -->
+    <section id="pricing" aria-labelledby="pricing-heading" style="background:var(--charcoal-900);">
+      <div class="container">
+        <div class="section-header reveal">
+          <h2 id="pricing-heading" class="fire-text">SIMPLE PRICING</h2>
+          <p>Start with a free trial. No credit card required. Cancel anytime.</p>
+        </div>
+
+        <div class="pricing-grid">
+          <!-- Monthly Plan -->
+          <div class="pricing-card reveal reveal-delay-1">
+            <h3 class="pricing-plan-name">Monthly</h3>
+            <div class="pricing-amount">
+              <span class="pricing-currency">$</span>
+              <span class="pricing-value">6</span>
+              <span class="pricing-period">/month</span>
+            </div>
+            <ul class="pricing-features">
+              <li>Unlimited song searches</li>
+              <li>AI stem separation (vocals, guitar, bass, drums, piano)</li>
+              <li>Real-time chord detection</li>
+              <li>Synced lyrics display</li>
+              <li>Personal song library &amp; favorites</li>
+              <li>Works on desktop &amp; mobile</li>
+            </ul>
+            <a href="https://app.smart-guitar.com/register" class="btn btn-ghost btn-lg pricing-cta">Get Started</a>
+          </div>
+
+          <!-- Yearly Plan -->
+          <div class="pricing-card pricing-card--featured reveal reveal-delay-2">
+            <div class="pricing-badge">BEST VALUE</div>
+            <h3 class="pricing-plan-name">Yearly</h3>
+            <div class="pricing-amount">
+              <span class="pricing-currency">$</span>
+              <span class="pricing-value">50</span>
+              <span class="pricing-period">/year</span>
+            </div>
+            <p class="pricing-savings">That's ~$4.17/month — save 31%</p>
+            <ul class="pricing-features">
+              <li>Everything in Monthly</li>
+              <li>Unlimited song searches</li>
+              <li>AI stem separation (vocals, guitar, bass, drums, piano)</li>
+              <li>Real-time chord detection</li>
+              <li>Synced lyrics display</li>
+              <li>Personal song library &amp; favorites</li>
+            </ul>
+            <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-lg pricing-cta">Get Started</a>
+          </div>
+        </div>
+
+        <p class="pricing-note reveal">
+          All plans include a free trial period. Payments processed securely by <strong>Paddle</strong>.
+          See our <a href="/refund.html">Refund Policy</a> for details.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- FINAL CTA                      -->
+    <!-- ============================== -->
+    <section class="cta-section" aria-labelledby="cta-heading">
+      <div class="container">
+        <h2 id="cta-heading" class="fire-text reveal" style="margin-bottom:1rem;">READY TO PLAY?</h2>
+        <p class="reveal">Free to try. No credit card required.</p>
+        <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-lg animate-fire-pulse reveal">
+          Start Playing Now
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================== -->
+  <!-- FOOTER                          -->
+  <!-- ============================== -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">
+          <span class="fire-text">SMART GUITAR</span>
+        </div>
+
+        <ul class="footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="https://app.smart-guitar.com/login">Log In</a></li>
+        </ul>
+
+        <ul class="footer-links">
+          <li><a href="/terms.html">Terms of Service</a></li>
+          <li><a href="/privacy.html">Privacy Notice</a></li>
+          <li><a href="/refund.html">Refund Policy</a></li>
+        </ul>
+
+        <p>&copy; 2026 Smart Guitar. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/text-type.js"></script>
+  <script src="js/scroll-reveal.js"></script>
+  <script src="js/nav.js"></script>
+
+</body>
+</html>

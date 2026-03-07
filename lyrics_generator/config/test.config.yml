@@ -1,0 +1,9 @@
+environment: "test"
+
+whisper:
+  # Keep integration tests reasonably fast; `base` can take several minutes.
+  model_name: "tiny"
+
+storage:
+  backend: "local"
+  base_path: "../local_bucket_test"

@@ -1,0 +1,5 @@
+environment: "test"
+
+storage:
+  backend: "local"
+  base_path: "../local_bucket_test"

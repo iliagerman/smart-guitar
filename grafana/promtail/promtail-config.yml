@@ -1,0 +1,63 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://100.83.230.57:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: smart-guitar-local-dev
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          environment: local-dev
+          __path__: /var/log/smart-guitar/{backend,demucs,chords,lyrics,tabs,frontend}.log
+
+    pipeline_stages:
+      # Extract service name from filename (e.g., backend.log -> backend)
+      - match:
+          selector: '{environment="local-dev"}'
+          stages:
+            - regex:
+                source: filename
+                expression: '/var/log/smart-guitar/(?P<log_source>[a-z]+)\.log'
+            - labels:
+                log_source:
+
+      # Parse JSON log lines; non-JSON lines (uvicorn startup, Vite) pass through
+      - match:
+          selector: '{environment="local-dev"}'
+          stages:
+            - json:
+                expressions:
+                  timestamp: timestamp
+                  level: level
+                  logger: logger
+                  message: message
+                  service: service
+                  request_id: request_id
+                  user_id: user_id
+                  user_email: user_email
+            - labels:
+                level:
+                service:
+            - structured_metadata:
+                request_id:
+                user_id:
+                user_email:
+            - output:
+                source: message
+            - timestamp:
+                source: timestamp
+                format: "2006-01-02 15:04:05,000"
+
+      # Drop health-check lines to reduce noise
+      - match:
+          selector: '{environment="local-dev"}'
+          stages:
+            - drop:
+                expression: 'GET /health'

@@ -1,0 +1,14 @@
+app:
+  name: "chords_generator-api"
+  host: "0.0.0.0"
+  port: 8001
+  log_level: "info"
+
+chords:
+  output_format: "json"
+
+processing:
+  temp_dir: "/tmp/chords_generator"
+  cleanup_temp: true
+
+storage:

@@ -1,0 +1,51 @@
+environment: "prod"
+
+aws:
+  region: "us-east-1"
+  use_iam_role: true
+
+storage:
+  backend: "s3"
+  bucket: "smart-guitar-audio-prod"
+
+paddle:
+  enabled: false
+  product: pro_01kj5a1yv9tj1nz3tc65cnm90w
+  price_monthly: pri_01kj5a4d337z27f9v92qp8q5cy
+  price_yearly: pri_01kj5a7ddnc7jpthh0q5jqnanf
+  environment: production
+  client_token: live_945fc8aaaaae679db86729f89d9
+
+allpay:
+  enabled: true
+  test_mode: false
+  success_url: "https://app.smart-guitar.com/subscription/success"
+  webhook_url: "https://api.smart-guitar.com/api/v1/webhooks/payment"
+
+telegram:
+  enabled: true
+  events_chat_id: "-1003733754087"
+  errors_chat_id: "-1003706403829"
+  feedback_chat_id: "-1003510144145"
+
+cors:
+  allowed_origins:
+    - "https://app.smart-guitar.com"
+
+services:
+  inference_demucs: "http://splitter.smart-guitar.com"
+  chords_generator: "http://chords.smart-guitar.com"
+  lyrics_generator: "http://lyrics.smart-guitar.com"
+  tabs_generator: "http://tabs.smart-guitar.com"
+
+youtube:
+  # Fresh account cookies can reduce or even remove usable public-video formats.
+  # Default to auth-only cookies: only retry with cookies when YouTube explicitly
+  # requires authentication.
+  use_cookies_for_public_videos: false
+  # Disabled PO-token: the mweb player client it forces produces stream URLs
+  # that get 403'd even through the residential proxy. Proxy alone works fine
+  # (same as local).
+  po_token_provider_enabled: false
+  po_token_provider_base_url: "http://127.0.0.1:4416"
+  youtube_download_queue_url: "https://sqs.us-east-1.amazonaws.com/863449716025/smart-guitar-youtube-download"

@@ -1,0 +1,6 @@
+environment       = "prod"
+aws_region        = "us-east-1"
+project_name      = "smart-guitar"
+domain_name       = "smart-guitar.com"
+hosted_zone_id    = "Z0456425XR8EGCPLH7K7"
+db_instance_class = "db.t4g.micro"

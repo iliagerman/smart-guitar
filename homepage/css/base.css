@@ -1,0 +1,107 @@
+/* ===== Reset & Base Typography ===== */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--smoke-300);
+  background-color: var(--charcoal-950);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Skip link --- */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--fire-500);
+  color: #fff;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  z-index: 1000;
+  transition: top var(--transition-fast);
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4 {
+  font-family: "Bebas Neue", cursive;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  color: var(--smoke-100);
+}
+
+h1 { font-size: clamp(2.5rem, 8vw, 6rem); }
+h2 { font-size: clamp(1.75rem, 5vw, 3.5rem); }
+h3 { font-size: clamp(1.25rem, 3vw, 1.75rem); }
+
+p {
+  max-width: 65ch;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Fire gradient text utility --- */
+.fire-text {
+  background: var(--gradient-fire-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Selection --- */
+::selection {
+  background: var(--fire-500);
+  color: #fff;
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--charcoal-900);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--charcoal-600);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fire-700);
+}
+
+/* --- Focus --- */
+:focus-visible {
+  outline: 2px solid var(--fire-500);
+  outline-offset: 2px;
+}
+
+/* --- Fonts (Google Fonts) loaded in HTML --- */

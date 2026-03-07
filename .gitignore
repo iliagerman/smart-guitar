@@ -1,0 +1,22 @@
+local_bucket
+local_bucket_test
+.venv
+*.secrets.yml
+test_guitar_player.db
+__pycache__
+.pytest_cache
+node_modules
+infra-outputs.json
+client_secret_2_396474978369-2ierj4pmhvt44kjafos58il579jp65lv.apps.googleusercontent.com.json
+.DS_Store
+logs/*.log
+unrecoverable_songs.log
+failures.log
+
+# Local secrets (never commit)
+secrets.yml
+youtube-cookies.txt
+*.youtube-cookies.txt
+# Local assistant / agent settings (never commit)
+.claude/
+local_bucket copy

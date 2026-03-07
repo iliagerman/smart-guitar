@@ -1,0 +1,15 @@
+app:
+  name: "inference-demucs-api"
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "info"
+
+demucs:
+  model_name: "htdemucs_6s"
+
+processing:
+  temp_dir: "/tmp/inference_demucs"
+  cleanup_temp: true
+
+storage:
+  output_prefix: ""

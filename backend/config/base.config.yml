@@ -1,0 +1,46 @@
+app:
+  name: "guitar-player-api"
+  host: "0.0.0.0"
+  port: 8002
+  log_level: "info"
+  api_prefix: "/api/v1"
+
+presigned_url:
+  expiry_seconds: 900
+
+llm_models:
+  name_parsing: us.amazon.nova-lite-v1:0
+
+paddle:
+  enabled: false
+  product: pro_01kj5amqp0n978abaa33f3bk79
+  price_monthly: pri_01kj5apaq0fecda0f9d8qxcg0v
+  price_yearly: pri_01kj5apza0g11qs7hjrgfv14sh
+  environment: sandbox
+  client_token: test_67e263350aa75988d285d323294
+
+allpay:
+  test_mode: true
+  price_monthly: 600
+  price_monthly_display: "6.00"
+  price_yearly: 5000
+  price_yearly_display: "50.00"
+  currency: USD
+  success_url: "http://localhost:5173/subscription/success"
+  webhook_url: "http://localhost:8002/api/v1/webhooks/payment"
+
+telegram:
+  enabled: false
+
+services:
+  inference_demucs: "http://localhost:8000"
+  chords_generator: "http://localhost:8001"
+  lyrics_generator: "http://localhost:8003"
+  tabs_generator: "http://localhost:8004"
+
+
+youtube:
+  max_duration_seconds: 400
+
+cognito:
+  region: "us-east-1"

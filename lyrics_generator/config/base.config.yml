@@ -1,0 +1,41 @@
+app:
+  name: "lyrics_generator-api"
+  host: "0.0.0.0"
+  port: 8003
+  log_level: "info"
+
+whisper:
+  # "large-v3" gives the best word-level timestamp accuracy for music.
+  model_name: "large-v3"
+  # Most of the demo content is English; forcing language usually improves recall.
+  # language: "en"
+
+  # Quality knobs — beam_size=5 explores multiple decoding paths instead of
+  # greedy (1), significantly reducing word errors at ~3-5x slower inference.
+  beam_size: 5
+  patience: 2.0
+
+  # Keep decoding deterministic by default.
+  temperature: 0.0
+
+  # Use previous segment text as context for the next segment, improving
+  # coherence across repeated verses/choruses in songs.
+  condition_on_previous_text: true
+
+  # Prompting: keep it short and focused on proper nouns.
+  # Template supports {title} and {artist}. Backend can pass these per-request.
+  initial_prompt: "Proper nouns (song/artist): {title}; {artist}."
+  carry_initial_prompt: false
+
+  # Leave silence/hallucination heuristics at safer defaults for vocals stems.
+  # compression_ratio_threshold lowered from 2.4 to 1.8 to more aggressively
+  # filter hallucinated repetitive segments (e.g. "oh oh oh oh oh...").
+  no_speech_threshold: 0.6
+  logprob_threshold: -1.0
+  compression_ratio_threshold: 1.8
+
+processing:
+  temp_dir: "/tmp/lyrics_generator"
+  cleanup_temp: true
+
+storage:

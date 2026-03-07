@@ -1,0 +1,8 @@
+environment: "local"
+
+storage:
+  backend: "local"
+  # NOTE: lyrics_generator/ is a sibling of local_bucket/ in the repo.
+  # The backend passes storage keys like "bob_dylan/.../vocals.mp3".
+  # So local storage must point at the repo root bucket, not lyrics_generator/local_bucket.
+  base_path: "../local_bucket"

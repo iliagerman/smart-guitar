@@ -1,0 +1,77 @@
+/* ===== Smart Guitar — Fire Theme Design Tokens ===== */
+/* Mirrored from frontend/src/index.css */
+
+:root {
+  /* Fire (orange) */
+  --fire-50: #fff7ed;
+  --fire-100: #ffedd5;
+  --fire-200: #fed7aa;
+  --fire-300: #fdba74;
+  --fire-400: #fb923c;
+  --fire-500: #f97316;
+  --fire-600: #ea580c;
+  --fire-700: #c2410c;
+  --fire-800: #9a3412;
+  --fire-900: #7c2d12;
+  --fire-950: #431407;
+
+  /* Ember (red) */
+  --ember-50: #fef2f2;
+  --ember-100: #fee2e2;
+  --ember-400: #f87171;
+  --ember-500: #ef4444;
+  --ember-600: #dc2626;
+  --ember-700: #b91c1c;
+  --ember-900: #7f1d1d;
+  --ember-950: #450a0a;
+
+  /* Flame (yellow) */
+  --flame-300: #fde047;
+  --flame-400: #facc15;
+  --flame-500: #eab308;
+  --flame-600: #ca8a04;
+  --flame-800: #854d0e;
+  --flame-900: #713f12;
+
+  /* Charcoal (dark bg) */
+  --charcoal-600: #383838;
+  --charcoal-700: #282828;
+  --charcoal-800: #1a1a1a;
+  --charcoal-900: #121212;
+  --charcoal-950: #0a0a0a;
+
+  /* Smoke (text) */
+  --smoke-100: #f5f5f4;
+  --smoke-300: #d6d3d1;
+  --smoke-400: #a8a29e;
+  --smoke-500: #78716c;
+  --smoke-600: #57534e;
+
+  /* Gradients */
+  --gradient-fire: linear-gradient(135deg, var(--flame-400), var(--fire-500), var(--ember-500));
+  --gradient-fire-text: linear-gradient(90deg, var(--flame-400), var(--fire-500), var(--ember-500));
+  --gradient-fire-vertical: linear-gradient(180deg, var(--fire-500), var(--ember-600));
+  --gradient-dark-overlay: linear-gradient(180deg, rgba(10,10,10,0.7) 0%, rgba(18,18,18,0.85) 100%);
+
+  /* Spacing */
+  --section-pad-y: 5rem;
+  --section-pad-x: 1.5rem;
+  --container-max: 1200px;
+
+  /* Radii */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 300ms ease;
+  --transition-slow: 500ms ease;
+
+  /* Shadows */
+  --glow-fire: 0 0 20px rgba(249, 115, 22, 0.4);
+  --glow-fire-strong: 0 0 40px rgba(249, 115, 22, 0.6);
+  --glow-ember: 0 0 20px rgba(239, 68, 68, 0.3);
+}

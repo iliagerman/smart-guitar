@@ -1,0 +1,27 @@
+FROM python:3.13-slim
+
+# Orchestrator mostly does I/O + HTTP calls, but we keep ffmpeg available for any
+# incidental audio operations (and for parity with backend image).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY config/ ./config/
+COPY src/ ./src/
+
+ENV APP_ENV=prod
+ENV HOME=/tmp
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+
+# Lambda container entrypoint
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["guitar_player.lambdas.job_orchestrator.handler"]

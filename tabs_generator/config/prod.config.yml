@@ -1,0 +1,9 @@
+environment: "prod"
+
+aws:
+  region: "us-east-1"
+  use_iam_role: true
+
+storage:
+  backend: "s3"
+  bucket: "smart-guitar-audio-prod"

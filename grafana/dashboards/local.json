@@ -1,0 +1,361 @@
+{
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "smart-guitar-loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "level"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "smart-guitar-loki"
+          },
+          "expr": "{environment=\"local-dev\", service=~\"${service:pipe}\", level=~\"${log_level:pipe}\"} |= `${search}`",
+          "maxLines": 500,
+          "refId": "A"
+        }
+      ],
+      "title": "Log Stream",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "kvp"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "id": true,
+              "tsNs": true,
+              "labels": true,
+              "environment": true,
+              "log_source": true,
+              "label_type": true,
+              "filename": true
+            },
+            "renameByName": {
+              "Line": "msg",
+              "request_id": "rid",
+              "user_id": "uid"
+            },
+            "indexByName": {
+              "Time": 0,
+              "service": 1,
+              "level": 2,
+              "rid": 3,
+              "uid": 4,
+              "msg": 5
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "smart-guitar-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "smart-guitar-loki"
+          },
+          "expr": "sum(count_over_time({environment=\"local-dev\", service=~\"${service:pipe}\", level=\"ERROR\"} [5m]))",
+          "legendFormat": "errors",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Count Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "smart-guitar-loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 3,
+      "options": {
+        "barWidth": 0.8,
+        "orientation": "horizontal",
+        "showValue": "always"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "smart-guitar-loki"
+          },
+          "expr": "sum by (service) (count_over_time({environment=\"local-dev\", service=~\"${service:pipe}\"} [$__range]))",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Log Volume by Service",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "local-dev"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "backend",
+            "value": "backend"
+          },
+          {
+            "selected": false,
+            "text": "demucs",
+            "value": "demucs"
+          },
+          {
+            "selected": false,
+            "text": "chords",
+            "value": "chords"
+          },
+          {
+            "selected": false,
+            "text": "lyrics",
+            "value": "lyrics"
+          },
+          {
+            "selected": false,
+            "text": "tabs",
+            "value": "tabs"
+          },
+          {
+            "selected": false,
+            "text": "frontend",
+            "value": "frontend"
+          }
+        ],
+        "query": "backend,demucs,chords,lyrics,tabs,frontend",
+        "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Log Level",
+        "multi": true,
+        "name": "log_level",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "DEBUG",
+            "value": "DEBUG"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
+          },
+          {
+            "selected": false,
+            "text": "WARNING",
+            "value": "WARNING"
+          },
+          {
+            "selected": false,
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "CRITICAL",
+            "value": "CRITICAL"
+          }
+        ],
+        "query": "DEBUG,INFO,WARNING,ERROR,CRITICAL",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "value": ""
+        },
+        "label": "Search",
+        "name": "search",
+        "options": [],
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "value": ""
+        },
+        "label": "Request ID",
+        "name": "request_id",
+        "options": [],
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Smart Guitar \u2013 Local Dev",
+  "uid": "smart-guitar-local",
+  "version": 1
+}

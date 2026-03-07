@@ -1,0 +1,5 @@
+environment: "dev"
+
+storage:
+  backend: "local"
+  base_path: "../local_bucket"

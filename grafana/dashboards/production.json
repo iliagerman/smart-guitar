@@ -1,0 +1,553 @@
+{
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "smart-guitar-cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lvl"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "svc"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "@_skip"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "@ptr"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "smart-guitar-cloudwatch"
+          },
+          "expression": "parse @log '*/smart-guitar-*' as @_skip, svc\n| filter @log like /${log_group:pipe}/\n| filter ispresent(level)\n| filter level like /${log_level:pipe}/\n| filter @message like /(?i)${search}/\n| filter coalesce(request_id, '') like /${request_id}/\n| fields @timestamp, coalesce(request_id, '-') as rid, coalesce(user_id, '-') as uid, level as lvl, coalesce(message, @message) as msg\n| sort @timestamp desc\n| limit 500",
+          "id": "",
+          "logGroups": [
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/ecs/smart-guitar-backend-api:*",
+              "name": "/ecs/smart-guitar-backend-api"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-job-orchestrator:*",
+              "name": "/aws/lambda/smart-guitar-job-orchestrator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-vocals-guitar-stitch:*",
+              "name": "/aws/lambda/smart-guitar-vocals-guitar-stitch"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-stale-job-sweeper:*",
+              "name": "/aws/lambda/smart-guitar-stale-job-sweeper"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-chords-generator:*",
+              "name": "/aws/lambda/smart-guitar-chords-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-demucs:*",
+              "name": "/aws/lambda/smart-guitar-demucs"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-lyrics-generator:*",
+              "name": "/aws/lambda/smart-guitar-lyrics-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-tabs-generator:*",
+              "name": "/aws/lambda/smart-guitar-tabs-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-unconfirmed-user-cleanup:*",
+              "name": "/aws/lambda/smart-guitar-unconfirmed-user-cleanup"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/homeserver/smart-guitar-youtube-downloader:*",
+              "name": "/homeserver/smart-guitar-youtube-downloader"
+            }
+          ],
+          "queryMode": "Logs",
+          "refId": "A",
+          "region": "us-east-1",
+          "statsGroups": []
+        }
+      ],
+      "title": "Log Stream",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "@ptr": true,
+              "Value": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "svc": 1,
+              "lvl": 2,
+              "rid": 3,
+              "uid": 4,
+              "msg": 5
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "smart-guitar-cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "smart-guitar-cloudwatch"
+          },
+          "expression": "parse @log '*/smart-guitar-*' as @_skip, svc\n| filter @log like /${log_group:pipe}/\n| filter ispresent(level)\n| filter level = 'ERROR' or @message like /ERROR|Error|FAILED|Traceback/\n| stats count(*) as errors by bin(5m)",
+          "id": "",
+          "logGroups": [
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/ecs/smart-guitar-backend-api:*",
+              "name": "/ecs/smart-guitar-backend-api"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-job-orchestrator:*",
+              "name": "/aws/lambda/smart-guitar-job-orchestrator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-vocals-guitar-stitch:*",
+              "name": "/aws/lambda/smart-guitar-vocals-guitar-stitch"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-stale-job-sweeper:*",
+              "name": "/aws/lambda/smart-guitar-stale-job-sweeper"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-chords-generator:*",
+              "name": "/aws/lambda/smart-guitar-chords-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-demucs:*",
+              "name": "/aws/lambda/smart-guitar-demucs"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-lyrics-generator:*",
+              "name": "/aws/lambda/smart-guitar-lyrics-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-tabs-generator:*",
+              "name": "/aws/lambda/smart-guitar-tabs-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-unconfirmed-user-cleanup:*",
+              "name": "/aws/lambda/smart-guitar-unconfirmed-user-cleanup"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/homeserver/smart-guitar-youtube-downloader:*",
+              "name": "/homeserver/smart-guitar-youtube-downloader"
+            }
+          ],
+          "queryMode": "Logs",
+          "refId": "A",
+          "region": "us-east-1",
+          "statsGroups": []
+        }
+      ],
+      "title": "Error Count Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "smart-guitar-cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 3,
+      "options": {
+        "barWidth": 0.8,
+        "orientation": "horizontal",
+        "showValue": "always"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "smart-guitar-cloudwatch"
+          },
+          "expression": "parse @log '*/smart-guitar-*' as @_skip, svc\n| filter @log like /${log_group:pipe}/\n| filter ispresent(level)\n| stats count(*) as log_count by svc\n| sort log_count desc",
+          "id": "",
+          "logGroups": [
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/ecs/smart-guitar-backend-api:*",
+              "name": "/ecs/smart-guitar-backend-api"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-job-orchestrator:*",
+              "name": "/aws/lambda/smart-guitar-job-orchestrator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-vocals-guitar-stitch:*",
+              "name": "/aws/lambda/smart-guitar-vocals-guitar-stitch"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-stale-job-sweeper:*",
+              "name": "/aws/lambda/smart-guitar-stale-job-sweeper"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-chords-generator:*",
+              "name": "/aws/lambda/smart-guitar-chords-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-demucs:*",
+              "name": "/aws/lambda/smart-guitar-demucs"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-lyrics-generator:*",
+              "name": "/aws/lambda/smart-guitar-lyrics-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-tabs-generator:*",
+              "name": "/aws/lambda/smart-guitar-tabs-generator"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/aws/lambda/smart-guitar-unconfirmed-user-cleanup:*",
+              "name": "/aws/lambda/smart-guitar-unconfirmed-user-cleanup"
+            },
+            {
+              "accountId": "863449716025",
+              "arn": "arn:aws:logs:us-east-1:863449716025:log-group:/homeserver/smart-guitar-youtube-downloader:*",
+              "name": "/homeserver/smart-guitar-youtube-downloader"
+            }
+          ],
+          "queryMode": "Logs",
+          "refId": "A",
+          "region": "us-east-1",
+          "statsGroups": []
+        }
+      ],
+      "title": "Log Volume by Service",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "production"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "log_group",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "backend-api",
+            "value": "backend-api"
+          },
+          {
+            "selected": false,
+            "text": "job-orchestrator",
+            "value": "job-orchestrator"
+          },
+          {
+            "selected": false,
+            "text": "vocals-guitar-stitch",
+            "value": "vocals-guitar-stitch"
+          },
+          {
+            "selected": false,
+            "text": "stale-job-sweeper",
+            "value": "stale-job-sweeper"
+          },
+          {
+            "selected": false,
+            "text": "chords-generator",
+            "value": "chords-generator"
+          },
+          {
+            "selected": false,
+            "text": "demucs",
+            "value": "demucs"
+          },
+          {
+            "selected": false,
+            "text": "lyrics-generator",
+            "value": "lyrics-generator"
+          },
+          {
+            "selected": false,
+            "text": "tabs-generator",
+            "value": "tabs-generator"
+          },
+          {
+            "selected": false,
+            "text": "unconfirmed-user-cleanup",
+            "value": "unconfirmed-user-cleanup"
+          },
+          {
+            "selected": false,
+            "text": "youtube-downloader",
+            "value": "youtube-downloader"
+          }
+        ],
+        "query": "backend-api,job-orchestrator,vocals-guitar-stitch,stale-job-sweeper,chords-generator,demucs,lyrics-generator,tabs-generator,unconfirmed-user-cleanup,youtube-downloader",
+        "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Log Level",
+        "multi": true,
+        "name": "log_level",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "DEBUG",
+            "value": "DEBUG"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
+          },
+          {
+            "selected": false,
+            "text": "WARNING",
+            "value": "WARNING"
+          },
+          {
+            "selected": false,
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "CRITICAL",
+            "value": "CRITICAL"
+          }
+        ],
+        "query": "DEBUG,INFO,WARNING,ERROR,CRITICAL",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "value": ""
+        },
+        "label": "Search",
+        "name": "search",
+        "options": [],
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "value": ""
+        },
+        "label": "Request ID",
+        "name": "request_id",
+        "options": [],
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Smart Guitar \u2013 Production",
+  "uid": "smart-guitar-prod",
+  "version": 15
+}
