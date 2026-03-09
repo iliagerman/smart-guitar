@@ -38,6 +38,9 @@ export function ConfirmEmailForm() {
       <p className="text-smoke-300 text-sm text-center">
         Enter the verification code sent to <span className="text-flame-400">{email}</span>
       </p>
+      <p className="text-smoke-500 text-xs text-center">
+        Don't see it? Check your spam or junk folder.
+      </p>
       <input
         id="confirm-code"
         name="code"

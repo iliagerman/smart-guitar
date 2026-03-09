@@ -966,6 +966,7 @@ async def _transcribe_lyrics_only(
             storage.resolve_service_path(vocals_key),
             title=song_title,
             artist=song_artist,
+            language=settings.openai.transcription_language,
             openai_api_key=settings.openai.api_key,
             openai_model=settings.openai.transcription_model,
             fast_only=quick_only,
@@ -1685,6 +1686,7 @@ async def _process_job(job_id: uuid.UUID) -> None:
                 storage.resolve_service_path(vocals_stem_key),
                 title=song_title,
                 artist=song_artist,
+                language=settings.openai.transcription_language,
                 openai_api_key=settings.openai.api_key,
                 openai_model=settings.openai.transcription_model,
             )

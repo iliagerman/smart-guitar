@@ -7,10 +7,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import require_active_subscription
+from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import (
+    get_db,
     get_job_service,
     get_processing_service,
     get_song_service,
@@ -174,10 +177,16 @@ async def submit_feedback(
     song_id: uuid.UUID,
     body: SongFeedbackRequest,
     user: CurrentUser = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_db),
     song_service: SongService = Depends(get_song_service),
     telegram: TelegramService = Depends(get_telegram_service),
 ) -> Response:
     """Submit thumbs-up/down feedback for a song. Fire-and-forget to Telegram."""
+    email = user.email
+    if not email:
+        db_user = await UserDAO(session).get_by_cognito_sub(user.sub)
+        if db_user:
+            email = db_user.email
     song = await song_service.get_song(song_id)
     emoji = "\U0001f44d" if body.rating == FeedbackRating.thumbs_up else "\U0001f44e"
     title = song.title or song.song_name
@@ -185,7 +194,7 @@ async def submit_feedback(
     lines = [
         f"{emoji} <b>Song Feedback</b>",
         f"\U0001f3b5 <b>{title}</b> by {artist}",
-        f"\U0001f464 {user.email or user.username or 'anonymous'}",
+        f"\U0001f464 {email or user.username or 'anonymous'}",
     ]
     if body.comment:
         lines.append(f"\U0001f4ac {body.comment}")

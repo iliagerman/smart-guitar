@@ -94,7 +94,7 @@ class OpenAIConfig(BaseModel):
     # Default transcription model. "whisper-1" supports word timestamps via verbose_json.
     transcription_model: str = "whisper-1"
     # If you know the language, setting it improves accuracy.
-    transcription_language: Optional[str] = "en"
+    transcription_language: Optional[str] = None
 
 
 class YoutubeConfig(BaseModel):

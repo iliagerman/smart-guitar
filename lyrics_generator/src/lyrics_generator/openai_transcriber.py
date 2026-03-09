@@ -82,7 +82,7 @@ async def transcribe_openai(
     *,
     api_key: str,
     model: str = "whisper-1",
-    language: str | None = "en",
+    language: str | None = None,
     title: str | None = None,
     artist: str | None = None,
 ) -> list[SegmentInfo]:
