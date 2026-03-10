@@ -38,9 +38,14 @@ export function ConfirmEmailForm() {
       <p className="text-smoke-300 text-sm text-center">
         Enter the verification code sent to <span className="text-flame-400">{email}</span>
       </p>
-      <p className="text-smoke-500 text-xs text-center">
-        Don't see it? Check your spam or junk folder.
-      </p>
+      <div className="bg-flame-400/10 border border-flame-400/30 rounded-lg px-4 py-3 text-center">
+        <p className="text-flame-300 text-sm font-semibold">
+          Can't find the email? Please check your Spam / Junk folder!
+        </p>
+        <p className="text-smoke-400 text-xs mt-1">
+          Verification emails often end up there.
+        </p>
+      </div>
       <input
         id="confirm-code"
         name="code"

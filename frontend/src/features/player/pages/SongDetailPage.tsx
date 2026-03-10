@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Heart, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
@@ -30,6 +30,7 @@ import { useToggleFavorite } from '@/features/library/hooks/use-toggle-favorite'
 import { useFavorites } from '@/features/library/hooks/use-favorites'
 import { useJobWatcherStore } from '@/stores/job-watcher.store'
 import { env } from '@/config/env'
+import { songsApi } from '@/api/songs.api'
 import { cn } from '@/lib/cn'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { transposeChordLabel } from '@/lib/chord-utils'
@@ -76,6 +77,7 @@ function getAudioUrl(songId: string, stem: StemName, detail: { audio_url: string
 export function SongDetailPage() {
   const { songId } = useParams<{ songId: string }>()
   const { loadTrack, togglePlay, seek } = useAudioPlayer()
+  const hasRecordedPlayRef = useRef(false)
   const currentStem = usePlaybackStore((s) => s.currentStem)
   const setStem = usePlaybackStore((s) => s.setStem)
   const setCurrentSong = usePlaybackStore((s) => s.setCurrentSong)
@@ -104,6 +106,7 @@ export function SongDetailPage() {
 
   useEffect(() => {
     if (!songId) return
+    hasRecordedPlayRef.current = false
     setCurrentSong(songId)
     // Default the track selector to vocals when entering a song detail page.
     // This runs on song changes only and won't interfere with subsequent user selections.
@@ -143,6 +146,16 @@ export function SongDetailPage() {
     },
     [setStem]
   )
+
+  const handleTogglePlay = useCallback(() => {
+    if (songId && !isPlaying && !hasRecordedPlayRef.current) {
+      hasRecordedPlayRef.current = true
+      void songsApi.recordPlay(songId).catch(() => {
+        hasRecordedPlayRef.current = false
+      })
+    }
+    togglePlay()
+  }, [isPlaying, songId, togglePlay])
 
   const handleToggleFavorite = () => {
     if (!songId) return
@@ -337,7 +350,7 @@ export function SongDetailPage() {
                 <SkipBack size={22} />
               </button>
               <button
-                onClick={togglePlay}
+                onClick={handleTogglePlay}
                 className={cn(
                   'w-12 h-12 rounded-full bg-flame-400 flex items-center justify-center text-charcoal-950 hover:bg-flame-500 transition-all',
                   isPlaying ? 'animate-flame-pulse' : '',
@@ -372,7 +385,7 @@ export function SongDetailPage() {
               </div>
             )}
             <TransportControls
-              onTogglePlay={togglePlay}
+              onTogglePlay={handleTogglePlay}
               onSeek={seek}
               selectors={
                 <>
@@ -400,6 +413,14 @@ export function SongDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Accurate lyrics generating banner */}
+      {isAccurateLyricsGenerating && (
+        <div className="relative z-20 bg-flame-400/10 border-b border-flame-400/20 px-4 py-2 flex items-center justify-center gap-2 text-sm text-flame-300">
+          <div className="h-3 w-3 rounded-full border-2 border-flame-400/40 border-t-flame-400 animate-spin" />
+          <span>Generating accurate lyrics — using quick lyrics in the meantime</span>
+        </div>
+      )}
 
       {/* Content — fills remaining space */}
       <div className="relative z-10 flex-1 min-h-0 flex flex-col">

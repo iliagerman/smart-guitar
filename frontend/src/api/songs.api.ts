@@ -32,6 +32,9 @@ export const songsApi = {
   detail: (songId: string) =>
     api.get<SongDetail>(`/api/v1/songs/${songId}`).then((r) => r.data),
 
+  recordPlay: (songId: string) =>
+    api.post(`/api/v1/songs/${songId}/play`).then((r) => r.data),
+
   submitFeedback: (songId: string, rating: 'thumbs_up' | 'thumbs_down', comment?: string) =>
     api.post(`/api/v1/songs/${songId}/feedback`, { rating, comment }),
 }

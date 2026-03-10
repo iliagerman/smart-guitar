@@ -61,7 +61,7 @@ class Song(UUIDMixin, TimestampMixin, Base):
     # Whether lyrics.json has been corrected by merging quick lyrics text
     # with Whisper timestamps.  Set once per song to avoid re-running.
     lyrics_corrected: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
+        Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Bumped per deploy to allow a one-time lyrics retry for non-Latin songs.
@@ -71,10 +71,10 @@ class Song(UUIDMixin, TimestampMixin, Base):
 
     # Permanent failure flags — prevent automatic retry on every page load.
     lyrics_failed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
+        Boolean, nullable=False, default=False, server_default="0"
     )
     tabs_failed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
+        Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Timestamps for lightweight task cooldowns — prevent re-enqueuing

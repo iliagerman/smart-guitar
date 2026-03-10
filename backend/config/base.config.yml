@@ -32,12 +32,18 @@ allpay:
 telegram:
   enabled: false
 
+analytics:
+  allowed_emails:
+    - "iliagerman@gmail.com"
+
+subscription_bypass_emails:
+  - "iliagerman@gmail.com"
+
 services:
   inference_demucs: "http://localhost:8000"
   chords_generator: "http://localhost:8001"
   lyrics_generator: "http://localhost:8003"
   tabs_generator: "http://localhost:8004"
-
 
 youtube:
   max_duration_seconds: 400

@@ -296,7 +296,7 @@ async def test_expired_lyrics_attempted_at_does_not_block(_db, song, storage):
 
     enqueued = False
 
-    def _fake_enqueue(sid):
+    def _fake_enqueue(sid, **kwargs):
         nonlocal enqueued
         enqueued = True
 

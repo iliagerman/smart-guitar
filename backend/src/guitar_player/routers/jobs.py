@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from guitar_player.auth.dependencies import get_current_user
@@ -15,6 +15,10 @@ from guitar_player.dependencies import get_job_service, get_processing_service
 from guitar_player.database import safe_session
 from guitar_player.dependencies import get_storage
 from guitar_player.schemas.job import CreateJobRequest, JobResponse
+from guitar_player.services.analytics_helpers import (
+    analytics_identity_from_user,
+    track_event,
+)
 from guitar_player.services.job_service import JobService
 from guitar_player.services.processing_service import ProcessingService
 
@@ -26,11 +30,12 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 @router.post("", response_model=JobResponse)
 async def create_job(
     body: CreateJobRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
 ) -> JobResponse:
-    return await job_service.create_and_process_job(
+    job = await job_service.create_and_process_job(
         user_sub=user.sub,
         user_email=user.email,
         song_id=body.song_id,
@@ -38,6 +43,15 @@ async def create_job(
         mode=body.mode,
         processing=processing,
     )
+    track_event(
+        background_tasks,
+        event_type="job_created",
+        event_category="jobs",
+        **analytics_identity_from_user(user),
+        song_id=body.song_id,
+        properties={"descriptions": body.descriptions, "mode": body.mode},
+    )
+    return job
 
 
 def _job_status_manifest_key(song_name: str, job_id: uuid.UUID) -> str:

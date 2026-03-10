@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import Depends, HTTPException, status
+from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.dependencies import get_current_user
@@ -13,12 +13,27 @@ from guitar_player.config import Settings, get_settings
 from guitar_player.dao.subscription_dao import SubscriptionDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import get_db
+from guitar_player.services.analytics_helpers import (
+    analytics_identity_from_user,
+    track_event,
+)
 from guitar_player.services.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
 
+def _is_bypass_user(email: str | None, settings: Settings) -> bool:
+    normalized_email = (email or "").strip().lower()
+    bypass_emails = {
+        item.strip().lower()
+        for item in settings.subscription_bypass_emails
+        if isinstance(item, str) and item.strip()
+    }
+    return bool(normalized_email) and normalized_email in bypass_emails
+
+
 async def require_active_subscription(
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -33,12 +48,26 @@ async def require_active_subscription(
     if settings.environment == "local" and os.environ.get("SKIP_AUTH") == "1":
         return user
 
+    if _is_bypass_user(user.email, settings):
+        return user
+
     user_dao = UserDAO(session)
     is_new = (await user_dao.get_by_cognito_sub(user.sub)) is None
     db_user = await user_dao.get_or_create(user.sub, user.email)
 
     if is_new:
-        logger.info("New user registered (Google OAuth): %s", user.email, extra={"email": user.email, "event_type": "user_registered"})
+        track_event(
+            background_tasks,
+            event_type="user_provisioned",
+            event_category="auth",
+            **analytics_identity_from_user(user),
+            properties={"method": "google_oauth"},
+        )
+        logger.info(
+            "New user registered (Google OAuth): %s",
+            user.email,
+            extra={"email": user.email, "event_type": "user_registered"},
+        )
         telegram = TelegramService(settings.telegram)
         await telegram.send_event(
             f"<b>New user registered</b>\nEmail: {user.email}\nMethod: Google OAuth"

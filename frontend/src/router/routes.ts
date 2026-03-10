@@ -6,6 +6,7 @@ export const ROUTES = {
   SEARCH: '/search',
   LIBRARY: '/library',
   FAVORITES: '/favorites',
+  ANALYTICS: '/analytics',
   SONG_DETAIL: '/songs/:songId',
   PROFILE: '/profile',
   SUBSCRIPTION_SUCCESS: '/subscription/success',

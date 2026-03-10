@@ -846,8 +846,16 @@ class SongService:
                     "Failed to read corrected lyrics for %s: %s", song.song_name, e
                 )
 
-        # Tabs/strums disabled — return empty.
+        # Read tabs from storage.
         tabs: list[TabNote] = []
+        if song.tabs_key and self._storage.file_exists(song.tabs_key):
+            try:
+                raw = self._storage.read_json(song.tabs_key)
+                if isinstance(raw, dict) and "notes" in raw:
+                    tabs = [TabNote(**n) for n in raw["notes"]]
+            except Exception as e:
+                logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
+
         strums: list[StrumEvent] = []
         rhythm: RhythmInfo | None = None
 

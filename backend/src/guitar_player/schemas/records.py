@@ -8,7 +8,7 @@ SQLAlchemy model instances.
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -123,3 +123,22 @@ class SubscriptionRecord(BaseModel):
     current_period_start: Optional[datetime] = None
     current_period_end: Optional[datetime] = None
     canceled_at: Optional[datetime] = None
+
+
+class AnalyticsEventRecord(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    created_at: datetime
+
+    event_type: str
+    event_category: str
+    event_source: str
+    user_sub: Optional[str] = None
+    user_email: Optional[str] = None
+    tenant_id: Optional[str] = None
+    aws_account_id: Optional[str] = None
+    song_id: Optional[uuid.UUID] = None
+    song_title: Optional[str] = None
+    session_id: Optional[str] = None
+    properties: Optional[dict[str, Any]] = None

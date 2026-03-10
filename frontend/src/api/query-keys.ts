@@ -17,6 +17,17 @@ export const queryKeys = {
     all: ['favorites'] as const,
     list: () => ['favorites', 'list'] as const,
   },
+  analytics: {
+    all: ['analytics'] as const,
+    access: () => ['analytics', 'access'] as const,
+    dashboard: (params?: Record<string, unknown>) => ['analytics', 'dashboard', params] as const,
+    overview: (params?: Record<string, unknown>) => ['analytics', 'overview', params] as const,
+    trends: (params?: Record<string, unknown>) => ['analytics', 'trends', params] as const,
+    topSongs: (params?: Record<string, unknown>) => ['analytics', 'top-songs', params] as const,
+    users: (params?: Record<string, unknown>) => ['analytics', 'users', params] as const,
+    events: (params?: Record<string, unknown>) => ['analytics', 'events', params] as const,
+    userEmails: () => ['analytics', 'user-emails'] as const,
+  },
   subscription: {
     all: ['subscription'] as const,
     status: () => ['subscription', 'status'] as const,

@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 from alembic import context
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 from guitar_player.config import load_settings
 from guitar_player.models import Base
@@ -17,6 +18,16 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+
+def _mask_db_url(url: str) -> str:
+    parsed = urlparse(url)
+    username = parsed.username or "<no-user>"
+    hostname = parsed.hostname or "<no-host>"
+    port = parsed.port or "<no-port>"
+    database = parsed.path.lstrip("/") or "<no-db>"
+    scheme = parsed.scheme or "postgresql"
+    return f"{scheme}://{username}:***@{hostname}:{port}/{database}"
 
 
 def _get_sync_url() -> str:
@@ -40,13 +51,22 @@ def _ensure_database_exists(url: str) -> None:
     # Build URL pointing to the default 'postgres' database
     maintenance_url = urlunparse(parsed._replace(path="/postgres"))
     engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = :db"), {"db": db_name}
-        )
-        if not result.scalar():
-            conn.execute(text(f'CREATE DATABASE "{db_name}" TEMPLATE template0'))
-    engine.dispose()
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :db"), {"db": db_name}
+            )
+            if not result.scalar():
+                conn.execute(text(f'CREATE DATABASE "{db_name}" TEMPLATE template0'))
+    except OperationalError as exc:
+        raise RuntimeError(
+            "Could not connect to local Postgres while running migrations. "
+            f"Tried {_mask_db_url(url)}. "
+            "Update backend/.secrets.yaml with the correct local db.url credentials "
+            "or set DATABASE_URL/DB_URL/GUITAR_PLAYER_DB_URL."
+        ) from exc
+    finally:
+        engine.dispose()
 
 
 def run_migrations_offline() -> None:
@@ -62,10 +82,18 @@ def run_migrations_online() -> None:
     url = _get_sync_url()
     _ensure_database_exists(url)
     connectable = create_engine(url)
-    with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+    try:
+        with connectable.connect() as connection:
+            context.configure(connection=connection, target_metadata=target_metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+    except OperationalError as exc:
+        raise RuntimeError(
+            "Connected database configuration is invalid for migrations. "
+            f"Tried {_mask_db_url(url)}. "
+            "Update backend/.secrets.yaml with the correct local db.url credentials "
+            "or set DATABASE_URL/DB_URL/GUITAR_PLAYER_DB_URL."
+        ) from exc
 
 
 if context.is_offline_mode():

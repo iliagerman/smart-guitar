@@ -62,11 +62,30 @@ class LyricsResult:
     source: str = "whisper"
 
 
+@dataclass
+class TabNoteInfo:
+    start_time: float
+    end_time: float
+    string: int
+    fret: int
+    midi_pitch: int
+    confidence: float
+    strum_id: int | None = None
+
+
+@dataclass
+class TabsResult:
+    tuning: list[str]
+    notes: list[TabNoteInfo]
+    output_path: str
+
+
 class ProcessingService:
     def __init__(self, settings: Settings) -> None:
         self._demucs_host = settings.services.inference_demucs
         self._chords_host = settings.services.chords_generator
         self._lyrics_host = settings.services.lyrics_generator
+        self._tabs_host = settings.services.tabs_generator
 
 
     async def _request(self, url: str, payload: dict) -> dict:
@@ -209,6 +228,18 @@ class ProcessingService:
             segments=segments,
             output_path=data.get("output_path", ""),
             source=data.get("source", "whisper"),
+        )
+
+    async def generate_tabs(self, input_path: str) -> TabsResult:
+        """POST to tabs_generator /transcribe-tabs endpoint."""
+        url = f"{self._tabs_host}/transcribe-tabs"
+        data = await self._request(url, {"input_path": input_path})
+
+        notes = [TabNoteInfo(**n) for n in data.get("notes", [])]
+        return TabsResult(
+            tuning=data.get("tuning", []),
+            notes=notes,
+            output_path=data.get("output_path", ""),
         )
 
     async def process_song(

@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
+from guitar_player.auth.subscription_guard import _is_bypass_user
+from guitar_player.config import Settings, get_settings
 from guitar_player.dependencies import get_payment_provider, get_telegram_service
 from guitar_player.schemas.subscription import (
     CancelSubscriptionResponse,
@@ -30,8 +32,12 @@ router = APIRouter(prefix="/subscription", tags=["subscription"])
 async def get_subscription_status(
     user: CurrentUser = Depends(get_current_user),
     provider: PaymentProviderProtocol = Depends(get_payment_provider),
+    settings: Settings = Depends(get_settings),
 ) -> SubscriptionStatusResponse:
-    return await provider.get_status(user.sub, user.email)
+    status = await provider.get_status(user.sub, user.email)
+    if not status.has_access and _is_bypass_user(user.email, settings):
+        status.has_access = True
+    return status
 
 
 @router.get("/prices", response_model=PricesResponse)

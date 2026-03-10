@@ -247,7 +247,7 @@ async def test_stale_active_job_is_replaced(_db, song, storage):
         job_dao = JobDAO(session)
         old_job = await job_dao.get_by_id(first.id)
         assert old_job.status == "FAILED"
-        assert "Stale job" in (old_job.error_message or "")
+        assert old_job.error_message and ("timed out" in old_job.error_message.lower() or "stale" in old_job.error_message.lower() or "restart" in old_job.error_message.lower())
 
 
 @pytest.mark.asyncio

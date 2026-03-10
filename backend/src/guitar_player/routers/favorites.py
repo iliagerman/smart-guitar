@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import require_active_subscription
@@ -12,6 +12,10 @@ from guitar_player.schemas.favorite import (
     FavoriteListResponse,
     FavoriteResponse,
 )
+from guitar_player.services.analytics_helpers import (
+    analytics_identity_from_user,
+    track_event,
+)
 from guitar_player.services.favorite_service import FavoriteService
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -20,22 +24,43 @@ router = APIRouter(prefix="/favorites", tags=["favorites"])
 @router.post("", response_model=FavoriteResponse, status_code=201)
 async def add_favorite(
     body: AddFavoriteRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> FavoriteResponse:
-    return await favorite_service.add_favorite(
-        user_sub=user.sub, user_email=user.email, song_id=body.song_id,
+    favorite = await favorite_service.add_favorite(
+        user_sub=user.sub,
+        user_email=user.email,
+        song_id=body.song_id,
     )
+    track_event(
+        background_tasks,
+        event_type="favorite_added",
+        event_category="songs",
+        **analytics_identity_from_user(user),
+        song_id=body.song_id,
+    )
+    return favorite
 
 
 @router.delete("/{song_id}", status_code=204)
 async def remove_favorite(
     song_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> None:
     await favorite_service.remove_favorite(
-        user_sub=user.sub, user_email=user.email, song_id=song_id,
+        user_sub=user.sub,
+        user_email=user.email,
+        song_id=song_id,
+    )
+    track_event(
+        background_tasks,
+        event_type="favorite_removed",
+        event_category="songs",
+        **analytics_identity_from_user(user),
+        song_id=song_id,
     )
 
 

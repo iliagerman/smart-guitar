@@ -7,6 +7,8 @@ import { RegisterPage } from '@/features/auth/pages/RegisterPage'
 import { ConfirmEmailPage } from '@/features/auth/pages/ConfirmEmailPage'
 import { CallbackPage } from '@/features/auth/pages/CallbackPage'
 import { ProfilePage } from '@/features/auth/pages/ProfilePage'
+import { AdminGuard } from '@/features/analytics/components/AdminGuard'
+import { AnalyticsDashboardPage } from '@/features/analytics/pages/AnalyticsDashboardPage'
 import { SearchPage } from '@/features/search/pages/SearchPage'
 import { LibraryPage } from '@/features/library/pages/LibraryPage'
 import { FavoritesPage } from '@/features/library/pages/FavoritesPage'
@@ -53,6 +55,16 @@ export const router = createBrowserRouter([
             <SubscriptionGuard>
               <FavoritesPage />
             </SubscriptionGuard>
+          </AuthGuard>
+        ),
+      },
+      {
+        path: ROUTES.ANALYTICS,
+        element: (
+          <AuthGuard>
+            <AdminGuard>
+              <AnalyticsDashboardPage />
+            </AdminGuard>
           </AuthGuard>
         ),
       },

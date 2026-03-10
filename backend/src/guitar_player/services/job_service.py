@@ -30,6 +30,7 @@ from guitar_player.storage import StorageBackend
 logger = logging.getLogger(__name__)
 
 _STEM_EXT = ".mp3"
+_PROCESS_STARTED_AT = datetime.now(timezone.utc)
 
 
 def _stem_candidates(song_name: str, *stem_names: str) -> list[str]:
@@ -58,18 +59,19 @@ _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS = 300  # 5 minutes
 _ADMIN_HEAL_LOG_THROTTLE_SECONDS = 600  # 10 minutes
 _LAST_ADMIN_HEAL_INFO_LOG: dict[tuple[str, uuid.UUID], float] = {}
 
-# Bump this to allow a one-time lyrics retry for non-Latin songs on next deploy.
-_CURRENT_LYRICS_HEAL_VERSION = 1
+# Bump this to allow a one-time lyrics re-transcription via OpenAI on next deploy.
+_CURRENT_LYRICS_HEAL_VERSION = 2
 
 # Regex matching characters from non-Latin scripts (Hebrew, Arabic, CJK, etc.)
-_NON_LATIN_RE = re.compile(r"[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F"
-                           r"\u3000-\u9FFF\uAC00-\uD7AF\u1100-\u11FF]")
+_NON_LATIN_RE = re.compile(
+    r"[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F"
+    r"\u3000-\u9FFF\uAC00-\uD7AF\u1100-\u11FF]"
+)
 
 
 def _has_non_latin_text(*texts: str | None) -> bool:
     """Return True if any of the provided texts contain non-Latin script characters."""
     return any(_NON_LATIN_RE.search(t) for t in texts if t)
-
 
 
 def _should_log_admin_heal_info(action: str, song_id: uuid.UUID) -> bool:
@@ -99,6 +101,38 @@ def _is_stale_active_job(updated_at: datetime | None, *, now: datetime) -> bool:
     updated = _to_aware_utc(updated_at)
     age_s = (now - updated).total_seconds()
     return age_s > _STALE_ACTIVE_JOB_AFTER_SECONDS
+
+
+def _active_job_stale_reason(
+    updated_at: datetime | None, *, now: datetime
+) -> str | None:
+    """Return a failure reason when an active job should be treated as stale.
+
+    In local dev we often run background processing in-process (no external
+    orchestrator). If the backend restarts, those asyncio tasks disappear even
+    though the DB row still says PENDING/PROCESSING. Treat such jobs as stale
+    immediately so the next page refresh can resume processing.
+    """
+    if _is_stale_active_job(updated_at, now=now):
+        return "Job timed out"
+
+    try:
+        from guitar_player.config import get_settings
+
+        settings = get_settings()
+        has_orchestrator = bool(
+            getattr(getattr(settings, "lambdas", None), "job_orchestrator", None)
+        )
+    except Exception:
+        has_orchestrator = False
+
+    if has_orchestrator or updated_at is None:
+        return None
+
+    if _to_aware_utc(updated_at) < _PROCESS_STARTED_AT:
+        return "Job interrupted by backend restart"
+
+    return None
 
 
 # Maps demucs output stem names to Song model field base names.
@@ -244,6 +278,27 @@ def _enqueue_lyrics_transcription(
     task.add_done_callback(_done)
 
 
+# ---- Tabs-only background generation ----
+
+_TABS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
+
+
+def _enqueue_tabs_generation(song_id: uuid.UUID) -> None:
+    """Fire-and-forget tabs generation in the background."""
+    existing = _TABS_TASKS.get(song_id)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_generate_tabs_only(song_id))
+    _TABS_TASKS[song_id] = task
+
+    def _done(t: asyncio.Task) -> None:
+        if _TABS_TASKS.get(song_id) is t:
+            _TABS_TASKS.pop(song_id, None)
+
+    task.add_done_callback(_done)
+
+
 class JobService:
     def __init__(
         self,
@@ -254,6 +309,28 @@ class JobService:
         self._job_dao = JobDAO(session)
         self._song_dao = SongDAO(session)
         self._user_dao = UserDAO(session)
+
+    async def _refresh_active_job_if_stale(self, job: JobRecord) -> JobRecord:
+        """Mark stale/orphaned active jobs failed and return the latest row."""
+        if job.status not in ("PENDING", "PROCESSING"):
+            return job
+
+        reason = _active_job_stale_reason(
+            getattr(job, "updated_at", None),
+            now=_utcnow(),
+        )
+        if not reason:
+            return job
+
+        await self._job_dao.update_status(job.id, "FAILED", error_message=reason)
+
+        song = await self._song_dao.get_by_id(job.song_id)
+        if song and song.processing_job_id == job.id:
+            await self._song_dao.update_by_id(song.id, processing_job_id=None)
+
+        await self._job_dao.flush()
+        refreshed = await self._job_dao.get_by_id(job.id)
+        return refreshed or job
 
     async def create_and_process_job(
         self,
@@ -285,14 +362,15 @@ class JobService:
         if song.processing_job_id:
             existing_job = await self._job_dao.get_by_id(song.processing_job_id)
             if existing_job and existing_job.status in ("PENDING", "PROCESSING"):
-                now = _utcnow()
-                if _is_stale_active_job(
-                    getattr(existing_job, "updated_at", None), now=now
-                ):
+                reason = _active_job_stale_reason(
+                    getattr(existing_job, "updated_at", None),
+                    now=_utcnow(),
+                )
+                if reason:
                     await self._job_dao.update_status(
                         existing_job.id,
                         "FAILED",
-                        error_message="Stale job: marked failed by idempotency check",
+                        error_message=reason,
                     )
                     await self._song_dao.update_by_id(song.id, processing_job_id=None)
                 else:
@@ -318,7 +396,9 @@ class JobService:
         )
 
         # Set the processing lock to the new job and reset failure flags.
-        await self._song_dao.update_by_id(song.id, processing_job_id=job.id, lyrics_failed=False, tabs_failed=False)
+        await self._song_dao.update_by_id(
+            song.id, processing_job_id=job.id, lyrics_failed=False, tabs_failed=False
+        )
 
         # IMPORTANT: job processing runs in a *separate* DB session.
         # If we enqueue the background task before committing, Postgres won't
@@ -481,13 +561,18 @@ class JobService:
         # Files truly missing — trigger reprocess if no *non-stale* active job.
         active_job = await self._job_dao.get_active_job(song_id)
         if active_job is not None:
-            now = _utcnow()
-            if _is_stale_active_job(getattr(active_job, "updated_at", None), now=now):
+            reason = _active_job_stale_reason(
+                getattr(active_job, "updated_at", None),
+                now=_utcnow(),
+            )
+            if reason:
                 await self._job_dao.update_status(
                     active_job.id,
                     "FAILED",
-                    error_message="Stale job: marked failed by admin",
+                    error_message=reason,
                 )
+                if song.processing_job_id == active_job.id:
+                    await self._song_dao.update_by_id(song.id, processing_job_id=None)
             else:
                 return None
 
@@ -537,14 +622,17 @@ class JobService:
         # automatically on every page load / poll. The user can trigger
         # a manual retry via the full reprocess flow if needed.
         #
-        # Exception: non-Latin songs get a one-time retry when a new heal
-        # version is deployed (bump _CURRENT_LYRICS_HEAL_VERSION).
+        # Exception: allow a one-time retry when a new heal version is deployed
+        # (bump _CURRENT_LYRICS_HEAL_VERSION).
+        is_non_latin = _has_non_latin_text(song.title, song.artist, song.song_name)
+
         if song.lyrics_failed:
-            is_non_latin = _has_non_latin_text(song.title, song.artist)
-            needs_heal = is_non_latin and song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION
+            needs_heal = (
+                is_non_latin and song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION
+            )
             if needs_heal:
                 logger.info(
-                    "Admin heal: one-time lyrics retry for non-Latin song "
+                    "Admin heal: one-time lyrics retry "
                     "(heal_version %d -> %d) song_id=%s song_name=%r",
                     song.lyrics_heal_version,
                     _CURRENT_LYRICS_HEAL_VERSION,
@@ -599,12 +687,15 @@ class JobService:
         # to run independently.
         active_job = await self._job_dao.get_active_job(song_id)
         if active_job is not None:
-            now = _utcnow()
-            if _is_stale_active_job(getattr(active_job, "updated_at", None), now=now):
+            reason = _active_job_stale_reason(
+                getattr(active_job, "updated_at", None),
+                now=_utcnow(),
+            )
+            if reason:
                 await self._job_dao.update_status(
                     active_job.id,
                     "FAILED",
-                    error_message="Stale job: marked failed by admin",
+                    error_message=reason,
                 )
 
         # If a lyrics-only transcription is already running (e.g., user is polling),
@@ -629,7 +720,9 @@ class JobService:
         if lyrics_ok and not quick_ok and song.song_name:
             quick_candidate = f"{song.song_name}/lyrics_quick.json"
             if self._storage.file_exists(quick_candidate):
-                await self._song_dao.update_by_id(song.id, lyrics_quick_key=quick_candidate)
+                await self._song_dao.update_by_id(
+                    song.id, lyrics_quick_key=quick_candidate
+                )
                 logger.info(
                     "Admin heal: backfilled lyrics_quick_key for song_id=%s "
                     "song_name=%r quick_candidate=%s",
@@ -645,6 +738,34 @@ class JobService:
                     },
                 )
                 return False
+
+        # One-time re-transcription via OpenAI Whisper for better accuracy.
+        # Triggers once per heal version bump for any song with existing lyrics.
+        if (
+            lyrics_ok
+            and is_non_latin
+            and song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION
+        ):
+            logger.info(
+                "Admin heal: forcing OpenAI re-transcription "
+                "(heal_version %d -> %d) song_id=%s song_name=%r",
+                song.lyrics_heal_version,
+                _CURRENT_LYRICS_HEAL_VERSION,
+                song_id,
+                song.song_name,
+            )
+            for stale_key in (song.lyrics_key, song.lyrics_corrected_key):
+                if stale_key:
+                    self._storage.delete_file(stale_key)
+            await self._song_dao.update_by_id(
+                song.id,
+                lyrics_key=None,
+                lyrics_corrected_key=None,
+                lyrics_failed=False,
+                lyrics_attempted_at=None,
+                lyrics_heal_version=_CURRENT_LYRICS_HEAL_VERSION,
+            )
+            lyrics_ok = False
 
         # Both present — nothing to do.
         if lyrics_ok and quick_ok:
@@ -685,34 +806,6 @@ class JobService:
                     },
                 )
             return False
-
-        # Non-Latin songs with a stale heal version need full re-transcription,
-        # even if lyrics_ok is True. Delete old files and re-generate.
-        if lyrics_ok and _has_non_latin_text(song.title, song.artist):
-            if song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION:
-                logger.info(
-                    "Admin heal: non-Latin song with stale lyrics "
-                    "(heal_version %d -> %d), forcing re-transcription "
-                    "song_id=%s song_name=%r",
-                    song.lyrics_heal_version,
-                    _CURRENT_LYRICS_HEAL_VERSION,
-                    song_id,
-                    song.song_name,
-                )
-                for stale_key in (song.lyrics_key, song.lyrics_quick_key, song.lyrics_corrected_key):
-                    if stale_key:
-                        self._storage.delete_file(stale_key)
-                await self._song_dao.update_by_id(
-                    song.id,
-                    lyrics_key=None,
-                    lyrics_quick_key=None,
-                    lyrics_corrected_key=None,
-                    lyrics_failed=False,
-                    lyrics_attempted_at=None,
-                    lyrics_heal_version=_CURRENT_LYRICS_HEAL_VERSION,
-                )
-                lyrics_ok = False
-                quick_ok = False
 
         # When only quick_lyrics are missing (full lyrics exist), we can use
         # fast_only mode which skips Whisper entirely.
@@ -793,7 +886,6 @@ class JobService:
         _enqueue_lyrics_transcription(song_id, quick_only=quick_only)
         return True
 
-
     async def trigger_vocals_guitar_merge_if_missing(
         self,
         song_id: uuid.UUID,
@@ -869,22 +961,111 @@ class JobService:
         _enqueue_vocals_guitar_merge(song_id)
         return True
 
+    async def trigger_tabs_generation_if_missing(
+        self,
+        song_id: uuid.UUID,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """If tabs are missing but the guitar stem exists, enqueue tabs generation.
+
+        Returns True if a background tabs task was enqueued.
+
+        When *force* is True, the ``tabs_failed`` flag is ignored (admin retry).
+        """
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song", str(song_id))
+
+        logger.debug(
+            "trigger_tabs: song_id=%s tabs_failed=%s tabs_attempted_at=%s "
+            "tabs_key=%s song_name=%s guitar_key=%s",
+            song_id,
+            song.tabs_failed,
+            song.tabs_attempted_at,
+            song.tabs_key,
+            song.song_name,
+            song.guitar_key,
+        )
+
+        if song.tabs_failed and not force:
+            logger.debug("trigger_tabs: blocked by tabs_failed")
+            return False
+
+        # DB-based cooldown: don't re-enqueue if we attempted recently.
+        if song.tabs_attempted_at and not force:
+            age_s = (_utcnow() - _to_aware_utc(song.tabs_attempted_at)).total_seconds()
+            if age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS:
+                logger.debug("trigger_tabs: blocked by cooldown (age=%.0fs)", age_s)
+                return False
+
+        existing_task = _TABS_TASKS.get(song_id)
+        if existing_task and not existing_task.done():
+            logger.debug("trigger_tabs: blocked by existing task")
+            return False
+
+        # Already present.
+        tabs_ok = bool(song.tabs_key) and self._storage.file_exists(song.tabs_key)
+        if tabs_ok:
+            logger.debug("trigger_tabs: tabs already present")
+            return False
+
+        if not song.song_name:
+            logger.debug("trigger_tabs: no song_name")
+            return False
+
+        # Fix DB key from disk if file exists.
+        tabs_candidate = f"{song.song_name}/tabs.json"
+        if self._storage.file_exists(tabs_candidate):
+            logger.debug("trigger_tabs: found tabs.json on disk, fixing DB key")
+            await self._song_dao.update_by_id(song.id, tabs_key=tabs_candidate)
+            return False
+
+        # Guitar stem must exist.
+        guitar_candidates = [
+            getattr(song, "guitar_key", None),
+            *_stem_candidates(song.song_name, "guitar", "guitar_isolated"),
+        ]
+        guitar_key = next(
+            (k for k in guitar_candidates if k and self._storage.file_exists(k)),
+            None,
+        )
+        if not guitar_key:
+            logger.debug(
+                "trigger_tabs: no guitar stem found, candidates=%s",
+                guitar_candidates,
+            )
+            return False
+
+        # Record the attempt timestamp so concurrent/subsequent polls skip this.
+        update_kwargs: dict = {"tabs_attempted_at": _utcnow()}
+        if force and song.tabs_failed:
+            update_kwargs["tabs_failed"] = False
+        await self._song_dao.update_by_id(song.id, **update_kwargs)
+
+        logger.info(
+            "Admin: tabs missing for %s; enqueuing generation",
+            song_id,
+        )
+        _enqueue_tabs_generation(song_id)
+        return True
+
     async def get_active_job_for_song(self, song_id: uuid.UUID) -> JobRecord | None:
         """Return the active (PENDING/PROCESSING) job for a song, if any."""
-        return await self._job_dao.get_active_job(song_id)
+        job = await self._job_dao.get_active_job(song_id)
+        if not job:
+            return None
+
+        refreshed = await self._refresh_active_job_if_stale(job)
+        if refreshed.status not in ("PENDING", "PROCESSING"):
+            return None
+        return refreshed
 
     async def get_job(self, job_id: uuid.UUID) -> JobResponse:
         job = await self._job_dao.get_by_id(job_id)
         if not job:
             raise NotFoundError("Job", str(job_id))
-        # Auto-expire stale active jobs on read.
-        if job.status in ("PENDING", "PROCESSING") and _is_stale_active_job(
-            getattr(job, "updated_at", None), now=_utcnow()
-        ):
-            await self._job_dao.update_status(
-                job.id, "FAILED", error_message="Job timed out"
-            )
-            await self._job_dao.flush()
+        job = await self._refresh_active_job_if_stale(job)
         return self._enrich_job(job)
 
     async def list_user_jobs(
@@ -1044,7 +1225,8 @@ async def _transcribe_lyrics_only(
             except Exception as e:
                 logger.info(
                     "fast_only failed for song_id=%s (%s), falling back to full transcription",
-                    song_id, e,
+                    song_id,
+                    e,
                 )
                 return await processing.transcribe_lyrics(
                     service_path,
@@ -1077,7 +1259,9 @@ async def _transcribe_lyrics_only(
                         s_dao = SongDAO(session)
                         s = await s_dao.get_by_id(song_id)
                         if s and not s.lyrics_quick_key:
-                            await s_dao.update_by_id(song_id, lyrics_quick_key=quick_key)
+                            await s_dao.update_by_id(
+                                song_id, lyrics_quick_key=quick_key
+                            )
                             await s_dao.commit()
                     logger.info(
                         "Lyrics-only quick lyrics ready",
@@ -1292,7 +1476,113 @@ async def _merge_vocals_guitar_only(song_id: uuid.UUID) -> None:
             return
         vg_key = _find_stem(storage, song.song_name, "vocals_guitar")
         if vg_key:
-            await song_dao.update_by_id(song_id, vocals_guitar_key=vg_key, merge_attempted_at=None)
+            await song_dao.update_by_id(
+                song_id, vocals_guitar_key=vg_key, merge_attempted_at=None
+            )
+            await song_dao.commit()
+
+
+async def _generate_tabs_only(song_id: uuid.UUID) -> None:
+    """Generate tabs for an existing song if the guitar stem is available."""
+
+    try:
+        storage = get_storage()
+    except Exception:
+        return
+
+    from guitar_player.config import get_settings
+
+    settings = get_settings()
+
+    async with safe_session() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_id(song_id)
+        if not song or not song.song_name:
+            return
+
+        # If the tabs file appeared meanwhile, just fix the DB key.
+        tabs_key = f"{song.song_name}/tabs.json"
+        if storage.file_exists(tabs_key):
+            if not song.tabs_key:
+                await song_dao.update_by_id(song_id, tabs_key=tabs_key)
+                await song_dao.commit()
+            return
+
+        guitar_candidates = [
+            getattr(song, "guitar_key", None),
+            *_stem_candidates(song.song_name, "guitar", "guitar_isolated"),
+        ]
+        guitar_key = next(
+            (k for k in guitar_candidates if k and storage.file_exists(k)), None
+        )
+        if not guitar_key:
+            return
+
+        song_name = song.song_name
+
+    t0 = time.monotonic()
+    try:
+        processing = ProcessingService(settings)
+        service_path = storage.resolve_service_path(guitar_key)
+        logger.info(
+            "Tabs generation starting song_id=%s guitar_key=%s",
+            song_id,
+            guitar_key,
+            extra={
+                "event_type": "background_task_start",
+                "task": "tabs_only",
+                "song_id": str(song_id),
+                "guitar_key": guitar_key,
+            },
+        )
+        await processing.generate_tabs(service_path)
+        elapsed_s = time.monotonic() - t0
+        logger.info(
+            "Tabs generation finished (%.1fs) song_id=%s",
+            elapsed_s,
+            song_id,
+            extra={
+                "event_type": "background_task_done",
+                "task": "tabs_only",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+            },
+        )
+    except Exception as e:
+        elapsed_s = time.monotonic() - t0
+        logger.warning(
+            "Tabs generation failed (%.1fs): %s song_id=%s",
+            elapsed_s,
+            e,
+            song_id,
+            extra={
+                "event_type": "background_task_failed",
+                "task": "tabs_only",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+                "error": str(e),
+            },
+        )
+        try:
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, tabs_failed=True)
+                await song_dao.commit()
+        except Exception:
+            logger.debug("Failed to persist tabs_failed for %s", song_id, exc_info=True)
+        return
+
+    # Persist tabs_key if the file is now present.
+    async with safe_session() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_id(song_id)
+        if not song or not song.song_name:
+            return
+        tabs_key = f"{song_name}/tabs.json"
+        if storage.file_exists(tabs_key):
+            await song_dao.update_by_id(
+                song_id, tabs_key=tabs_key, tabs_failed=False, tabs_attempted_at=None
+            )
             await song_dao.commit()
 
 
@@ -1517,7 +1807,9 @@ async def _process_job(job_id: uuid.UUID) -> None:
             demucs_requested_outputs.append("vocals_isolated")
         song = await song_dao.get_by_id(job.song_id)
         if not song:
-            await job_dao.update_status(job.id, "FAILED", error_message="Song not found")
+            await job_dao.update_status(
+                job.id, "FAILED", error_message="Song not found"
+            )
             await job_dao.commit()
             return
 
@@ -1914,7 +2206,9 @@ async def _process_job(job_id: uuid.UUID) -> None:
                             s_dao = SongDAO(sess)
                             s = await s_dao.get_by_id(song_id)
                             if s and not s.lyrics_quick_key:
-                                await s_dao.update_by_id(song_id, lyrics_quick_key=quick_key)
+                                await s_dao.update_by_id(
+                                    song_id, lyrics_quick_key=quick_key
+                                )
                                 await s_dao.commit()
                     except Exception as e:
                         logger.debug("Failed to persist lyrics_quick_key: %s", e)
@@ -1968,7 +2262,9 @@ async def _process_job(job_id: uuid.UUID) -> None:
             return
         song = await song_dao.get_by_id(job.song_id)
         if not song:
-            await job_dao.update_status(job.id, "FAILED", error_message="Song not found")
+            await job_dao.update_status(
+                job.id, "FAILED", error_message="Song not found"
+            )
             await job_dao.commit()
             return
 

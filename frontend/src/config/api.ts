@@ -11,7 +11,8 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken
+  const state = useAuthStore.getState()
+  const token = state.idToken || state.accessToken
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -62,7 +63,7 @@ api.interceptors.response.use(
             refresh_token: refreshToken,
           })
           useAuthStore.getState().setTokens(data.access_token, data.id_token, refreshToken)
-          original.headers.Authorization = `Bearer ${data.access_token}`
+          original.headers.Authorization = `Bearer ${data.id_token || data.access_token}`
           return api(original)
         }
 
@@ -72,7 +73,7 @@ api.interceptors.response.use(
         const idToken = session.tokens?.idToken?.toString()
         if (accessToken && idToken) {
           useAuthStore.getState().setTokens(accessToken, idToken, '')
-          original.headers.Authorization = `Bearer ${accessToken}`
+          original.headers.Authorization = `Bearer ${idToken}`
           return api(original)
         }
       } catch {

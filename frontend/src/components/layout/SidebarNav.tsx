@@ -1,15 +1,18 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, User } from 'lucide-react'
+import { Search, Library, Heart, User, BarChart3 } from 'lucide-react'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
-
-const navItems = [
-    { to: ROUTES.SEARCH, icon: Search, label: 'Search', testId: 'sidebar-search' },
-    { to: ROUTES.LIBRARY, icon: Library, label: 'Library', testId: 'sidebar-library' },
-    { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites', testId: 'sidebar-favorites' },
-]
+import { useIsAdmin } from '@/features/analytics/components/AdminGuard'
 
 export function SidebarNav() {
+    const canUseAnalytics = useIsAdmin()
+    const navItems = [
+        { to: ROUTES.SEARCH, icon: Search, label: 'Search', testId: 'sidebar-search' },
+        { to: ROUTES.LIBRARY, icon: Library, label: 'Library', testId: 'sidebar-library' },
+        { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites', testId: 'sidebar-favorites' },
+        ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics', testId: 'sidebar-analytics' }] : []),
+    ]
+
     return (
         <aside
             className={cn(

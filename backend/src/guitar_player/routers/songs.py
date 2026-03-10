@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +34,10 @@ from guitar_player.schemas.song import (
     SongResponse,
 )
 from guitar_player.services.job_service import JobService
+from guitar_player.services.analytics_helpers import (
+    analytics_identity_from_user,
+    track_event,
+)
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.song_service import SongService
 from guitar_player.services.telegram_service import TelegramService
@@ -59,7 +63,6 @@ _DEFAULT_MEDIA_TYPE = "audio/mpeg"
 
 _EXT_MEDIA_TYPE: dict[str, str] = {
     ".mp3": "audio/mpeg",
-
     ".wav": "audio/wav",
     ".flac": "audio/flac",
     ".m4a": "audio/mp4",
@@ -86,34 +89,69 @@ _REPROCESSABLE_STEMS = {
 @router.post("/search", response_model=EnrichedSearchResponse)
 async def search_songs(
     body: SearchRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
 ) -> EnrichedSearchResponse:
     results = await song_service.search_youtube_enriched(body.query)
+    identity = analytics_identity_from_user(user)
+    track_event(
+        background_tasks,
+        event_type="search",
+        event_category="songs",
+        **identity,
+        properties={
+            "query": body.query[:200],
+            "query_length": len(body.query),
+            "result_count": len(results),
+        },
+    )
     return EnrichedSearchResponse(results=results)
 
 
 @router.post("/select", response_model=SongDetailResponse)
 async def select_song(
     body: SelectSongRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
 ) -> SongDetailResponse:
-    return await song_service.select_song(
+    detail = await song_service.select_song(
         song_name=body.song_name,
         youtube_id=body.youtube_id,
         user_sub=user.sub,
         user_email=user.email,
     )
+    track_event(
+        background_tasks,
+        event_type="song_selected",
+        event_category="songs",
+        **analytics_identity_from_user(user),
+        song_id=detail.song.id,
+        song_title=detail.song.title,
+        properties={"youtube_id": body.youtube_id},
+    )
+    return detail
 
 
 @router.post("/download", response_model=SongResponse)
 async def download_song(
     body: DownloadRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
 ) -> SongResponse:
-    return await song_service.download_song(body.youtube_id, user.sub, user.email)
+    song = await song_service.download_song(body.youtube_id, user.sub, user.email)
+    track_event(
+        background_tasks,
+        event_type="song_download_requested",
+        event_category="songs",
+        **analytics_identity_from_user(user),
+        song_id=song.id,
+        song_title=song.title,
+        properties={"youtube_id": body.youtube_id},
+    )
+    return song
 
 
 @router.get("", response_model=PaginatedSongsResponse)
@@ -165,10 +203,20 @@ async def list_genres(
 @router.post("/{song_id}/play", status_code=204)
 async def record_play(
     song_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
 ) -> Response:
+    song = await song_service.get_song(song_id)
     await song_service.record_play(song_id)
+    track_event(
+        background_tasks,
+        event_type="song_played",
+        event_category="player",
+        **analytics_identity_from_user(user),
+        song_id=song_id,
+        song_title=song.title,
+    )
     return Response(status_code=204)
 
 

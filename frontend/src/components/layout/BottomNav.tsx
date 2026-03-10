@@ -1,16 +1,19 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, User } from 'lucide-react'
+import { Search, Library, Heart, User, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
-
-const navItems = [
-  { to: ROUTES.SEARCH, icon: Search, label: 'Search' },
-  { to: ROUTES.LIBRARY, icon: Library, label: 'Library' },
-  { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites' },
-  { to: ROUTES.PROFILE, icon: User, label: 'Profile' },
-]
+import { useIsAdmin } from '@/features/analytics/components/AdminGuard'
 
 export function BottomNav() {
+  const canUseAnalytics = useIsAdmin()
+  const navItems = [
+    { to: ROUTES.SEARCH, icon: Search, label: 'Search' },
+    { to: ROUTES.LIBRARY, icon: Library, label: 'Library' },
+    { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites' },
+    ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics' }] : []),
+    { to: ROUTES.PROFILE, icon: User, label: 'Profile' },
+  ]
+
   return (
     <nav
       className="fixed left-0 right-0 z-40 bg-charcoal-900 border-t border-charcoal-700 pb-[env(safe-area-inset-bottom)] lg:hidden"

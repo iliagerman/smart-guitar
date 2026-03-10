@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.config import Settings, get_settings
 from guitar_player.database import get_session_factory
+from guitar_player.services.analytics_service import AnalyticsService
 from guitar_player.services.artwork_service import ArtworkService
 from guitar_player.services.cognito_auth_service import CognitoAuthService
 from guitar_player.services.favorite_service import FavoriteService
@@ -61,6 +62,12 @@ def get_telegram_service(
 
 def get_artwork_service() -> ArtworkService:
     return ArtworkService()
+
+
+def get_analytics_service(
+    session: AsyncSession = Depends(get_db),
+) -> AnalyticsService:
+    return AnalyticsService(session)
 
 
 _youtube_service: YoutubeService | None = None

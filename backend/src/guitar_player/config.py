@@ -22,9 +22,10 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional
+from urllib.parse import urlparse
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
 _CONFIG_DIR = _PACKAGE_ROOT / "config"
@@ -86,6 +87,7 @@ class ServicesConfig(BaseModel):
     inference_demucs: str = "localhost:8000"
     chords_generator: str = "localhost:8001"
     lyrics_generator: str = "localhost:8003"
+    tabs_generator: str = "localhost:8004"
 
 
 class OpenAIConfig(BaseModel):
@@ -170,6 +172,10 @@ class TelegramConfig(BaseModel):
     enabled: bool = False
 
 
+class AnalyticsConfig(BaseModel):
+    allowed_emails: list[str] = Field(default_factory=list)
+
+
 class Settings(BaseModel):
     environment: str = "local"
     app: AppConfig = AppConfig()
@@ -188,12 +194,16 @@ class Settings(BaseModel):
     paddle: PaddleConfig = PaddleConfig()
     allpay: AllPayConfig = AllPayConfig()
     telegram: TelegramConfig = TelegramConfig()
+    analytics: AnalyticsConfig = AnalyticsConfig()
+    subscription_bypass_emails: list[str] = []
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base. Override values win."""
     merged = base.copy()
     for key, value in override.items():
+        if value in (None, ""):
+            continue
         if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
             merged[key] = _deep_merge(merged[key], value)
         else:
@@ -201,22 +211,62 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return merged
 
 
+def _secrets_candidate_names(app_env: str) -> list[str]:
+    return [
+        f".{app_env}.secrets.yaml",
+        f".{app_env}.secrets.yml",
+        f"{app_env}.secrets.yaml",
+        f"{app_env}.secrets.yml",
+        ".secrets.yaml",
+        ".secrets.yml",
+        "secrets.yaml",
+        "secrets.yml",
+    ]
+
+
+def _find_first_existing(directory: Path, names: list[str]) -> Path | None:
+    for name in names:
+        candidate = directory / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _find_secrets_file(config_dir: Path, app_env: str) -> Path | None:
     """Locate the secrets file. Checks config_dir first, then project root."""
     # 1. config_dir/{app_env}.secrets.yml  (inside Docker image)
-    candidate = config_dir / f"{app_env}.secrets.yml"
-    if candidate.exists():
+    candidate = _find_first_existing(
+        config_dir,
+        [
+            f".{app_env}.secrets.yaml",
+            f".{app_env}.secrets.yml",
+            f"{app_env}.secrets.yaml",
+            f"{app_env}.secrets.yml",
+        ],
+    )
+    if candidate:
         return candidate
 
     # 2. project_root/{app_env}.secrets.yml  (local dev)
     project_root = config_dir.parent.parent
-    candidate = project_root / f"{app_env}.secrets.yml"
-    if candidate.exists():
+    candidate = _find_first_existing(
+        project_root,
+        [
+            f".{app_env}.secrets.yaml",
+            f".{app_env}.secrets.yml",
+            f"{app_env}.secrets.yaml",
+            f"{app_env}.secrets.yml",
+        ],
+    )
+    if candidate:
         return candidate
 
     # 3. project_root/secrets.yml  (legacy fallback)
-    candidate = project_root / "secrets.yml"
-    if candidate.exists():
+    candidate = _find_first_existing(
+        project_root,
+        [".secrets.yaml", ".secrets.yml", "secrets.yaml", "secrets.yml"],
+    )
+    if candidate:
         return candidate
 
     return None
@@ -235,26 +285,65 @@ def _project_root_for_config_dir(config_dir: Path) -> Path:
     return config_dir.parent
 
 
+def _local_backend_root(config_dir: Path) -> Path | None:
+    if config_dir.name == "config" and config_dir.parent.name == "backend":
+        return config_dir.parent
+    return None
+
+
 def _find_secrets_files(config_dir: Path, app_env: str) -> list[Path]:
     """Locate secrets files (base + env override), returning them in load order."""
     files: list[Path] = []
 
     # Prefer files baked into the container image (config_dir)
-    base_in_image = config_dir / "secrets.yml"
-    env_in_image = config_dir / f"{app_env}.secrets.yml"
-    if base_in_image.exists():
-        files.append(base_in_image)
-    if env_in_image.exists():
-        files.append(env_in_image)
+    for candidate in (
+        config_dir / ".secrets.yaml",
+        config_dir / ".secrets.yml",
+        config_dir / "secrets.yaml",
+        config_dir / "secrets.yml",
+    ):
+        if candidate.exists() and candidate not in files:
+            files.append(candidate)
+    for candidate in (
+        config_dir / f".{app_env}.secrets.yaml",
+        config_dir / f".{app_env}.secrets.yml",
+        config_dir / f"{app_env}.secrets.yaml",
+        config_dir / f"{app_env}.secrets.yml",
+    ):
+        if candidate.exists() and candidate not in files:
+            files.append(candidate)
 
     # Local dev / repo root
     project_root = _project_root_for_config_dir(config_dir)
-    base_in_repo = project_root / "secrets.yml"
-    env_in_repo = project_root / f"{app_env}.secrets.yml"
-    if base_in_repo.exists() and base_in_repo not in files:
-        files.append(base_in_repo)
-    if env_in_repo.exists() and env_in_repo not in files:
-        files.append(env_in_repo)
+    for candidate in (
+        project_root / ".secrets.yaml",
+        project_root / ".secrets.yml",
+        project_root / "secrets.yaml",
+        project_root / "secrets.yml",
+    ):
+        if candidate.exists() and candidate not in files:
+            files.append(candidate)
+    for candidate in (
+        project_root / f".{app_env}.secrets.yaml",
+        project_root / f".{app_env}.secrets.yml",
+        project_root / f"{app_env}.secrets.yaml",
+        project_root / f"{app_env}.secrets.yml",
+    ):
+        if candidate.exists() and candidate not in files:
+            files.append(candidate)
+
+    backend_root = _local_backend_root(config_dir)
+    if backend_root is not None:
+        for candidate in (
+            backend_root / ".secrets.yaml",
+            backend_root / ".secrets.yml",
+            backend_root / f".{app_env}.secrets.yaml",
+            backend_root / f".{app_env}.secrets.yml",
+            backend_root / f"{app_env}.secrets.yaml",
+            backend_root / f"{app_env}.secrets.yml",
+        ):
+            if candidate.exists() and candidate not in files:
+                files.append(candidate)
 
     # Legacy fallback used by older setups
     legacy = _find_secrets_file(config_dir, app_env)
@@ -305,15 +394,58 @@ def _resolve_secrets(merged: dict, config_dir: Path, app_env: str = "local") -> 
         print("[CONFIG DEBUG] No secrets files found!")
         return merged
 
+    def _has_value(value: object) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def _mask_db_url(url: str | None) -> str:
+        if not url:
+            return "<unset>"
+        try:
+            parsed = urlparse(url)
+            username = parsed.username or "<no-user>"
+            hostname = parsed.hostname or "<no-host>"
+            port = parsed.port or "<no-port>"
+            database = parsed.path.lstrip("/") or "<no-db>"
+            scheme = parsed.scheme or "postgresql"
+            return f"{scheme}://{username}:***@{hostname}:{port}/{database}"
+        except Exception:
+            return "<invalid-db-url>"
+
     secrets: dict = {}
     for secrets_path in secrets_paths:
         with open(secrets_path) as f:
             loaded = yaml.safe_load(f) or {}
         if not isinstance(loaded, dict):
             continue
-        print(f"[CONFIG DEBUG] Loaded {secrets_path}: admin={loaded.get('admin')}")
+        loaded_db_url = (
+            (loaded.get("db") or {}).get("url")
+            if isinstance(loaded.get("db"), dict)
+            else None
+        )
+        loaded_admin_key = (
+            (loaded.get("admin") or {}).get("api-key")
+            if isinstance(loaded.get("admin"), dict)
+            else None
+        )
+        print(
+            "[CONFIG DEBUG] Loaded "
+            f"{secrets_path}: db_url={_mask_db_url(loaded_db_url)} admin_api_key_present={_has_value(loaded_admin_key)}"
+        )
         secrets = _deep_merge(secrets, loaded)
-    print(f"[CONFIG DEBUG] Merged secrets: admin={secrets.get('admin')}")
+    merged_db_url = (
+        (secrets.get("db") or {}).get("url")
+        if isinstance(secrets.get("db"), dict)
+        else None
+    )
+    merged_admin_key = (
+        (secrets.get("admin") or {}).get("api-key")
+        if isinstance(secrets.get("admin"), dict)
+        else None
+    )
+    print(
+        "[CONFIG DEBUG] Merged secrets: "
+        f"db_url={_mask_db_url(merged_db_url)} admin_api_key_present={_has_value(merged_admin_key)}"
+    )
 
     # --- AWS/DB/Cognito: load from file in ALL environments ---
     aws_secrets = secrets.get("aws", {})
@@ -357,9 +489,7 @@ def _resolve_secrets(merged: dict, config_dir: Path, app_env: str = "local") -> 
     if not merged["admin"].get("api_key"):
         merged["admin"]["api_key"] = admin_secrets.get("api-key")
     admin_key = merged.get("admin", {}).get("api_key")
-    print(
-        f"[CONFIG DEBUG] Final admin.api_key: len={len(admin_key) if admin_key else 0} prefix={admin_key[:4] if admin_key else 'None'}..."
-    )
+    print(f"[CONFIG DEBUG] Final admin.api_key present={_has_value(admin_key)}")
 
     # Paddle (optional)
     # YAML key uses hyphenated form: paddle.api-key, paddle.webhook-secret
@@ -447,7 +577,9 @@ def _resolve_env_overrides(merged: dict) -> dict:
 
     youtube_download_queue_url = os.environ.get("YOUTUBE_DOWNLOAD_QUEUE_URL")
     if youtube_download_queue_url:
-        merged.setdefault("youtube", {})["youtube_download_queue_url"] = youtube_download_queue_url
+        merged.setdefault("youtube", {})["youtube_download_queue_url"] = (
+            youtube_download_queue_url
+        )
 
     # Lambda function names/ARNs (used by backend dispatch + orchestrator sub-invocations).
     job_orchestrator = os.environ.get("JOB_ORCHESTRATOR_FUNCTION_NAME")

@@ -1,11 +1,13 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { SidebarNav } from './SidebarNav'
+import { useEventTracker } from '@/hooks/use-event-tracker'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
 
 export function AppShell() {
   const location = useLocation()
+  useEventTracker()
 
   const authPaths: string[] = [ROUTES.LOGIN, ROUTES.REGISTER, ROUTES.CONFIRM_EMAIL, ROUTES.CALLBACK]
   const isAuthPage = authPaths.includes(location.pathname)

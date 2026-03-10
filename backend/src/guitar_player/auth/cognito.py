@@ -63,13 +63,17 @@ def verify_token(token: str, settings: Settings) -> dict:
         if claims.get("client_id") != cognito.client_id:
             raise JWTError("Token client_id does not match")
     else:
-        # ID tokens carry a standard ``aud`` claim
+        # ID tokens carry a standard ``aud`` claim.
+        # Disable at_hash verification — Google-federated Cognito ID tokens
+        # include an at_hash claim, but we only receive the ID token (no
+        # access_token to compare against).
         claims = jwt.decode(
             token,
             signing_key,
             algorithms=["RS256"],
             audience=cognito.client_id,
             issuer=issuer,
+            options={"verify_at_hash": False},
         )
 
     return claims

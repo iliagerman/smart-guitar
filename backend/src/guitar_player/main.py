@@ -24,6 +24,7 @@ from guitar_player.dependencies import set_storage
 from guitar_player.exceptions import AlreadyExistsError, BadRequestError, NotFoundError
 from guitar_player.routers import (
     admin,
+    analytics,
     auth,
     favorites,
     health,
@@ -183,7 +184,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         s.youtube_id,
                         s.song_name,
                     )
-                logger.info("Cleaned up %d songs with corrupted youtube_ids", len(bad_songs))
+                logger.info(
+                    "Cleaned up %d songs with corrupted youtube_ids", len(bad_songs)
+                )
     except Exception:
         logger.warning(
             "Failed to clean up corrupted youtube_ids on startup",
@@ -314,6 +317,7 @@ api_prefix = _settings.app.api_prefix
 app.include_router(songs.router, prefix=api_prefix)
 app.include_router(jobs.router, prefix=api_prefix)
 app.include_router(favorites.router, prefix=api_prefix)
+app.include_router(analytics.router, prefix=api_prefix)
 app.include_router(admin.router, prefix=api_prefix)
 app.include_router(subscription.router, prefix=api_prefix)
 app.include_router(subscription.webhook_router, prefix=api_prefix)

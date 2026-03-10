@@ -3,7 +3,7 @@
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from guitar_player.config import get_settings
 from jose import jwt as jose_jwt
@@ -20,7 +20,11 @@ from guitar_player.schemas.auth import (
     ResendCodeRequest,
     ResendCodeResponse,
 )
-from guitar_player.services.cognito_auth_service import CognitoAuthError, CognitoAuthService
+from guitar_player.services.cognito_auth_service import (
+    CognitoAuthError,
+    CognitoAuthService,
+)
+from guitar_player.services.analytics_helpers import track_event
 from guitar_player.services.telegram_service import TelegramService
 from guitar_player.dependencies import get_cognito_auth_service, get_telegram_service
 
@@ -48,11 +52,23 @@ def _cognito_to_http(exc: CognitoAuthError) -> HTTPException:
 @router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(
     body: RegisterRequest,
+    background_tasks: BackgroundTasks,
     auth_service: CognitoAuthService = Depends(get_cognito_auth_service),
 ) -> RegisterResponse:
     try:
         result = auth_service.register(body.email, body.password)
-        logger.info("New user registered: %s", body.email, extra={"email": body.email, "event_type": "user_registered"})
+        track_event(
+            background_tasks,
+            event_type="register",
+            event_category="auth",
+            user_email=body.email,
+            properties={"method": "email_password"},
+        )
+        logger.info(
+            "New user registered: %s",
+            body.email,
+            extra={"email": body.email, "event_type": "user_registered"},
+        )
         return RegisterResponse(
             user_sub=result["user_sub"],
             user_confirmed=result["user_confirmed"],
@@ -65,12 +81,24 @@ async def register(
 @router.post("/confirm", response_model=ConfirmResponse)
 async def confirm(
     body: ConfirmRequest,
+    background_tasks: BackgroundTasks,
     auth_service: CognitoAuthService = Depends(get_cognito_auth_service),
     telegram: TelegramService = Depends(get_telegram_service),
 ) -> ConfirmResponse:
     try:
         auth_service.confirm(body.email, body.confirmation_code)
-        logger.info("User confirmed email: %s", body.email, extra={"email": body.email, "event_type": "user_confirmed"})
+        track_event(
+            background_tasks,
+            event_type="email_confirmed",
+            event_category="auth",
+            user_email=body.email,
+            properties={"method": "email_password"},
+        )
+        logger.info(
+            "User confirmed email: %s",
+            body.email,
+            extra={"email": body.email, "event_type": "user_confirmed"},
+        )
         await telegram.send_event(
             f"<b>New user registered</b>\nEmail: {body.email}\nMethod: email/password"
         )
@@ -94,12 +122,21 @@ def resend_code(
 @router.post("/login", response_model=LoginResponse)
 def login(
     body: LoginRequest,
+    background_tasks: BackgroundTasks,
     auth_service: CognitoAuthService = Depends(get_cognito_auth_service),
 ) -> LoginResponse:
     settings = get_settings()
     if settings.environment == "local" and os.environ.get("SKIP_AUTH") == "1":
         claims = {"sub": f"local-{body.email}", "email": body.email}
         fake_token = jose_jwt.encode(claims, "dev-secret", algorithm="HS256")
+        track_event(
+            background_tasks,
+            event_type="login",
+            event_category="auth",
+            user_sub=claims["sub"],
+            user_email=body.email,
+            properties={"method": "email_password", "mode": "local_skip_auth"},
+        )
         return LoginResponse(
             access_token=fake_token,
             id_token=fake_token,
@@ -108,6 +145,13 @@ def login(
         )
     try:
         tokens = auth_service.login(body.email, body.password)
+        track_event(
+            background_tasks,
+            event_type="login",
+            event_category="auth",
+            user_email=body.email,
+            properties={"method": "email_password"},
+        )
         return LoginResponse(**tokens)
     except CognitoAuthError as exc:
         raise _cognito_to_http(exc)
@@ -123,7 +167,8 @@ def refresh(
         # Decode email from the existing token if available
         fake_token = jose_jwt.encode(
             {"sub": "local-dev-user", "email": "dev@local.test"},
-            "dev-secret", algorithm="HS256",
+            "dev-secret",
+            algorithm="HS256",
         )
         return RefreshResponse(
             access_token=fake_token,
