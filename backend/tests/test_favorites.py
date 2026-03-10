@@ -40,7 +40,7 @@ async def _setup(session):
         title="Fav Test Song 2",
         song_name=f"test_artist/fav_test_song_{uuid.uuid4().hex[:8]}",
     )
-    await session.commit()
+    await song_dao.commit()
     return user_a, user_b, song_1, song_2
 
 
@@ -49,8 +49,8 @@ async def _cleanup_favorites(session, *user_ids):
     fav_dao = FavoriteDAO(session)
     for uid in user_ids:
         for fav in await fav_dao.list_by_user(uid):
-            await fav_dao.delete(fav)
-    await session.commit()
+            await fav_dao.delete_by_id(fav.id)
+    await fav_dao.commit()
 
 
 # ── Add ──────────────────────────────────────────────────────────
@@ -58,11 +58,11 @@ async def _cleanup_favorites(session, *user_ids):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_add_favorite(session_factory):
+async def test_add_favorite(session_factory, storage):
     """Adding a favorite returns correct user_id and song_id."""
     async with session_factory() as session:
         user_a, _, song_1, _ = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         result = await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         assert result.song_id == song_1.id
@@ -74,11 +74,11 @@ async def test_add_favorite(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_add_duplicate_raises(session_factory):
+async def test_add_duplicate_raises(session_factory, storage):
     """Adding the same song twice raises AlreadyExistsError."""
     async with session_factory() as session:
         user_a, _, song_1, _ = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         await session.commit()
@@ -91,11 +91,11 @@ async def test_add_duplicate_raises(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_add_nonexistent_song_raises(session_factory):
+async def test_add_nonexistent_song_raises(session_factory, storage):
     """Adding a favorite for a song that doesn't exist raises NotFoundError."""
     async with session_factory() as session:
         await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         with pytest.raises(NotFoundError):
             await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, uuid.uuid4())
@@ -106,11 +106,11 @@ async def test_add_nonexistent_song_raises(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_list_favorites(session_factory):
+async def test_list_favorites(session_factory, storage):
     """Listing returns all favorites for the user."""
     async with session_factory() as session:
         user_a, _, song_1, song_2 = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_2.id)
@@ -125,21 +125,21 @@ async def test_list_favorites(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_list_empty_for_unknown_user(session_factory):
+async def test_list_empty_for_unknown_user(session_factory, storage):
     """Listing favorites for a user with no account returns empty list."""
     async with session_factory() as session:
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
         favs = await svc.list_favorites("nonexistent-sub-xyz")
         assert favs == []
 
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_list_user_isolation(session_factory):
+async def test_list_user_isolation(session_factory, storage):
     """User A's favorites are not visible to User B."""
     async with session_factory() as session:
         user_a, user_b, song_1, song_2 = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_2.id)
@@ -162,11 +162,11 @@ async def test_list_user_isolation(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_remove_favorite(session_factory):
+async def test_remove_favorite(session_factory, storage):
     """Removing a favorite makes it disappear from the list."""
     async with session_factory() as session:
         user_a, _, song_1, song_2 = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_2.id)
@@ -184,11 +184,11 @@ async def test_remove_favorite(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_remove_nonexistent_raises(session_factory):
+async def test_remove_nonexistent_raises(session_factory, storage):
     """Removing a favorite that doesn't exist raises NotFoundError."""
     async with session_factory() as session:
         user_a, _, song_1, _ = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         with pytest.raises(NotFoundError):
             await svc.remove_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
@@ -196,11 +196,11 @@ async def test_remove_nonexistent_raises(session_factory):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_remove_does_not_affect_other_user(session_factory):
+async def test_remove_does_not_affect_other_user(session_factory, storage):
     """Removing User A's favorite does not affect User B's favorites."""
     async with session_factory() as session:
         user_a, user_b, song_1, _ = await _setup(session)
-        svc = FavoriteService(session)
+        svc = FavoriteService(session, storage)
 
         await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
         await svc.add_favorite(TEST_USER_B_SUB, TEST_USER_B_EMAIL, song_1.id)

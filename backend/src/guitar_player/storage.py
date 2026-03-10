@@ -32,6 +32,7 @@ class StorageBackend(Protocol):
     def delete_file(self, key: str) -> bool: ...
     def delete_prefix(self, prefix: str) -> int: ...
     def read_json(self, key: str) -> dict | list: ...
+    def write_json(self, key: str, data: dict | list) -> None: ...
     def resolve_service_path(self, key: str) -> str: ...
 
 
@@ -70,11 +71,7 @@ class LocalStorage:
         base = self._base_path / prefix
         if not base.is_dir():
             return []
-        return [
-            f"{prefix}/{f.name}"
-            for f in base.iterdir()
-            if f.is_file()
-        ]
+        return [f"{prefix}/{f.name}" for f in base.iterdir() if f.is_file()]
 
     def delete_file(self, key: str) -> bool:
         path = self._base_path / key
@@ -98,6 +95,12 @@ class LocalStorage:
         path = self._base_path / key
         with open(path) as f:
             return json.load(f)
+
+    def write_json(self, key: str, data: dict | list) -> None:
+        path = self._base_path / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 class S3Storage:
@@ -186,6 +189,15 @@ class S3Storage:
     def read_json(self, key: str) -> dict | list:
         resp = self._s3.get_object(Bucket=self._bucket, Key=key)
         return json.loads(resp["Body"].read())
+
+    def write_json(self, key: str, data: dict | list) -> None:
+        body = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
+        self._s3.put_object(
+            Bucket=self._bucket,
+            Key=key,
+            Body=body,
+            ContentType="application/json",
+        )
 
 
 def create_storage(settings: Settings) -> StorageBackend:

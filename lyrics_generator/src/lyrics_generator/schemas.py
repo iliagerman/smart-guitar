@@ -106,6 +106,25 @@ class FetchAndAlignResponse(BaseModel):
     source: str = Field(description="Where lyrics came from: 'lrclib_synced+whisper', 'lrclib_plain+whisper', 'openai_whisper', or 'whisper'")
 
 
+class CorrectLyricsRequest(BaseModel):
+    input_path: str = Field(
+        default="",
+        description="Storage key to the audio file (no longer used, kept for compat)",
+    )
+    whisper_segments: list[Segment] = Field(
+        ..., description="Segments from Whisper (accurate timestamps, may have wrong text)",
+    )
+    quick_segments: list[Segment] = Field(
+        ..., description="Segments from quick lyrics (correct text+structure)",
+    )
+
+
+class CorrectLyricsResponse(BaseModel):
+    status: str = "done"
+    segments: list[Segment]
+    source: str = Field(default="corrected", description="Source label for the corrected lyrics")
+
+
 class ErrorResponse(BaseModel):
     status: str = "error"
     detail: str

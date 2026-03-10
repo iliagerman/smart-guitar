@@ -9,14 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
 from guitar_player.models.subscription import Subscription
+from guitar_player.schemas.records import SubscriptionRecord
 
 
-class SubscriptionDAO(BaseDAO[Subscription]):
+class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, Subscription)
+        super().__init__(session, Subscription, SubscriptionRecord)
 
-    async def get_active_by_user(self, user_id: uuid.UUID) -> Optional[Subscription]:
-        """Get the user's active subscription (active, trialing, or past_due)."""
+    async def get_active_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
         stmt = select(Subscription).where(
             and_(
                 Subscription.user_id == user_id,
@@ -24,12 +24,12 @@ class SubscriptionDAO(BaseDAO[Subscription]):
             )
         )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        obj = result.scalar_one_or_none()
+        return self._to_record(obj) if obj else None
 
     async def get_by_external_id(
         self, provider: str, external_sub_id: str
-    ) -> Optional[Subscription]:
-        """Look up subscription by provider + external subscription ID."""
+    ) -> Optional[SubscriptionRecord]:
         stmt = select(Subscription).where(
             and_(
                 Subscription.provider == provider,
@@ -37,10 +37,10 @@ class SubscriptionDAO(BaseDAO[Subscription]):
             )
         )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        obj = result.scalar_one_or_none()
+        return self._to_record(obj) if obj else None
 
-    async def get_pending_by_user(self, user_id: uuid.UUID) -> Optional[Subscription]:
-        """Get the most recent pending subscription for a user."""
+    async def get_pending_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
         stmt = (
             select(Subscription)
             .where(
@@ -53,10 +53,10 @@ class SubscriptionDAO(BaseDAO[Subscription]):
             .limit(1)
         )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        obj = result.scalar_one_or_none()
+        return self._to_record(obj) if obj else None
 
-    async def get_by_user(self, user_id: uuid.UUID) -> Optional[Subscription]:
-        """Get the most recent subscription for a user (any status)."""
+    async def get_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
         stmt = (
             select(Subscription)
             .where(Subscription.user_id == user_id)
@@ -64,10 +64,10 @@ class SubscriptionDAO(BaseDAO[Subscription]):
             .limit(1)
         )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        obj = result.scalar_one_or_none()
+        return self._to_record(obj) if obj else None
 
     async def has_any_subscription(self, user_id: uuid.UUID) -> bool:
-        """Check if the user has ever had a subscription (any status, excluding pending)."""
         stmt = select(Subscription.id).where(
             and_(
                 Subscription.user_id == user_id,
@@ -77,8 +77,7 @@ class SubscriptionDAO(BaseDAO[Subscription]):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
-    async def get_canceled_with_access(self, user_id: uuid.UUID) -> Optional[Subscription]:
-        """Get a canceled subscription that still has remaining paid time."""
+    async def get_canceled_with_access(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
         now = datetime.now(timezone.utc)
         stmt = select(Subscription).where(
             and_(
@@ -88,4 +87,5 @@ class SubscriptionDAO(BaseDAO[Subscription]):
             )
         ).order_by(Subscription.current_period_end.desc()).limit(1)
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        obj = result.scalar_one_or_none()
+        return self._to_record(obj) if obj else None

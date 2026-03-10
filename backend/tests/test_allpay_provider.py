@@ -224,8 +224,10 @@ class TestGetStatus:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(provider._subscription_dao, "get_pending_by_user", return_value=None),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
         ):
             result = await provider.get_status("sub-123", "test@example.com")
 
@@ -242,8 +244,10 @@ class TestGetStatus:
             patch.object(
                 provider._user_dao, "get_or_create", return_value=mock_user_with_trial
             ),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(provider._subscription_dao, "get_pending_by_user", return_value=None),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
         ):
             result = await provider.get_status("sub-trial", "trial@example.com")
 
@@ -269,6 +273,7 @@ class TestGetStatus:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
@@ -312,11 +317,12 @@ class TestGetStatusPendingVerification:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(
                 provider._subscription_dao, "get_pending_by_user", return_value=mock_pending
             ),
-            patch.object(provider._subscription_dao, "update") as mock_update,
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -354,10 +360,12 @@ class TestGetStatusPendingVerification:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(
                 provider._subscription_dao, "get_pending_by_user", return_value=mock_pending
             ),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -381,10 +389,12 @@ class TestGetStatusPendingVerification:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(
                 provider._subscription_dao, "get_pending_by_user", return_value=mock_pending
             ),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
             ) as mock_http_cls,
@@ -412,10 +422,12 @@ class TestGetStatusPendingVerification:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
             patch.object(
                 provider._subscription_dao, "get_pending_by_user", return_value=mock_pending
             ),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -453,10 +465,12 @@ class TestGetStatusActiveCheck:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
-            patch.object(provider._subscription_dao, "update") as mock_update,
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -496,6 +510,7 @@ class TestGetStatusActiveCheck:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
@@ -529,6 +544,7 @@ class TestGetStatusActiveCheck:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
@@ -559,6 +575,7 @@ class TestGetStatusActiveCheck:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
@@ -595,10 +612,12 @@ class TestGetStatusActiveCheck:
             patch.object(
                 provider._user_dao, "get_or_create", return_value=mock_user_with_trial
             ),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
-            patch.object(provider._subscription_dao, "update"),
+            patch.object(provider._subscription_dao, "update_by_id"),
+            patch.object(provider._subscription_dao, "get_canceled_with_access", return_value=None),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -626,6 +645,8 @@ class TestCreateCheckout:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "get_by_external_id", return_value=None),
+            patch.object(provider._subscription_dao, "create"),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -651,6 +672,8 @@ class TestCreateCheckout:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "get_by_external_id", return_value=None),
+            patch.object(provider._subscription_dao, "create"),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -673,6 +696,8 @@ class TestCreateCheckout:
 
         with (
             patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "get_by_external_id", return_value=None),
+            patch.object(provider._subscription_dao, "create"),
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -833,7 +858,7 @@ class TestCancelSubscription:
             patch.object(
                 provider._subscription_dao, "get_active_by_user", return_value=mock_sub
             ),
-            patch.object(provider._subscription_dao, "update") as mock_update,
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
             patch(
                 "guitar_player.services.allpay_provider.httpx.AsyncClient",
                 return_value=mock_client,
@@ -917,7 +942,7 @@ class TestHandleWebhook:
             patch.object(
                 provider._subscription_dao, "get_by_external_id", return_value=existing_sub
             ),
-            patch.object(provider._subscription_dao, "update") as mock_update,
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
         ):
             await provider.handle_webhook(request)
 
@@ -963,7 +988,7 @@ class TestHandleWebhook:
             patch.object(
                 provider._subscription_dao, "get_by_external_id", return_value=existing_sub
             ),
-            patch.object(provider._subscription_dao, "update") as mock_update,
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
             patch.object(provider._user_dao, "get_by_id", return_value=mock_user),
         ):
             await provider.handle_webhook(request)

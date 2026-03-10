@@ -14,7 +14,6 @@ from guitar_player.storage import StorageBackend
 
 class FavoriteService:
     def __init__(self, session: AsyncSession, storage: StorageBackend) -> None:
-        self._session = session
         self._storage = storage
         self._favorite_dao = FavoriteDAO(session)
         self._song_dao = SongDAO(session)
@@ -46,7 +45,7 @@ class FavoriteService:
         if not favorite:
             raise NotFoundError("Favorite", f"{user.id}:{song_id}")
 
-        await self._favorite_dao.delete(favorite)
+        await self._favorite_dao.delete_by_id(favorite.id)
         await self._song_dao.decrement_like_count(song_id)
 
     async def list_favorites(

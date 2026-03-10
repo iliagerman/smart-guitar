@@ -85,9 +85,9 @@ async def test_song_detail_includes_tabs(settings, storage):
                 artist="Test Artist",
                 song_name=song_name,
                 audio_key=f"{song_name}/audio.mp3",
+                tabs_key=tabs_key,
             )
-            song.tabs_key = tabs_key
-            await session.commit()
+            await song_dao.commit()
             song_id = song.id
 
         # Fetch song detail
@@ -107,7 +107,7 @@ async def test_song_detail_includes_tabs(settings, storage):
             song_dao = SongDAO(session)
             song = await song_dao.get_by_song_name(song_name)
             if song:
-                await song_dao.delete(song)
+                await song_dao.delete_by_id(song.id)
                 await session.commit()
         for d in created_dirs:
             shutil.rmtree(d, ignore_errors=True)
@@ -145,7 +145,7 @@ async def test_song_detail_empty_tabs_when_missing(settings, storage):
             song_dao = SongDAO(session)
             song = await song_dao.get_by_song_name(song_name)
             if song:
-                await song_dao.delete(song)
+                await song_dao.delete_by_id(song.id)
                 await session.commit()
         await close_db()
 
@@ -171,9 +171,9 @@ async def test_song_detail_tabs_structure(settings, storage):
                 artist="Test Artist",
                 song_name=song_name,
                 audio_key=f"{song_name}/audio.mp3",
+                tabs_key=tabs_key,
             )
-            song.tabs_key = tabs_key
-            await session.commit()
+            await song_dao.commit()
             song_id = song.id
 
         async with factory() as session:
@@ -196,7 +196,7 @@ async def test_song_detail_tabs_structure(settings, storage):
             song_dao = SongDAO(session)
             song = await song_dao.get_by_song_name(song_name)
             if song:
-                await song_dao.delete(song)
+                await song_dao.delete_by_id(song.id)
                 await session.commit()
         for d in created_dirs:
             shutil.rmtree(d, ignore_errors=True)

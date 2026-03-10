@@ -227,9 +227,10 @@ async def test_deletes_local_db_user_if_exists():
     mock_telegram = AsyncMock()
 
     mock_db_user = MagicMock()
+    mock_db_user.id = "mock-user-id"
     mock_user_dao = AsyncMock()
     mock_user_dao.get_by_cognito_sub.return_value = mock_db_user
-    mock_user_dao.delete.return_value = None
+    mock_user_dao.delete_by_id.return_value = True
 
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
@@ -263,7 +264,7 @@ async def test_deletes_local_db_user_if_exists():
         result = await _run()
 
     assert result["deleted"] == 1
-    mock_user_dao.delete.assert_called_once_with(mock_db_user)
+    mock_user_dao.delete_by_id.assert_called_once_with(mock_db_user.id)
 
 
 @pytest.mark.asyncio

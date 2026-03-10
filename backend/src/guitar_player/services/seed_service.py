@@ -20,14 +20,12 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from guitar_player.dao.favorite_dao import FavoriteDAO
 from guitar_player.dao.song_dao import SongDAO
-from guitar_player.models.favorite import Favorite
-from guitar_player.models.song import Song
-from guitar_player.models.user import User
+from guitar_player.schemas.records import UserRecord
 
 if TYPE_CHECKING:
     from guitar_player.storage import StorageBackend
@@ -231,7 +229,7 @@ def seed_local_bucket_dirs(base_path: str) -> int:
 
 async def seed_db_catalog(
     session: AsyncSession,
-    default_user: User,
+    default_user: UserRecord,
     *,
     dry_run: bool = False,
 ) -> AsyncGenerator[str | int, None]:
@@ -279,7 +277,7 @@ async def seed_db_catalog(
             yield msg
 
     if created and not dry_run:
-        await session.flush()
+        await dao.flush()
 
     msg = (
         f"{prefix}seed_db_catalog: done — {created}/{total} songs "
@@ -292,7 +290,7 @@ async def seed_db_catalog(
 
 async def seed_update_metadata(
     session: AsyncSession,
-    default_user: User,
+    default_user: UserRecord,
     *,
     dry_run: bool = False,
 ) -> AsyncGenerator[str | int, None]:
@@ -308,6 +306,8 @@ async def seed_update_metadata(
     prefix = "[DRY RUN] " if dry_run else ""
     rng = random.Random(42)
 
+    dao = SongDAO(session)
+    fav_dao = FavoriteDAO(session)
     updated = 0
     fav_count = 0
     total = len(SEED_SONGS)
@@ -317,9 +317,7 @@ async def seed_update_metadata(
     yield msg
 
     for i, entry in enumerate(SEED_SONGS, 1):
-        stmt = select(Song).where(Song.song_name == entry["song_name"])
-        result = await session.execute(stmt)
-        song = result.scalar_one_or_none()
+        song = await dao.get_by_song_name(entry["song_name"])
         if not song:
             if i % 50 == 0 or i == 1:
                 msg = f"{prefix}seed_update_metadata: {i}/{total} (song not found, skipping)"
@@ -328,59 +326,50 @@ async def seed_update_metadata(
             continue
 
         # Check what would change
-        changes: list[str] = []
+        change_descriptions: list[str] = []
+        update_fields: dict[str, Any] = {}
+
         if song.genre is None:
-            changes.append(f"genre=>{entry['genre']}")
-            if not dry_run:
-                song.genre = entry["genre"]
+            change_descriptions.append(f"genre=>{entry['genre']}")
+            update_fields["genre"] = entry["genre"]
         if song.play_count == 0:
             new_pc = rng.randint(0, 500)
-            changes.append(f"play_count=>{new_pc}")
-            if not dry_run:
-                song.play_count = new_pc
+            change_descriptions.append(f"play_count=>{new_pc}")
+            update_fields["play_count"] = new_pc
         else:
             rng.randint(0, 500)  # advance rng to keep deterministic
         if song.duration_seconds is None:
             new_dur = rng.randint(_MIN_DURATION, _MAX_DURATION)
-            changes.append(f"duration=>{new_dur}")
-            if not dry_run:
-                song.duration_seconds = new_dur
+            change_descriptions.append(f"duration=>{new_dur}")
+            update_fields["duration_seconds"] = new_dur
         else:
             rng.randint(_MIN_DURATION, _MAX_DURATION)  # advance rng
         if song.title != entry["title"]:
-            changes.append(f"title: '{song.title}' => '{entry['title']}'")
-            if not dry_run:
-                song.title = entry["title"]
+            change_descriptions.append(f"title: '{song.title}' => '{entry['title']}'")
+            update_fields["title"] = entry["title"]
         if song.artist != entry["artist"]:
-            changes.append(f"artist: '{song.artist}' => '{entry['artist']}'")
-            if not dry_run:
-                song.artist = entry["artist"]
+            change_descriptions.append(f"artist: '{song.artist}' => '{entry['artist']}'")
+            update_fields["artist"] = entry["artist"]
 
-        if changes:
+        if change_descriptions:
             updated += 1
             if dry_run:
-                msg = f"{prefix}would update {entry['song_name']}: {', '.join(changes)}"
+                msg = f"{prefix}would update {entry['song_name']}: {', '.join(change_descriptions)}"
                 logger.info(msg)
                 yield msg
+            else:
+                await dao.update_by_id(song.id, **update_fields)
 
         # Create favorite (~40 % chance, deterministic via rng)
         if rng.random() < 0.4:
-            fav_exists_stmt = (
-                select(func.count())
-                .select_from(Favorite)
-                .where(
-                    Favorite.user_id == default_user.id,
-                    Favorite.song_id == song.id,
-                )
-            )
-            exists = (await session.execute(fav_exists_stmt)).scalar_one()
-            if not exists:
+            fav_exists = await fav_dao.exists(default_user.id, song.id)
+            if not fav_exists:
                 if dry_run:
                     msg = f"{prefix}would create favorite: {entry['song_name']}"
                     logger.info(msg)
                     yield msg
                 else:
-                    session.add(Favorite(user_id=default_user.id, song_id=song.id))
+                    await fav_dao.create(user_id=default_user.id, song_id=song.id)
                 fav_count += 1
 
         if i % 50 == 0 or i == 1:
@@ -394,7 +383,7 @@ async def seed_update_metadata(
             yield msg
 
     if (updated or fav_count) and not dry_run:
-        await session.flush()
+        await dao.flush()
 
     verb = "would update" if dry_run else "updated"
     fav_verb = "would create" if dry_run else "created"
@@ -439,16 +428,13 @@ async def seed_discover_storage_keys(
     """
     prefix = "[DRY RUN] " if dry_run else ""
 
-    stmt = select(Song).where(Song.song_name.isnot(None))
-    result = await session.execute(stmt)
-    songs: list[Song] = list(result.scalars().all())
+    dao = SongDAO(session)
+    songs = await dao.list_all_with_song_name()
     total = len(songs)
     updated = 0
 
     # Pre-load all existing youtube_ids to avoid unique constraint violations.
-    yt_stmt = select(Song.youtube_id).where(Song.youtube_id.isnot(None))
-    yt_result = await session.execute(yt_stmt)
-    used_youtube_ids: set[str] = {row[0] for row in yt_result.all()}
+    used_youtube_ids: set[str] = await dao.get_all_youtube_ids()
 
     msg = f"{prefix}seed_discover_storage_keys: starting — {total} songs to scan"
     logger.info(msg)
@@ -464,53 +450,49 @@ async def seed_discover_storage_keys(
         if not files:
             continue
 
-        changes: list[str] = []
+        change_descriptions: list[str] = []
+        update_fields: dict[str, Any] = {}
 
         # Discover known filenames (audio, stems, chords, lyrics, tabs).
         for filename, attr in _FILENAME_TO_KEY.items():
             key = f"{song.song_name}/{filename}"
             if key in files and not getattr(song, attr, None):
-                changes.append(f"{attr}={filename}")
+                change_descriptions.append(f"{attr}={filename}")
                 if not dry_run:
-                    setattr(song, attr, key)
+                    update_fields[attr] = key
 
         # Discover thumbnail from any .jpg/.jpeg file.
         if not song.thumbnail_key:
             for f in sorted(files):
                 if f.lower().endswith((".jpg", ".jpeg")):
-                    changes.append(f"thumbnail_key={f.rsplit('/', 1)[-1]}")
+                    change_descriptions.append(f"thumbnail_key={f.rsplit('/', 1)[-1]}")
                     if not dry_run:
-                        song.thumbnail_key = f
+                        update_fields["thumbnail_key"] = f
                     # Extract youtube_id from filename (skip if already taken).
                     if not song.youtube_id:
                         stem = f.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-                        if stem not in ("thumbnail", "cover"):
-                            candidate = stem
-                            while candidate in used_youtube_ids:
-                                candidate += "_"
-                            changes.append(f"youtube_id={candidate}")
+                        if stem not in ("thumbnail", "cover") and stem not in used_youtube_ids:
+                            change_descriptions.append(f"youtube_id={stem}")
                             if not dry_run:
-                                song.youtube_id = candidate
-                            used_youtube_ids.add(candidate)
+                                update_fields["youtube_id"] = stem
+                            used_youtube_ids.add(stem)
                     break
 
-        if changes:
+        if change_descriptions:
             updated += 1
             if dry_run:
-                msg = f"{prefix}would update {song.song_name}: {', '.join(changes)}"
+                msg = f"{prefix}would update {song.song_name}: {', '.join(change_descriptions)}"
                 logger.info(msg)
                 yield msg
             else:
-                # Use a savepoint so a single unique-constraint conflict
-                # doesn't roll back the entire batch.
                 try:
-                    async with session.begin_nested():
-                        await session.flush()
+                    await dao.update_by_id(song.id, **update_fields)
                 except IntegrityError as exc:
                     logger.warning(
                         "IntegrityError updating %s (skipped): %s",
                         song.song_name, exc,
                     )
+                    await dao.rollback()
                     updated -= 1
 
         if i % 10 == 0 or i == 1:

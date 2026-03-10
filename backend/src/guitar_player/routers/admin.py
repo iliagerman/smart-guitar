@@ -17,7 +17,6 @@ import json
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.admin import require_admin_token
@@ -33,7 +32,7 @@ from guitar_player.dependencies import (
     get_storage,
 )
 from guitar_player.exceptions import YoutubeAuthenticationRequiredError
-from guitar_player.models.song import Song
+from guitar_player.schemas.records import SongRecord
 from guitar_player.schemas.admin import (
     AdminDropSongsResponse,
     AdminRequiredSongsResponse,
@@ -124,7 +123,7 @@ async def admin_heal_song(
         warnings.append(f"audio_thumbnail_failed:{type(e).__name__}")
         audio_heal_error = f"{type(e).__name__}: {e}"
         audio_heal_exception = e
-        await session.rollback()
+        await SongDAO(session).rollback()
 
     # If audio is still missing after the heal attempt, the song is
     # unrecoverable — log it and delete from DB.
@@ -153,7 +152,7 @@ async def admin_heal_song(
                 title=song.title or "?",
                 reason=reason,
             )
-            await dao.delete(song)
+            await dao.delete_by_id(song.id)
             logger.info(
                 "Deleted unrecoverable song %s (%s) — %s",
                 song_id,
@@ -177,7 +176,7 @@ async def admin_heal_song(
     except Exception as e:
         logger.warning("Admin (service) reprocess check failed for %s: %s", song_id, e)
         warnings.append(f"reprocess_failed:{type(e).__name__}")
-        await session.rollback()
+        await SongDAO(session).rollback()
 
     lyrics_enqueued = False
     try:
@@ -187,7 +186,7 @@ async def admin_heal_song(
     except Exception as e:
         logger.warning("Admin (service) lyrics check failed for %s: %s", song_id, e)
         warnings.append(f"lyrics_failed:{type(e).__name__}")
-        await session.rollback()
+        await SongDAO(session).rollback()
 
     return AdminSongResponse(
         song_id=song_id,
@@ -217,8 +216,7 @@ async def admin_download_complete(
         raise HTTPException(status_code=404, detail="Audio file not found on S3")
 
     # Clear pending download flag
-    song.download_requested_at = None
-    await session.flush()
+    await dao.update_by_id(song_id, download_requested_at=None)
 
     # Auto-trigger processing (stem separation, chords, lyrics)
     job = await job_service.create_and_process_job(
@@ -328,7 +326,7 @@ async def populate_seed_songs(
                         yield json.dumps({"progress": item}) + "\n"
 
                 if not dry_run:
-                    await session.commit()
+                    await SongDAO(session).commit()
 
                 result = AdminSeedPopulateResponse(
                     songs_created=songs_created,
@@ -344,7 +342,7 @@ async def populate_seed_songs(
                 )
                 yield json.dumps({"result": result.model_dump()}) + "\n"
             except Exception:
-                await session.rollback()
+                await SongDAO(session).rollback()
                 raise
 
     return StreamingResponse(_generate(), media_type="application/x-ndjson")
@@ -355,7 +353,7 @@ async def populate_seed_songs(
 # ---------------------------------------------------------------------------
 
 
-def _collect_storage_prefixes(song: Song) -> list[str]:
+def _collect_storage_prefixes(song: SongRecord) -> list[str]:
     """Return unique storage prefixes (song_name dirs) for a song."""
     if song.song_name:
         return [song.song_name]
@@ -388,7 +386,7 @@ async def admin_drop_song(
                 logger.warning("Storage cleanup failed for %s: %s", prefix, e)
                 storage_errors.append(f"{prefix}: {e}")
 
-    await dao.delete(song)
+    await dao.delete_by_id(song.id)
     logger.info(
         "Dropped song %s (%s) (skip_storage=%s)", song_id, song.song_name, skip_storage
     )
@@ -427,7 +425,7 @@ async def admin_drop_all_songs(
                     storage_errors.append(f"{prefix}: {e}")
 
     for song in songs:
-        await dao.delete(song)
+        await dao.delete_by_id(song.id)
 
     count = len(songs)
     logger.info("Dropped all %d songs (skip_storage=%s)", count, skip_storage)
@@ -485,7 +483,7 @@ async def admin_sanity_check(
 
     db_ok = False
     storage_ok = False
-    song: Song | None = None
+    song: SongRecord | None = None
     audio_path: str | None = None
     vocals_path: str | None = None
     guitar_path: str | None = None
@@ -493,7 +491,7 @@ async def admin_sanity_check(
     # 1. DB connectivity ---------------------------------------------------
     async def _check_db() -> None:
         nonlocal db_ok
-        await session.execute(text("SELECT 1"))
+        await SongDAO(session).ping()
         db_ok = True
 
     checks.append(await _run_check("db_connectivity", _check_db))
@@ -528,21 +526,15 @@ async def admin_sanity_check(
     # 7. Song lookup -------------------------------------------------------
     async def _check_song_lookup() -> None:
         nonlocal song
+        song_dao = SongDAO(session)
         if body.song_id:
-            song = await session.get(Song, body.song_id)
+            song = await song_dao.get_by_id(body.song_id)
             if not song:
                 raise ValueError(f"Song {body.song_id} not found")
             if not song.audio_key:
                 raise ValueError(f"Song {body.song_id} has no audio_key")
         else:
-            stmt = (
-                select(Song)
-                .where(Song.audio_key.isnot(None))
-                .order_by(Song.created_at.asc())
-                .limit(1)
-            )
-            row = await session.execute(stmt)
-            song = row.scalar_one_or_none()
+            song = await song_dao.get_first_with_audio()
             if not song:
                 raise ValueError("No song with audio_key found in DB")
 

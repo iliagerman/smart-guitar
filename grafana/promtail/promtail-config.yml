@@ -55,6 +55,15 @@ scrape_configs:
                 source: timestamp
                 format: "2006-01-02 15:04:05,000"
 
+      # Extract level from non-JSON lines (e.g., "INFO:", "WARNING:", "INFO -")
+      - match:
+          selector: '{environment="local-dev", level=""}'
+          stages:
+            - regex:
+                expression: '(?i)(?P<level>DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL)'
+            - labels:
+                level:
+
       # Drop health-check lines to reduce noise
       - match:
           selector: '{environment="local-dev"}'

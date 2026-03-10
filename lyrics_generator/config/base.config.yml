@@ -34,6 +34,9 @@ whisper:
   logprob_threshold: -1.0
   compression_ratio_threshold: 1.8
 
+  # Languages where local WhisperX is unreliable — prefer OpenAI Whisper instead.
+  openai_prefer_languages: ["he", "ar"]
+
 processing:
   temp_dir: "/tmp/lyrics_generator"
   cleanup_temp: true

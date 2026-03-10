@@ -51,7 +51,7 @@ async def song(_db, storage):
         song_dao = SongDAO(session)
         existing = await song_dao.get_by_song_name(SONG_NAME)
         if existing:
-            await song_dao.delete(existing)
+            await song_dao.delete_by_id(existing.id)
             await session.commit()
 
         song = await song_dao.create(
@@ -68,7 +68,7 @@ async def song(_db, storage):
         song_dao = SongDAO(session)
         s = await song_dao.get_by_song_name(SONG_NAME)
         if s:
-            await song_dao.delete(s)
+            await song_dao.delete_by_id(s.id)
             await session.commit()
 
     # Cleanup files
@@ -87,23 +87,26 @@ async def _reset_song_for_trigger(db_factory, song_id):
         s = await song_dao.get_by_id(song_id)
         if not s:
             return
-        # Clear the processing lock
-        s.processing_job_id = None
-        s.lyrics_failed = False
-        s.tabs_failed = False
-        s.lyrics_attempted_at = None
-        s.tabs_attempted_at = None
-        s.merge_attempted_at = None
-        s.lyrics_key = None
-        s.tabs_key = None
-        s.vocals_guitar_key = None
+        # Clear the processing lock and failure flags
+        await song_dao.update_by_id(
+            song_id,
+            processing_job_id=None,
+            lyrics_failed=False,
+            tabs_failed=False,
+            lyrics_attempted_at=None,
+            tabs_attempted_at=None,
+            merge_attempted_at=None,
+            lyrics_key=None,
+            tabs_key=None,
+            vocals_guitar_key=None,
+        )
         # Fail any active jobs so they don't block triggers
         active = await job_dao.get_active_job(song_id)
         while active:
-            await job_dao.update_status(active, "FAILED", error_message="test cleanup")
-            await session.flush()
+            await job_dao.update_status(active.id, "FAILED", error_message="test cleanup")
+            await job_dao.flush()
             active = await job_dao.get_active_job(song_id)
-        await session.commit()
+        await song_dao.commit()
 
 
 def _storage_base(storage) -> Path | None:
@@ -201,10 +204,8 @@ async def test_create_job_resets_failure_flags(_db, song, storage):
     # Set failure flags
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.lyrics_failed = True
-        s.tabs_failed = True
-        await session.commit()
+        await song_dao.update_by_id(song.id, lyrics_failed=True, tabs_failed=True)
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -233,9 +234,8 @@ async def test_lyrics_failed_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.lyrics_failed = True
-        await session.commit()
+        await song_dao.update_by_id(song.id, lyrics_failed=True)
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -252,9 +252,8 @@ async def test_tabs_failed_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.tabs_failed = True
-        await session.commit()
+        await song_dao.update_by_id(song.id, tabs_failed=True)
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -271,9 +270,8 @@ async def test_recent_lyrics_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.lyrics_attempted_at = datetime.now(timezone.utc)
-        await session.commit()
+        await song_dao.update_by_id(song.id, lyrics_attempted_at=datetime.now(timezone.utc))
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -291,10 +289,8 @@ async def test_expired_lyrics_attempted_at_does_not_block(_db, song, storage):
     )
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.lyrics_attempted_at = expired
-        s.vocals_key = f"{SONG_NAME}/vocals.mp3"
-        await session.commit()
+        await song_dao.update_by_id(song.id, lyrics_attempted_at=expired, vocals_key=f"{SONG_NAME}/vocals.mp3")
+        await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/vocals.mp3")
 
@@ -328,9 +324,8 @@ async def test_recent_tabs_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.tabs_attempted_at = datetime.now(timezone.utc)
-        await session.commit()
+        await song_dao.update_by_id(song.id, tabs_attempted_at=datetime.now(timezone.utc))
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -348,10 +343,8 @@ async def test_expired_tabs_attempted_at_does_not_block(_db, song, storage):
     )
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.tabs_attempted_at = expired
-        s.guitar_key = f"{SONG_NAME}/guitar.mp3"
-        await session.commit()
+        await song_dao.update_by_id(song.id, tabs_attempted_at=expired, guitar_key=f"{SONG_NAME}/guitar.mp3")
+        await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/guitar.mp3")
 
@@ -385,9 +378,8 @@ async def test_recent_merge_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.merge_attempted_at = datetime.now(timezone.utc)
-        await session.commit()
+        await song_dao.update_by_id(song.id, merge_attempted_at=datetime.now(timezone.utc))
+        await song_dao.commit()
 
     async with _db() as session:
         svc = JobService(session, storage)
@@ -405,11 +397,13 @@ async def test_expired_merge_attempted_at_does_not_block(_db, song, storage):
     )
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.merge_attempted_at = expired
-        s.vocals_key = f"{SONG_NAME}/vocals.mp3"
-        s.guitar_key = f"{SONG_NAME}/guitar.mp3"
-        await session.commit()
+        await song_dao.update_by_id(
+            song.id,
+            merge_attempted_at=expired,
+            vocals_key=f"{SONG_NAME}/vocals.mp3",
+            guitar_key=f"{SONG_NAME}/guitar.mp3",
+        )
+        await song_dao.commit()
 
     dummy_vocals = _write_dummy_file(storage, f"{SONG_NAME}/vocals.mp3")
     dummy_guitar = _write_dummy_file(storage, f"{SONG_NAME}/guitar.mp3")
@@ -446,10 +440,8 @@ async def test_tabs_force_bypasses_failed_flag(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        s = await song_dao.get_by_id(song.id)
-        s.tabs_failed = True
-        s.guitar_key = f"{SONG_NAME}/guitar.mp3"
-        await session.commit()
+        await song_dao.update_by_id(song.id, tabs_failed=True, guitar_key=f"{SONG_NAME}/guitar.mp3")
+        await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/guitar.mp3")
 
@@ -521,7 +513,7 @@ async def test_stale_processing_lock_is_cleared(_db, song, storage):
         job_dao = JobDAO(session)
         job = await job_dao.get_by_id(first.id)
         stale_time = datetime.now(timezone.utc) - timedelta(minutes=45)
-        await job_dao.update(job, updated_at=stale_time)
+        await job_dao.update_by_id(job.id, updated_at=stale_time)
         await session.commit()
 
     async with _db() as session:

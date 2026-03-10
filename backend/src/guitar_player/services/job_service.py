@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 import tempfile
@@ -12,18 +13,14 @@ from typing import Sequence
 
 import httpx
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
-from guitar_player.models.song import Song
 from guitar_player.database import safe_session
 from guitar_player.app_state import get_storage
 from guitar_player.exceptions import NotFoundError
-from guitar_player.models.job import Job
 from guitar_player.schemas.job import JobResponse
+from guitar_player.schemas.records import JobRecord, SongRecord
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.youtube_service import YoutubeService
@@ -56,10 +53,23 @@ _STALE_ACTIVE_JOB_AFTER_SECONDS = 60 * 16  # 16 minutes
 _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS = 300  # 5 minutes
 
 
-# Throttle INFO logs for repeated “blocked” outcomes (e.g., missing stems while
+# Throttle INFO logs for repeated "blocked" outcomes (e.g., missing stems while
 # the UI polls). Keyed by (action, song_id). This is in-memory best-effort.
 _ADMIN_HEAL_LOG_THROTTLE_SECONDS = 600  # 10 minutes
 _LAST_ADMIN_HEAL_INFO_LOG: dict[tuple[str, uuid.UUID], float] = {}
+
+# Bump this to allow a one-time lyrics retry for non-Latin songs on next deploy.
+_CURRENT_LYRICS_HEAL_VERSION = 1
+
+# Regex matching characters from non-Latin scripts (Hebrew, Arabic, CJK, etc.)
+_NON_LATIN_RE = re.compile(r"[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F"
+                           r"\u3000-\u9FFF\uAC00-\uD7AF\u1100-\u11FF]")
+
+
+def _has_non_latin_text(*texts: str | None) -> bool:
+    """Return True if any of the provided texts contain non-Latin script characters."""
+    return any(_NON_LATIN_RE.search(t) for t in texts if t)
+
 
 
 def _should_log_admin_heal_info(action: str, song_id: uuid.UUID) -> bool:
@@ -237,10 +247,9 @@ def _enqueue_lyrics_transcription(
 class JobService:
     def __init__(
         self,
-        session: AsyncSession,
+        session,
         storage: StorageBackend,
     ) -> None:
-        self._session = session
         self._storage = storage
         self._job_dao = JobDAO(session)
         self._song_dao = SongDAO(session)
@@ -281,12 +290,11 @@ class JobService:
                     getattr(existing_job, "updated_at", None), now=now
                 ):
                     await self._job_dao.update_status(
-                        existing_job,
+                        existing_job.id,
                         "FAILED",
                         error_message="Stale job: marked failed by idempotency check",
                     )
-                    song.processing_job_id = None
-                    await self._session.flush()
+                    await self._song_dao.update_by_id(song.id, processing_job_id=None)
                 else:
                     logger.info(
                         "Idempotent job creation: returning existing active job %s for song %s",
@@ -296,12 +304,9 @@ class JobService:
                     return self._enrich_job(existing_job)
             else:
                 # Job doesn't exist or is already COMPLETED/FAILED — clear the lock.
-                song.processing_job_id = None
-                await self._session.flush()
+                await self._song_dao.update_by_id(song.id, processing_job_id=None)
 
         # Reset failure flags so the full pipeline can retry.
-        song.lyrics_failed = False
-
         job = await self._job_dao.create(
             user_id=user.id,
             song_id=song.id,
@@ -312,16 +317,15 @@ class JobService:
             mode=mode,
         )
 
-        # Set the processing lock to the new job.
-        song.processing_job_id = job.id
-        await self._session.flush()
+        # Set the processing lock to the new job and reset failure flags.
+        await self._song_dao.update_by_id(song.id, processing_job_id=job.id, lyrics_failed=False, tabs_failed=False)
 
         # IMPORTANT: job processing runs in a *separate* DB session.
         # If we enqueue the background task before committing, Postgres won't
         # expose the new Job row to the worker yet, and the worker will bail
         # out thinking the job doesn't exist.
         if processing is not None:
-            await self._session.commit()
+            await self._song_dao.commit()
 
             # Write an initial "pending" manifest so the presigned S3 URL
             # the client polls never returns 404 (avoids noisy browser console errors).
@@ -384,7 +388,7 @@ class JobService:
         # Policy: never keep drums/bass/piano/other stems.
         # If legacy keys/files exist, delete them and clear the DB columns.
         # This makes admin heal idempotent and prevents the UI from ever seeing them.
-        cleared_any = False
+        cleared_changes: dict = {}
         for stem_name in sorted(_UNWANTED_STEMS):
             col = f"{stem_name}_key"
             existing_key = getattr(song, col, None)
@@ -399,8 +403,7 @@ class JobService:
                         existing_key,
                         exc_info=True,
                     )
-                setattr(song, col, None)
-                cleared_any = True
+                cleared_changes[col] = None
             # Also delete conventional filenames, even if DB key is already NULL.
             candidate_key = f"{song.song_name}/{stem_name}{_STEM_EXT}"
             try:
@@ -413,14 +416,19 @@ class JobService:
                     exc_info=True,
                 )
 
-        if cleared_any:
-            await self._session.flush()
+        if cleared_changes:
+            await self._song_dao.update_by_id(song.id, **cleared_changes)
+            # Re-read song after update
+            song = await self._song_dao.get_by_id(song_id)
+            if not song:
+                raise NotFoundError("Song", str(song_id))
 
         # Scan disk for stem/chords/lyrics files under alternate names and fix DB keys.
         # IMPORTANT: this method may be called from endpoints other than /stream, so it
         # must be safe to call even when nothing is missing.
         fixed = 0
         missing_any = False
+        fix_changes: dict = {}
 
         for stem_name, variants in _STEM_FILE_VARIANTS.items():
             col = f"{stem_name}_key"
@@ -435,7 +443,7 @@ class JobService:
             for filename in variants:
                 candidate_key = f"{song.song_name}/{filename}"
                 if self._storage.file_exists(candidate_key):
-                    setattr(song, col, candidate_key)
+                    fix_changes[col] = candidate_key
                     logger.info("Admin: fixed %s -> %s", col, candidate_key)
                     fixed += 1
                     stem_missing = False
@@ -449,7 +457,7 @@ class JobService:
         if not chords_ok:
             chords_candidate = f"{song.song_name}/chords.json"
             if self._storage.file_exists(chords_candidate):
-                song.chords_key = chords_candidate
+                fix_changes["chords_key"] = chords_candidate
                 fixed += 1
             else:
                 missing_any = True
@@ -460,11 +468,11 @@ class JobService:
         if not lyrics_ok:
             lyrics_candidate = f"{song.song_name}/lyrics.json"
             if self._storage.file_exists(lyrics_candidate):
-                song.lyrics_key = lyrics_candidate
+                fix_changes["lyrics_key"] = lyrics_candidate
                 fixed += 1
 
-        if fixed:
-            await self._session.flush()
+        if fix_changes:
+            await self._song_dao.update_by_id(song.id, **fix_changes)
 
         # If nothing is missing after key-fixes, we're done.
         if not missing_any:
@@ -476,13 +484,17 @@ class JobService:
             now = _utcnow()
             if _is_stale_active_job(getattr(active_job, "updated_at", None), now=now):
                 await self._job_dao.update_status(
-                    active_job,
+                    active_job.id,
                     "FAILED",
                     error_message="Stale job: marked failed by admin",
                 )
-                await self._session.flush()
             else:
                 return None
+
+        # Re-read song after potential updates
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song", str(song_id))
 
         # Guard: don't trigger stem separation if the source audio is missing.
         audio_ok = bool(song.audio_key) and self._storage.file_exists(song.audio_key)
@@ -524,22 +536,48 @@ class JobService:
         # A previous transcription attempt already failed — don't retry
         # automatically on every page load / poll. The user can trigger
         # a manual retry via the full reprocess flow if needed.
+        #
+        # Exception: non-Latin songs get a one-time retry when a new heal
+        # version is deployed (bump _CURRENT_LYRICS_HEAL_VERSION).
         if song.lyrics_failed:
-            if _should_log_admin_heal_info("lyrics_only", song_id):
+            is_non_latin = _has_non_latin_text(song.title, song.artist)
+            needs_heal = is_non_latin and song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION
+            if needs_heal:
                 logger.info(
-                    "Admin heal: lyrics-only blocked (lyrics_failed=True) "
-                    "song_id=%s song_name=%r",
+                    "Admin heal: one-time lyrics retry for non-Latin song "
+                    "(heal_version %d -> %d) song_id=%s song_name=%r",
+                    song.lyrics_heal_version,
+                    _CURRENT_LYRICS_HEAL_VERSION,
                     song_id,
                     song.song_name,
-                    extra={
-                        "event_type": "admin_heal",
-                        "action": "lyrics_only",
-                        "song_id": str(song_id),
-                        "outcome": "blocked",
-                        "reason": "lyrics_failed",
-                    },
                 )
-            return False
+                await self._song_dao.update_by_id(
+                    song.id,
+                    lyrics_failed=False,
+                    lyrics_attempted_at=None,
+                    lyrics_heal_version=_CURRENT_LYRICS_HEAL_VERSION,
+                )
+                # Re-read song after update
+                song = await self._song_dao.get_by_id(song_id)
+                if not song:
+                    return False
+                # fall through to the rest of the method
+            else:
+                if _should_log_admin_heal_info("lyrics_only", song_id):
+                    logger.info(
+                        "Admin heal: lyrics-only blocked (lyrics_failed=True) "
+                        "song_id=%s song_name=%r",
+                        song_id,
+                        song.song_name,
+                        extra={
+                            "event_type": "admin_heal",
+                            "action": "lyrics_only",
+                            "song_id": str(song_id),
+                            "outcome": "blocked",
+                            "reason": "lyrics_failed",
+                        },
+                    )
+                return False
 
         # DB-based cooldown: don't re-enqueue if we attempted recently.
         if song.lyrics_attempted_at:
@@ -564,11 +602,10 @@ class JobService:
             now = _utcnow()
             if _is_stale_active_job(getattr(active_job, "updated_at", None), now=now):
                 await self._job_dao.update_status(
-                    active_job,
+                    active_job.id,
                     "FAILED",
                     error_message="Stale job: marked failed by admin",
                 )
-                await self._session.flush()
 
         # If a lyrics-only transcription is already running (e.g., user is polling),
         # don't enqueue duplicates.
@@ -592,8 +629,7 @@ class JobService:
         if lyrics_ok and not quick_ok and song.song_name:
             quick_candidate = f"{song.song_name}/lyrics_quick.json"
             if self._storage.file_exists(quick_candidate):
-                song.lyrics_quick_key = quick_candidate
-                await self._session.flush()
+                await self._song_dao.update_by_id(song.id, lyrics_quick_key=quick_candidate)
                 logger.info(
                     "Admin heal: backfilled lyrics_quick_key for song_id=%s "
                     "song_name=%r quick_candidate=%s",
@@ -619,12 +655,12 @@ class JobService:
         if not lyrics_ok and song.song_name:
             candidate = f"{song.song_name}/lyrics.json"
             if self._storage.file_exists(candidate):
-                song.lyrics_key = candidate
+                fix_kwargs: dict = {"lyrics_key": candidate}
                 # Also backfill quick lyrics if present on disk.
                 quick_candidate = f"{song.song_name}/lyrics_quick.json"
                 if self._storage.file_exists(quick_candidate):
-                    song.lyrics_quick_key = quick_candidate
-                await self._session.flush()
+                    fix_kwargs["lyrics_quick_key"] = quick_candidate
+                await self._song_dao.update_by_id(song.id, **fix_kwargs)
                 logger.info(
                     "Admin heal: fixed lyrics_key for song_id=%s song_name=%r -> %s",
                     song_id,
@@ -649,6 +685,34 @@ class JobService:
                     },
                 )
             return False
+
+        # Non-Latin songs with a stale heal version need full re-transcription,
+        # even if lyrics_ok is True. Delete old files and re-generate.
+        if lyrics_ok and _has_non_latin_text(song.title, song.artist):
+            if song.lyrics_heal_version < _CURRENT_LYRICS_HEAL_VERSION:
+                logger.info(
+                    "Admin heal: non-Latin song with stale lyrics "
+                    "(heal_version %d -> %d), forcing re-transcription "
+                    "song_id=%s song_name=%r",
+                    song.lyrics_heal_version,
+                    _CURRENT_LYRICS_HEAL_VERSION,
+                    song_id,
+                    song.song_name,
+                )
+                for stale_key in (song.lyrics_key, song.lyrics_quick_key, song.lyrics_corrected_key):
+                    if stale_key:
+                        self._storage.delete_file(stale_key)
+                await self._song_dao.update_by_id(
+                    song.id,
+                    lyrics_key=None,
+                    lyrics_quick_key=None,
+                    lyrics_corrected_key=None,
+                    lyrics_failed=False,
+                    lyrics_attempted_at=None,
+                    lyrics_heal_version=_CURRENT_LYRICS_HEAL_VERSION,
+                )
+                lyrics_ok = False
+                quick_ok = False
 
         # When only quick_lyrics are missing (full lyrics exist), we can use
         # fast_only mode which skips Whisper entirely.
@@ -705,8 +769,7 @@ class JobService:
             return False
 
         # Record the attempt timestamp so concurrent/subsequent polls skip this.
-        song.lyrics_attempted_at = _utcnow()
-        await self._session.flush()
+        await self._song_dao.update_by_id(song.id, lyrics_attempted_at=_utcnow())
 
         # Emit a single INFO log per enqueue; this is the key signal we want
         # in CloudWatch/Grafana.
@@ -729,6 +792,7 @@ class JobService:
         )
         _enqueue_lyrics_transcription(song_id, quick_only=quick_only)
         return True
+
 
     async def trigger_vocals_guitar_merge_if_missing(
         self,
@@ -770,8 +834,7 @@ class JobService:
         # Fix DB key from disk if file exists.
         vg_candidate = _find_stem(self._storage, song.song_name, "vocals_guitar")
         if vg_candidate:
-            song.vocals_guitar_key = vg_candidate
-            await self._session.flush()
+            await self._song_dao.update_by_id(song.id, vocals_guitar_key=vg_candidate)
             return False
 
         # Both source stems must exist.
@@ -797,8 +860,7 @@ class JobService:
             return False
 
         # Record the attempt timestamp so concurrent/subsequent polls skip this.
-        song.merge_attempted_at = _utcnow()
-        await self._session.flush()
+        await self._song_dao.update_by_id(song.id, merge_attempted_at=_utcnow())
 
         logger.debug(
             "Admin: vocals+guitar merge missing for %s; enqueuing merge",
@@ -807,7 +869,7 @@ class JobService:
         _enqueue_vocals_guitar_merge(song_id)
         return True
 
-    async def get_active_job_for_song(self, song_id: uuid.UUID) -> Job | None:
+    async def get_active_job_for_song(self, song_id: uuid.UUID) -> JobRecord | None:
         """Return the active (PENDING/PROCESSING) job for a song, if any."""
         return await self._job_dao.get_active_job(song_id)
 
@@ -820,9 +882,9 @@ class JobService:
             getattr(job, "updated_at", None), now=_utcnow()
         ):
             await self._job_dao.update_status(
-                job, "FAILED", error_message="Job timed out"
+                job.id, "FAILED", error_message="Job timed out"
             )
-            await self._session.flush()
+            await self._job_dao.flush()
         return self._enrich_job(job)
 
     async def list_user_jobs(
@@ -834,7 +896,7 @@ class JobService:
         jobs = await self._job_dao.get_by_user(user.id, offset, limit)
         return [self._enrich_job(j) for j in jobs]
 
-    def _enrich_job(self, job: Job) -> JobResponse:
+    def _enrich_job(self, job: JobRecord) -> JobResponse:
         """Convert job to response, resolving result URLs if completed."""
         resp = JobResponse.model_validate(job)
         if resp.results and resp.status == "COMPLETED":
@@ -904,7 +966,7 @@ async def _transcribe_lyrics_only(
         if not lyrics_exists:
             lyrics_key = f"{song.song_name}/lyrics.json"
             if storage.file_exists(lyrics_key):
-                song.lyrics_key = lyrics_key
+                await song_dao.update_by_id(song_id, lyrics_key=lyrics_key)
                 lyrics_exists = True
 
         quick_exists = bool(song.lyrics_quick_key) and storage.file_exists(
@@ -913,12 +975,12 @@ async def _transcribe_lyrics_only(
         if not quick_exists:
             quick_candidate = f"{song.song_name}/lyrics_quick.json"
             if storage.file_exists(quick_candidate):
-                song.lyrics_quick_key = quick_candidate
+                await song_dao.update_by_id(song_id, lyrics_quick_key=quick_candidate)
                 quick_exists = True
 
         # Both present — nothing to do.
         if lyrics_exists and quick_exists:
-            await session.flush()
+            await song_dao.flush()
             return
 
         vocals_candidates = [
@@ -960,18 +1022,43 @@ async def _transcribe_lyrics_only(
     # Start transcription and poll for quick lyrics in parallel.
     # The lyrics-generator stores lyrics_quick.json early (fast-track alignment)
     # while full transcription may still be running.
-    # When quick_only, fast_only mode skips Whisper entirely.
-    transcribe_task = asyncio.create_task(
-        processing.transcribe_lyrics(
-            storage.resolve_service_path(vocals_key),
-            title=song_title,
-            artist=song_artist,
-            language=settings.openai.transcription_language,
-            openai_api_key=settings.openai.api_key,
-            openai_model=settings.openai.transcription_model,
-            fast_only=quick_only,
-        )
+    # When quick_only, fast_only mode skips Whisper entirely — but if that fails
+    # (no online lyrics found), we fall back to full transcription.
+    service_path = storage.resolve_service_path(vocals_key)
+    transcribe_coro = processing.transcribe_lyrics(
+        service_path,
+        title=song_title,
+        artist=song_artist,
+        language=settings.openai.transcription_language,
+        openai_api_key=settings.openai.api_key,
+        openai_model=settings.openai.transcription_model,
+        fast_only=quick_only,
     )
+
+    if quick_only:
+        # If fast_only fails (no online lyrics), retry with full transcription
+        # so OpenAI/WhisperX can still produce lyrics.
+        async def _fast_with_fallback():
+            try:
+                return await transcribe_coro
+            except Exception as e:
+                logger.info(
+                    "fast_only failed for song_id=%s (%s), falling back to full transcription",
+                    song_id, e,
+                )
+                return await processing.transcribe_lyrics(
+                    service_path,
+                    title=song_title,
+                    artist=song_artist,
+                    language=settings.openai.transcription_language,
+                    openai_api_key=settings.openai.api_key,
+                    openai_model=settings.openai.transcription_model,
+                    fast_only=False,
+                )
+
+        transcribe_task = asyncio.create_task(_fast_with_fallback())
+    else:
+        transcribe_task = asyncio.create_task(transcribe_coro)
 
     quick_key = f"{song_name}/lyrics_quick.json"
 
@@ -987,11 +1074,11 @@ async def _transcribe_lyrics_only(
                     continue
                 try:
                     async with safe_session() as session:
-                        song_dao = SongDAO(session)
-                        s = await song_dao.get_by_id(song_id)
+                        s_dao = SongDAO(session)
+                        s = await s_dao.get_by_id(song_id)
                         if s and not s.lyrics_quick_key:
-                            s.lyrics_quick_key = quick_key
-                            await session.commit()
+                            await s_dao.update_by_id(song_id, lyrics_quick_key=quick_key)
+                            await s_dao.commit()
                     logger.info(
                         "Lyrics-only quick lyrics ready",
                         extra={
@@ -1045,19 +1132,22 @@ async def _transcribe_lyrics_only(
             },
         )
         # Mark as failed in the DB so we don't retry on every page load/poll.
-        try:
-            async with safe_session() as session:
-                song_dao = SongDAO(session)
-                song = await song_dao.get_by_id(song_id)
-                if song:
-                    song.lyrics_failed = True
-                    await session.commit()
-        except Exception:
-            logger.debug(
-                "Failed to persist lyrics_failed for %s",
-                song_id,
-                exc_info=True,
-            )
+        # But only for full transcription failures — a quick_only failure
+        # (e.g. no lyrics found online) should not block a future full attempt.
+        if not quick_only:
+            try:
+                async with safe_session() as session:
+                    song_dao = SongDAO(session)
+                    song = await song_dao.get_by_id(song_id)
+                    if song:
+                        await song_dao.update_by_id(song_id, lyrics_failed=True)
+                        await song_dao.commit()
+            except Exception:
+                logger.debug(
+                    "Failed to persist lyrics_failed for %s",
+                    song_id,
+                    exc_info=True,
+                )
         return
     finally:
         if quick_task is not None:
@@ -1074,23 +1164,27 @@ async def _transcribe_lyrics_only(
         song = await song_dao.get_by_id(song_id)
         if not song or not song.song_name:
             return
-        changed = False
-        if not quick_only:
-            lyrics_key = f"{song_name}/lyrics.json"
-            if storage.file_exists(lyrics_key):
-                await _cleanup_lyrics_preamble(storage, lyrics_key)
-                song.lyrics_key = lyrics_key
-                changed = True
+        changes: dict = {}
+        # Always check for lyrics.json — even when quick_only was requested,
+        # the fallback may have run a full transcription.
+        lyrics_key = f"{song_name}/lyrics.json"
+        if storage.file_exists(lyrics_key) and not song.lyrics_key:
+            await _cleanup_lyrics_preamble(storage, lyrics_key)
+            changes["lyrics_key"] = lyrics_key
+        lyrics_corrected_key = f"{song_name}/lyrics_corrected.json"
+        if storage.file_exists(lyrics_corrected_key) and not song.lyrics_corrected_key:
+            changes["lyrics_corrected_key"] = lyrics_corrected_key
+            changes["lyrics_corrected"] = True
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         if storage.file_exists(lyrics_quick_key) and not song.lyrics_quick_key:
-            song.lyrics_quick_key = lyrics_quick_key
-            changed = True
+            changes["lyrics_quick_key"] = lyrics_quick_key
         # Clear failure flag and attempt timestamp on success.
-        if changed:
+        if changes:
             if song.lyrics_failed:
-                song.lyrics_failed = False
-            song.lyrics_attempted_at = None
-            await session.commit()
+                changes["lyrics_failed"] = False
+            changes["lyrics_attempted_at"] = None
+            await song_dao.update_by_id(song_id, **changes)
+            await song_dao.commit()
 
 
 async def _merge_vocals_guitar_only(song_id: uuid.UUID) -> None:
@@ -1115,8 +1209,8 @@ async def _merge_vocals_guitar_only(song_id: uuid.UUID) -> None:
 
         vg_key = _find_stem(storage, song.song_name, "vocals_guitar")
         if vg_key:
-            song.vocals_guitar_key = vg_key
-            await session.commit()
+            await song_dao.update_by_id(song_id, vocals_guitar_key=vg_key)
+            await song_dao.commit()
             return
 
         # Find vocals and guitar stems.
@@ -1198,10 +1292,8 @@ async def _merge_vocals_guitar_only(song_id: uuid.UUID) -> None:
             return
         vg_key = _find_stem(storage, song.song_name, "vocals_guitar")
         if vg_key:
-            song.vocals_guitar_key = vg_key
-            # Clear attempt timestamp on success so future healing works.
-            song.merge_attempted_at = None
-            await session.commit()
+            await song_dao.update_by_id(song_id, vocals_guitar_key=vg_key, merge_attempted_at=None)
+            await song_dao.commit()
 
 
 _LYRICS_CLEANUP_TIMEOUT_S = 30
@@ -1289,9 +1381,9 @@ async def _set_progress(job_id: uuid.UUID, progress: int, stage: str) -> None:
         job = await job_dao.get_by_id(job_id)
         if not job:
             return
-        await job_dao.update_progress(job, progress=progress, stage=stage)
+        await job_dao.update_progress(job.id, progress=progress, stage=stage)
         song = await song_dao.get_by_id(job.song_id)
-        await session.commit()
+        await job_dao.commit()
 
     if storage and song and song.song_name:
         try:
@@ -1323,12 +1415,12 @@ async def _fail_job(job_id: uuid.UUID, message: str) -> None:
         job = await job_dao.get_by_id(job_id)
         if not job:
             return
-        await job_dao.update_status(job, "FAILED", error_message=message)
+        await job_dao.update_status(job.id, "FAILED", error_message=message)
         song = await song_dao.get_by_id(job.song_id)
         # Release processing lock if this job owns it.
         if song and song.processing_job_id == job_id:
-            song.processing_job_id = None
-        await session.commit()
+            await song_dao.update_by_id(song.id, processing_job_id=None)
+        await job_dao.commit()
 
     if storage and song and song.song_name:
         try:
@@ -1361,12 +1453,12 @@ async def _complete_job(job_id: uuid.UUID, results: list[dict]) -> None:
         job = await job_dao.get_by_id(job_id)
         if not job:
             return
-        await job_dao.update_status(job, "COMPLETED", results=results)
+        await job_dao.update_status(job.id, "COMPLETED", results=results)
         song = await song_dao.get_by_id(job.song_id)
         # Release processing lock if this job owns it.
         if song and song.processing_job_id == job_id:
-            song.processing_job_id = None
-        await session.commit()
+            await song_dao.update_by_id(song.id, processing_job_id=None)
+        await job_dao.commit()
 
     if storage and song and song.song_name:
         try:
@@ -1425,20 +1517,20 @@ async def _process_job(job_id: uuid.UUID) -> None:
             demucs_requested_outputs.append("vocals_isolated")
         song = await song_dao.get_by_id(job.song_id)
         if not song:
-            await job_dao.update_status(job, "FAILED", error_message="Song not found")
-            await session.commit()
+            await job_dao.update_status(job.id, "FAILED", error_message="Song not found")
+            await job_dao.commit()
             return
 
         # Mark processing.
-        await job_dao.update_status(job, "PROCESSING")
-        await job_dao.update_progress(job, progress=3, stage="resolving_audio")
-        await session.commit()
+        await job_dao.update_status(job.id, "PROCESSING")
+        await job_dao.update_progress(job.id, progress=3, stage="resolving_audio")
+        await job_dao.commit()
 
         if not song.audio_key or not storage.file_exists(song.audio_key):
             await job_dao.update_status(
-                job, "FAILED", error_message="Audio file not found"
+                job.id, "FAILED", error_message="Audio file not found"
             )
-            await session.commit()
+            await job_dao.commit()
             return
 
         audio_path = storage.resolve_service_path(song.audio_key)
@@ -1822,8 +1914,8 @@ async def _process_job(job_id: uuid.UUID) -> None:
                             s_dao = SongDAO(sess)
                             s = await s_dao.get_by_id(song_id)
                             if s and not s.lyrics_quick_key:
-                                s.lyrics_quick_key = quick_key
-                                await sess.commit()
+                                await s_dao.update_by_id(song_id, lyrics_quick_key=quick_key)
+                                await s_dao.commit()
                     except Exception as e:
                         logger.debug("Failed to persist lyrics_quick_key: %s", e)
                 await _set_progress(job_id, 80, "quick_lyrics_ready")
@@ -1876,9 +1968,11 @@ async def _process_job(job_id: uuid.UUID) -> None:
             return
         song = await song_dao.get_by_id(job.song_id)
         if not song:
-            await job_dao.update_status(job, "FAILED", error_message="Song not found")
-            await session.commit()
+            await job_dao.update_status(job.id, "FAILED", error_message="Song not found")
+            await job_dao.commit()
             return
+
+        song_changes: dict = {}
 
         for stem_info in separation_result.stems:
             canonical = STEM_NAME_MAP.get(stem_info.name)
@@ -1886,34 +1980,35 @@ async def _process_job(job_id: uuid.UUID) -> None:
                 from pathlib import Path as _Path
 
                 ext = _Path(stem_info.path).suffix or _STEM_EXT
-                setattr(song, f"{canonical}_key", f"{song_name}/{stem_info.name}{ext}")
+                song_changes[f"{canonical}_key"] = f"{song_name}/{stem_info.name}{ext}"
 
         if chords_result.output_path:
-            song.chords_key = f"{song_name}/chords.json"
+            song_changes["chords_key"] = f"{song_name}/chords.json"
 
         lyrics_key = f"{song_name}/lyrics.json"
         if storage.file_exists(lyrics_key):
             await _cleanup_lyrics_preamble(storage, lyrics_key)
-            song.lyrics_key = lyrics_key
-            song.lyrics_failed = False
+            song_changes["lyrics_key"] = lyrics_key
+            song_changes["lyrics_failed"] = False
         else:
             # Lyrics transcription didn't produce output — mark as failed
             # so the admin heal loop doesn't retry on every page load.
-            song.lyrics_failed = True
+            song_changes["lyrics_failed"] = True
 
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         if storage.file_exists(lyrics_quick_key):
-            song.lyrics_quick_key = lyrics_quick_key
+            song_changes["lyrics_quick_key"] = lyrics_quick_key
 
         vg_key = _find_stem(storage, song_name, "vocals_guitar")
         if vg_key:
-            song.vocals_guitar_key = vg_key
+            song_changes["vocals_guitar_key"] = vg_key
 
         # Policy: never persist these stem keys.
         for stem_name in sorted(_UNWANTED_STEMS):
-            setattr(song, f"{stem_name}_key", None)
+            song_changes[f"{stem_name}_key"] = None
 
-        await session.flush()
+        if song_changes:
+            await song_dao.update_by_id(song.id, **song_changes)
 
         job_results = [
             {
@@ -1923,8 +2018,8 @@ async def _process_job(job_id: uuid.UUID) -> None:
             for stem_info in separation_result.stems
         ]
 
-        await job_dao.update_status(job, "COMPLETED", results=job_results)
-        await session.commit()
+        await job_dao.update_status(job.id, "COMPLETED", results=job_results)
+        await job_dao.commit()
 
     logger.info(
         "Job completed",
@@ -1958,7 +2053,8 @@ _STEM_LIKE_AUDIO_FILENAMES: set[str] = {
 
 async def _admin_heal_audio_and_thumbnail_on_startup(
     *,
-    song: Song,
+    song: SongRecord,
+    song_dao: SongDAO,
     storage: StorageBackend,
     user_sub: str,
     user_email: str,
@@ -1985,6 +2081,8 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
     if audio_ok and thumb_ok:
         return 0
 
+    changes: dict = {}
+
     # 1) Try to fix from existing files in storage.
     if song.song_name:
         try:
@@ -2007,7 +2105,7 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
 
                 for key in audio_candidates:
                     if key in files and storage.file_exists(key):
-                        song.audio_key = key
+                        changes["audio_key"] = key
                         audio_ok = True
                         fixed += 1
                         break
@@ -2023,7 +2121,7 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
 
                 for key in thumb_candidates:
                     if key in files and storage.file_exists(key):
-                        song.thumbnail_key = key
+                        changes["thumbnail_key"] = key
                         thumb_ok = True
                         fixed += 1
                         break
@@ -2048,7 +2146,7 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
                 audio_filename = os.path.basename(local_mp3)
                 audio_key = f"{song.song_name}/{audio_filename}"
                 storage.upload_file(local_mp3, audio_key)
-                song.audio_key = audio_key
+                changes["audio_key"] = audio_key
                 audio_ok = True
                 fixed += 1
 
@@ -2056,12 +2154,12 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
                 thumb_path = await youtube.download_thumbnail(song.youtube_id, tmp_dir)
                 thumb_key = f"{song.song_name}/{song.youtube_id}.jpg"
                 storage.upload_file(thumb_path, thumb_key)
-                song.thumbnail_key = thumb_key
+                changes["thumbnail_key"] = thumb_key
                 thumb_ok = True
                 fixed += 1
 
             if fixed and not song.downloaded_by:
-                song.downloaded_by = user.id
+                changes["downloaded_by"] = user.id
         finally:
             try:
                 # Always cleanup local temp dir.
@@ -2070,6 +2168,9 @@ async def _admin_heal_audio_and_thumbnail_on_startup(
                 shutil.rmtree(tmp_dir, ignore_errors=True)
             except Exception:
                 pass
+
+    if changes:
+        await song_dao.update_by_id(song.id, **changes)
 
     return fixed
 
@@ -2150,14 +2251,12 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
         max_sleep_interval_seconds=settings.youtube.max_sleep_interval_seconds,
     )
 
-    # Collect candidate song IDs.
-    # We scan *all* songs with song_name, because audio/thumbnail might be missing
-    # and need to be repaired before stems/chords/lyrics can be backfilled.
+    # Collect candidate song IDs via DAO.
     async with safe_session() as session:
-        result = await session.execute(select(Song.id, Song.song_name))
-        rows = result.all()
+        song_dao = SongDAO(session)
+        rows = await song_dao.get_all_ids_with_song_name()
 
-    candidates = [(row.id, row.song_name) for row in rows if row.song_name]
+    candidates = [(row_id, row_name) for row_id, row_name in rows if row_name]
 
     if not candidates:
         logger.info("Startup admin: no songs to check")
@@ -2180,6 +2279,7 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
                 # Fill missing originals first so downstream jobs have a valid input.
                 fixed_here = await _admin_heal_audio_and_thumbnail_on_startup(
                     song=song,
+                    song_dao=song_dao,
                     storage=storage,
                     user_sub=user_sub,
                     user_email=user_email,
@@ -2189,8 +2289,12 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
                 )
                 if fixed_here:
                     keys_fixed += fixed_here
-                    await session.flush()
+                    await song_dao.flush()
 
+                # Re-read song after potential updates
+                song = await song_dao.get_by_id(song_id)
+                if not song:
+                    continue
                 audio_ok = bool(song.audio_key) and storage.file_exists(song.audio_key)
 
                 # -- Stems / chords (trigger_reprocess also fixes DB keys from disk) --
@@ -2223,7 +2327,7 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
                 if not triggered:
                     await job_svc.trigger_lyrics_transcription_if_missing(song_id)
 
-                await session.commit()
+                await song_dao.commit()
         except Exception as e:
             logger.warning(
                 "Startup admin: song %s (%s) failed: %s", song_name, song_id, e

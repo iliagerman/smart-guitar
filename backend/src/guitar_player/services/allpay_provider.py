@@ -9,13 +9,12 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.config import Settings
 from guitar_player.dao.subscription_dao import SubscriptionDAO
 from guitar_player.dao.user_dao import UserDAO
-from guitar_player.models.subscription import Subscription
 from guitar_player.enums import PaymentProvider
+from guitar_player.schemas.records import SubscriptionRecord
 from guitar_player.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutResponse,
@@ -79,7 +78,6 @@ class AllPayProvider:
     def __init__(
         self, session: AsyncSession, settings: Settings, telegram: TelegramService
     ) -> None:
-        self._session = session
         self._settings = settings
         self._telegram = telegram
         self._subscription_dao = SubscriptionDAO(session)
@@ -236,8 +234,8 @@ class AllPayProvider:
             )
             resp.raise_for_status()
 
-        await self._subscription_dao.update(
-            sub,
+        await self._subscription_dao.update_by_id(
+            sub.id,
             status="canceled",
             canceled_at=datetime.now(timezone.utc),
         )
@@ -248,8 +246,8 @@ class AllPayProvider:
         )
 
     async def _verify_and_activate(
-        self, pending: Subscription, now: datetime
-    ) -> Subscription | None:
+        self, pending: SubscriptionRecord, now: datetime
+    ) -> SubscriptionRecord | None:
         """Check AllPay payment status for a pending subscription.
 
         If AllPay confirms the payment succeeded, activate the subscription
@@ -281,8 +279,8 @@ class AllPayProvider:
             status = str(data.get("status", ""))
             if status == "1":
                 period_end = now + timedelta(days=30)
-                await self._subscription_dao.update(
-                    pending,
+                await self._subscription_dao.update_by_id(
+                    pending.id,
                     status="active",
                     current_period_start=now,
                     current_period_end=period_end,
@@ -296,8 +294,8 @@ class AllPayProvider:
         return None
 
     async def _check_subscription_still_active(
-        self, sub: Subscription, now: datetime
-    ) -> Subscription | None:
+        self, sub: SubscriptionRecord, now: datetime
+    ) -> SubscriptionRecord | None:
         """Verify an active subscription is still active with AllPay.
 
         Calls the subscriptionstatus API. If AllPay reports the subscription
@@ -329,8 +327,8 @@ class AllPayProvider:
                     "AllPay subscription %s cancelled externally, updating DB",
                     order_id,
                 )
-                await self._subscription_dao.update(
-                    sub, status="canceled", canceled_at=now
+                await self._subscription_dao.update_by_id(
+                    sub.id, status="canceled", canceled_at=now
                 )
                 return None
         except Exception:
@@ -409,8 +407,8 @@ class AllPayProvider:
             PROVIDER.value, order_id
         )
         if existing:
-            await self._subscription_dao.update(
-                existing,
+            await self._subscription_dao.update_by_id(
+                existing.id,
                 status="active",
                 current_period_start=now,
                 current_period_end=period_end,
@@ -443,8 +441,8 @@ class AllPayProvider:
             )
             return
 
-        await self._subscription_dao.update(
-            sub, status="canceled", canceled_at=datetime.now(timezone.utc)
+        await self._subscription_dao.update_by_id(
+            sub.id, status="canceled", canceled_at=datetime.now(timezone.utc)
         )
 
         user = await self._user_dao.get_by_id(sub.user_id)

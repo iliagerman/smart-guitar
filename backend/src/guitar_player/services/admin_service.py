@@ -5,14 +5,14 @@ SongService + JobService; this service focuses on determining which songs
 *appear* to require admin healing.
 """
 
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from guitar_player.models.song import Song
+from guitar_player.dao.song_dao import SongDAO
 from guitar_player.schemas.admin import (
     AdminRequiredSong,
     AdminRequiredSongsResponse,
 )
+from guitar_player.schemas.records import SongRecord
 from guitar_player.storage import StorageBackend
 
 
@@ -29,7 +29,7 @@ _MISSING_CHECK_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _reasons_for_song(song: Song, *, storage: StorageBackend | None) -> list[str]:
+def _reasons_for_song(song: SongRecord, *, storage: StorageBackend | None) -> list[str]:
     reasons: list[str] = []
 
     for col in _MISSING_CHECK_COLUMNS:
@@ -47,7 +47,7 @@ def _reasons_for_song(song: Song, *, storage: StorageBackend | None) -> list[str
 
 class AdminService:
     def __init__(self, session: AsyncSession, storage: StorageBackend) -> None:
-        self._session = session
+        self._song_dao = SongDAO(session)
         self._storage = storage
 
     async def list_required_songs(
@@ -74,27 +74,14 @@ class AdminService:
         scanned = 0
         current_offset = offset
 
-        # If we're not checking storage, we can cheaply filter in SQL.
-        where_missing_key = None
-        if not check_storage:
-            where_missing_key = or_(
-                *(getattr(Song, col).is_(None) for col in _MISSING_CHECK_COLUMNS)
-            )
-
         while scanned < max_scan and len(items) < limit:
             batch_size = min(200, max_scan - scanned)
 
-            stmt = (
-                select(Song)
-                .order_by(Song.created_at.desc())
-                .offset(current_offset)
-                .limit(batch_size)
+            songs = await self._song_dao.list_ordered_for_scan(
+                offset=current_offset,
+                limit=batch_size,
+                missing_key_columns=list(_MISSING_CHECK_COLUMNS) if not check_storage else None,
             )
-            if where_missing_key is not None:
-                stmt = stmt.where(where_missing_key)
-
-            result = await self._session.execute(stmt)
-            songs = list(result.scalars().all())
             if not songs:
                 # Exhausted.
                 return AdminRequiredSongsResponse(

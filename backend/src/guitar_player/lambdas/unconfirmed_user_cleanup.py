@@ -68,8 +68,8 @@ async def _run() -> dict[str, Any]:
                 user_dao = UserDAO(session)
                 db_user = await user_dao.get_by_cognito_sub(username)
                 if db_user:
-                    await user_dao.delete(db_user)
-                await session.commit()
+                    await user_dao.delete_by_id(db_user.id)
+                await user_dao.commit()
         except Exception:
             logger.exception("Failed to delete local DB user for %s", username)
 

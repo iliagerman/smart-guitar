@@ -79,7 +79,7 @@ class PresignedUrlConfig(BaseModel):
 
 
 class LlmModelsConfig(BaseModel):
-    name_parsing: str = "us.amazon.nova-lite-v1:0"
+    name_parsing: str = "us.amazon.nova-2-lite-v1:0"
 
 
 class ServicesConfig(BaseModel):

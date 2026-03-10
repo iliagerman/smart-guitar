@@ -100,7 +100,7 @@ async def test_select_new_song_downloads_and_indexes(
         # Clean up any stale DB record from a previous run (files may have been deleted)
         stale = await song_dao.get_by_youtube_id("CGj85pVzRJs")
         if stale:
-            await song_dao.delete(stale)
+            await song_dao.delete_by_id(stale.id)
             await session.commit()
             print("  Cleaned up stale DB record from previous run", flush=True)
 
@@ -147,7 +147,7 @@ async def test_select_new_song_downloads_and_indexes(
         print(f"  audio_key: {detail.song.audio_key}", flush=True)
 
         # Cleanup: remove downloaded files and DB record
-        await song_dao.delete(db_song)
+        await song_dao.delete_by_id(db_song.id)
         await session.commit()
         print(f"  Cleaned up DB record: {db_song.id}", flush=True)
 
@@ -208,5 +208,5 @@ async def test_existence_check_uses_db_not_filesystem(
         print(f"  No file on disk — existence check is DB-based: PASS", flush=True)
 
         # Cleanup: remove test record
-        await song_dao.delete(found)
+        await song_dao.delete_by_id(found.id)
         await session.commit()

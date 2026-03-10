@@ -94,7 +94,6 @@ class SongService:
         llm: LlmService,
         artwork: ArtworkService,
     ) -> None:
-        self._session = session
         self._storage = storage
         self._youtube = youtube
         self._llm = llm
@@ -262,8 +261,7 @@ class SongService:
             ):
                 # Update youtube_id if not set
                 if not existing_by_name.youtube_id:
-                    await self._song_dao.update(existing_by_name, youtube_id=youtube_id)
-                    await self._session.flush()
+                    await self._song_dao.update_by_id(existing_by_name.id, youtube_id=youtube_id)
                 return SongResponse.model_validate(existing_by_name)
 
             canonical_audio_filename = "audio.mp3"
@@ -275,8 +273,8 @@ class SongService:
 
             # DB-first: create/update record before uploading files
             if existing:
-                song = await self._song_dao.update(
-                    existing,
+                song = await self._song_dao.update_by_id(
+                    existing.id,
                     song_name=song_name,
                     title=title_display or title,
                     artist=artist_display,
@@ -300,13 +298,12 @@ class SongService:
 
                 self._storage.upload_file(thumb_path, thumbnail_key)
 
-                song = await self._song_dao.update(
-                    song,
+                song = await self._song_dao.update_by_id(
+                    song.id,
                     audio_key=audio_key_to_use,
                     thumbnail_key=thumbnail_key,
+                    download_requested_at=datetime.now(timezone.utc),
                 )
-                song.download_requested_at = datetime.now(timezone.utc)
-                await self._session.flush()
 
                 await self._publish_download_request(
                     youtube_id=youtube_id,
@@ -342,8 +339,8 @@ class SongService:
 
                 self._storage.upload_file(thumb_path, thumbnail_key)
 
-                song = await self._song_dao.update(
-                    song,
+                song = await self._song_dao.update_by_id(
+                    song.id,
                     audio_key=audio_key_to_use,
                     thumbnail_key=thumbnail_key,
                 )
@@ -408,8 +405,7 @@ class SongService:
         """Clear a stale storage key from a song record."""
         song = await self._song_dao.get_by_id(song_id)
         if song and getattr(song, column_name, None):
-            setattr(song, column_name, None)
-            await self._session.flush()
+            await self._song_dao.update_by_id(song.id, **{column_name: None})
 
     async def admin_heal_audio_and_thumbnail(
         self,
@@ -438,6 +434,8 @@ class SongService:
         )
 
         updated = False
+        # Collect all updates to flush at the end of each phase.
+        pending_updates: dict = {}
 
         # Canonicalize audio even when it's already present.
         if audio_ok and song.song_name and song.audio_key:
@@ -448,7 +446,7 @@ class SongService:
                     source_audio_key=song.audio_key,
                 )
                 if canonical and canonical != song.audio_key:
-                    song.audio_key = canonical
+                    pending_updates["audio_key"] = canonical
                     updated = True
                     audio_ok = True
 
@@ -488,9 +486,10 @@ class SongService:
                             continue
                         audio_candidates.append(f)
 
+                    found_audio_key: str | None = None
                     for key in audio_candidates:
                         if key in files and self._storage.file_exists(key):
-                            song.audio_key = key
+                            found_audio_key = key
                             audio_ok = True
                             updated = True
                             break
@@ -498,17 +497,20 @@ class SongService:
                     # If we found audio but it's not canonical, canonicalize it.
                     if (
                         audio_ok
-                        and song.audio_key
-                        and not song.audio_key.endswith("/audio.mp3")
+                        and found_audio_key
+                        and not found_audio_key.endswith("/audio.mp3")
                     ):
                         canonical = await ensure_canonical_audio_mp3(
                             self._storage,
                             song_name=song.song_name,
-                            source_audio_key=song.audio_key,
+                            source_audio_key=found_audio_key,
                         )
-                        if canonical and canonical != song.audio_key:
-                            song.audio_key = canonical
+                        if canonical and canonical != found_audio_key:
+                            found_audio_key = canonical
                             updated = True
+
+                    if found_audio_key:
+                        pending_updates["audio_key"] = found_audio_key
 
                 if not thumb_ok:
                     thumb_candidates = [
@@ -527,7 +529,7 @@ class SongService:
 
                     for key in thumb_candidates:
                         if key in files and self._storage.file_exists(key):
-                            song.thumbnail_key = key
+                            pending_updates["thumbnail_key"] = key
                             thumb_ok = True
                             updated = True
                             break
@@ -535,7 +537,7 @@ class SongService:
                     if not thumb_ok:
                         for f in sorted(files):
                             if f.lower().endswith((".jpg", ".jpeg")):
-                                song.thumbnail_key = f
+                                pending_updates["thumbnail_key"] = f
                                 thumb_ok = True
                                 updated = True
                                 # Extract youtube_id from filename (e.g. "artist/song/dLl4PZtxia8.jpg")
@@ -550,7 +552,7 @@ class SongService:
                                             is not None
                                         ):
                                             candidate += "_"
-                                        song.youtube_id = candidate
+                                        pending_updates["youtube_id"] = candidate
                                 break
             except Exception as e:
                 logger.warning(
@@ -559,7 +561,9 @@ class SongService:
 
         if updated:
             # Persist any key fixes.
-            await self._session.flush()
+            if pending_updates:
+                song = await self._song_dao.update_by_id(song.id, **pending_updates)
+                pending_updates = {}
             return True
 
         # If still missing and we don't have a youtube_id, try to discover one.
@@ -590,9 +594,8 @@ class SongService:
                             is not None
                         ):
                             candidate += "_"
-                        song.youtube_id = candidate
+                        song = await self._song_dao.update_by_id(song.id, youtube_id=candidate)
                         updated = True
-                        await self._session.flush()
                         logger.info(
                             "Admin: discovered youtube_id for %s via query '%s'",
                             song.song_name,
@@ -630,6 +633,8 @@ class SongService:
             # Ensure user exists (and mark who triggered the repair if downloaded_by is empty).
             user = await self._user_dao.get_or_create(user_sub, user_email)
 
+            heal_updates: dict = {}
+
             if not audio_ok:
                 try:
                     local_audio, _raw_name, _meta = await self._youtube.download(
@@ -660,7 +665,7 @@ class SongService:
                 try:
                     transcode_audio_to_mp3_cbr192(local_audio, local_mp3)
                     self._storage.upload_file(local_mp3, canonical_audio_key)
-                    song.audio_key = canonical_audio_key
+                    heal_updates["audio_key"] = canonical_audio_key
                 except Exception:
                     logger.exception(
                         "Admin heal: transcode failed, falling back to original song_name=%r",
@@ -669,7 +674,7 @@ class SongService:
                     audio_filename = os.path.basename(local_audio)
                     audio_key = f"{song.song_name}/{audio_filename}"
                     self._storage.upload_file(local_audio, audio_key)
-                    song.audio_key = audio_key
+                    heal_updates["audio_key"] = audio_key
 
                 updated = True
 
@@ -680,7 +685,7 @@ class SongService:
                     )
                     thumb_key = f"{song.song_name}/{song.youtube_id}.jpg"
                     self._storage.upload_file(thumb_path, thumb_key)
-                    song.thumbnail_key = thumb_key
+                    heal_updates["thumbnail_key"] = thumb_key
                     updated = True
                 except Exception:
                     logger.exception(
@@ -690,10 +695,10 @@ class SongService:
                     )
 
             if updated and not song.downloaded_by:
-                song.downloaded_by = user.id
+                heal_updates["downloaded_by"] = user.id
 
-            if updated:
-                await self._session.flush()
+            if updated and heal_updates:
+                await self._song_dao.update_by_id(song.id, **heal_updates)
             return updated
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -793,8 +798,7 @@ class SongService:
             if self._storage.file_exists(candidate):
                 quick_lyrics_key = candidate
                 # Persist to DB so future requests don't need the probe.
-                song.lyrics_quick_key = candidate
-                await self._session.flush()
+                await self._song_dao.update_by_id(song.id, lyrics_quick_key=candidate)
         if quick_lyrics_key and self._storage.file_exists(quick_lyrics_key):
             try:
                 raw = self._storage.read_json(quick_lyrics_key)
@@ -814,6 +818,34 @@ class SongService:
                     "Failed to read quick lyrics for %s: %s", song.song_name, e
                 )
 
+        # Read corrected lyrics (merged quick text + Whisper timestamps)
+        corrected_lyrics: list[LyricsSegment] = []
+        corrected_lyrics_source: str | None = None
+        corrected_key = song.lyrics_corrected_key
+        if not corrected_key and song.song_name:
+            candidate = f"{song.song_name}/lyrics_corrected.json"
+            if self._storage.file_exists(candidate):
+                corrected_key = candidate
+                await self._song_dao.update_by_id(song.id, lyrics_corrected_key=candidate)
+        if corrected_key and self._storage.file_exists(corrected_key):
+            try:
+                raw = self._storage.read_json(corrected_key)
+                if isinstance(raw, dict) and "segments" in raw:
+                    corrected_lyrics_source = raw.get("source")
+                    corrected_lyrics = [
+                        LyricsSegment(
+                            start=s["start"],
+                            end=s["end"],
+                            text=s["text"],
+                            words=[LyricsWord(**w) for w in s.get("words", [])],
+                        )
+                        for s in raw["segments"]
+                    ]
+            except Exception as e:
+                logger.warning(
+                    "Failed to read corrected lyrics for %s: %s", song.song_name, e
+                )
+
         # Tabs/strums disabled — return empty.
         tabs: list[TabNote] = []
         strums: list[StrumEvent] = []
@@ -831,6 +863,8 @@ class SongService:
             lyrics_source=lyrics_source,
             quick_lyrics=quick_lyrics,
             quick_lyrics_source=quick_lyrics_source,
+            corrected_lyrics=corrected_lyrics,
+            corrected_lyrics_source=corrected_lyrics_source,
             tabs=tabs,
             strums=strums,
             rhythm=rhythm,
@@ -935,7 +969,7 @@ class SongService:
             updates["chords_key"] = chords_key
 
         if updates:
-            await self._song_dao.update(song, **updates)
+            await self._song_dao.update_by_id(song.id, **updates)
 
     async def select_song(
         self,

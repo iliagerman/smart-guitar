@@ -83,7 +83,7 @@ async def test_job_processing_translates_stems_and_generates_lyrics(
             song_dao = SongDAO(session)
             existing = await song_dao.get_by_song_name(song_name)
             if existing:
-                await song_dao.delete(existing)
+                await song_dao.delete_by_id(existing.id)
                 await session.commit()
 
             song = await song_dao.create(

@@ -9,7 +9,7 @@ presigned_url:
   expiry_seconds: 900
 
 llm_models:
-  name_parsing: us.amazon.nova-lite-v1:0
+  name_parsing: us.amazon.nova-2-lite-v1:0
 
 paddle:
   enabled: false

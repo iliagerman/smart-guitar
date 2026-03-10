@@ -13,6 +13,7 @@ function contentFingerprint(d: SongDetail): string {
     d.chords.length,
     d.lyrics.length,
     d.quick_lyrics.length,
+    d.corrected_lyrics?.length ?? 0,
     d.tabs.length,
     d.strums.length,
     d.chord_options.length,
@@ -21,6 +22,7 @@ function contentFingerprint(d: SongDetail): string {
     d.active_job?.status ?? '',
     d.lyrics_source ?? '',
     d.quick_lyrics_source ?? '',
+    d.corrected_lyrics_source ?? '',
   ].join('|')
 }
 

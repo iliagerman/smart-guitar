@@ -49,6 +49,9 @@ class WhisperConfig(BaseModel):
     no_speech_threshold: float = 0.6
     logprob_threshold: float = -1.0
     compression_ratio_threshold: float = 2.4
+    # Languages where local WhisperX produces poor results (e.g. Hebrew, Arabic).
+    # When detected, OpenAI Whisper is tried first; local WhisperX becomes the fallback.
+    openai_prefer_languages: list[str] = []
 
 
 class ProcessingConfig(BaseModel):

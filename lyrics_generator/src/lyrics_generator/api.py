@@ -31,8 +31,10 @@ from lyrics_generator.schemas import (
     FetchAndAlignRequest,
     FetchAndAlignResponse,
     Segment,
+    SegmentInfo,
     TranscribeRequest,
     TranscribeResponse,
+    WordInfo,
     WordTimestamp,
 )
 from lyrics_generator.request_context import RequestContextFilter, RequestContextMiddleware
@@ -174,8 +176,12 @@ async def _transcribe_with_fallback(
     title: str | None,
     artist: str | None,
     source_override: str | None = None,
+    prefer_openai: bool = False,
 ) -> tuple[list, str]:
     """Run transcription: local WhisperX first, OpenAI as fallback.
+
+    When *prefer_openai* is True (e.g. for languages where WhisperX is poor),
+    the order is reversed: OpenAI first, local WhisperX as fallback.
 
     Returns:
         (segments, source) where source is "whisper", "openai_whisper", etc.
@@ -183,22 +189,10 @@ async def _transcribe_with_fallback(
     results = None
     source = source_override or "whisper"
 
-    # PRIMARY: always try local WhisperX first
-    try:
-        logger.info("Using local WhisperX for job %s (language=%s)", job_id, language)
-        results = await asyncio.to_thread(
-            transcribe, local_input, output_dir, whisper_config=whisper_cfg,
-        )
-        if not source_override:
-            source = "whisper"
-    except Exception as e:
-        logger.warning("Local WhisperX failed for job %s: %s", job_id, e)
-        results = None
-
-    # FALLBACK: try OpenAI only if local WhisperX failed AND key is available
-    if results is None and openai_api_key:
+    if prefer_openai and openai_api_key:
+        # PREFERRED: OpenAI first for languages where WhisperX is unreliable
         try:
-            logger.info("Falling back to OpenAI Whisper for job %s (language=%s)", job_id, language)
+            logger.info("Preferring OpenAI Whisper for job %s (language=%s)", job_id, language)
             results = await transcribe_openai(
                 local_input,
                 api_key=openai_api_key,
@@ -209,8 +203,50 @@ async def _transcribe_with_fallback(
             )
             source = "openai_whisper"
         except Exception as e:
-            logger.error("OpenAI Whisper also failed for job %s: %s", job_id, e)
-            raise RuntimeError(f"All transcription methods failed for job {job_id}") from e
+            logger.warning("OpenAI Whisper failed for job %s, falling back to local: %s", job_id, e)
+            results = None
+
+        # FALLBACK: local WhisperX if OpenAI failed
+        if results is None:
+            try:
+                logger.info("Falling back to local WhisperX for job %s (language=%s)", job_id, language)
+                results = await asyncio.to_thread(
+                    transcribe, local_input, output_dir, whisper_config=whisper_cfg,
+                )
+                if not source_override:
+                    source = "whisper"
+            except Exception as e:
+                logger.error("Local WhisperX also failed for job %s: %s", job_id, e)
+                raise RuntimeError(f"All transcription methods failed for job {job_id}") from e
+    else:
+        # DEFAULT: local WhisperX first
+        try:
+            logger.info("Using local WhisperX for job %s (language=%s)", job_id, language)
+            results = await asyncio.to_thread(
+                transcribe, local_input, output_dir, whisper_config=whisper_cfg,
+            )
+            if not source_override:
+                source = "whisper"
+        except Exception as e:
+            logger.warning("Local WhisperX failed for job %s: %s", job_id, e)
+            results = None
+
+        # FALLBACK: try OpenAI only if local WhisperX failed AND key is available
+        if results is None and openai_api_key:
+            try:
+                logger.info("Falling back to OpenAI Whisper for job %s (language=%s)", job_id, language)
+                results = await transcribe_openai(
+                    local_input,
+                    api_key=openai_api_key,
+                    model=openai_model or "whisper-1",
+                    language=language,
+                    title=title,
+                    artist=artist,
+                )
+                source = "openai_whisper"
+            except Exception as e:
+                logger.error("OpenAI Whisper also failed for job %s: %s", job_id, e)
+                raise RuntimeError(f"All transcription methods failed for job {job_id}") from e
 
     if results is None:
         raise RuntimeError(f"Transcription failed for job {job_id}")
@@ -242,7 +278,7 @@ async def _produce_fast_lyrics(
     duration: float | None,
     storage: StorageBackend,
     job_id: str,
-) -> None:
+) -> list[SegmentInfo] | None:
     """Produce fast-aligned lyrics from fetched lyrics and store immediately.
 
     Runs in parallel with Whisper transcription.  Stores lyrics_quick.json
@@ -271,7 +307,7 @@ async def _produce_fast_lyrics(
             if not lines:
                 del audio
                 logger.info("Fast lyrics: empty plain lyrics for job %s", job_id)
-                return
+                return None
             segments = await asyncio.to_thread(
                 align_plain_lyrics, lines, audio, duration or total_duration,
             )
@@ -279,11 +315,11 @@ async def _produce_fast_lyrics(
             source = f"{src}_quick_plain"
         else:
             del audio
-            return
+            return None
 
         if not segments:
             logger.info("Fast lyrics: no segments produced for job %s", job_id)
-            return
+            return None
 
         # Write to a separate temp dir and store immediately
         quick_dir = os.path.join(temp_dir, f"{job_id}_quick")
@@ -295,9 +331,12 @@ async def _produce_fast_lyrics(
         finally:
             shutil.rmtree(quick_dir, ignore_errors=True)
 
+        return segments
+
     except Exception as e:
         # Non-fatal: fast lyrics are best-effort
         logger.warning("Fast lyrics failed for job %s (non-fatal): %s", job_id, e)
+        return None
 
 
 async def _run_transcription_pipeline(
@@ -446,6 +485,12 @@ async def _run_transcription_pipeline(
             source_override = f"{lyrics_source}_plain+whisper"
 
     # Step 5: Transcribe (local WhisperX primary, OpenAI fallback)
+    # For languages where WhisperX is unreliable, prefer OpenAI instead.
+    prefer_openai = bool(
+        whisper_cfg.language
+        and whisper_cfg.language in settings.whisper.openai_prefer_languages
+    )
+
     results, source = await _transcribe_with_fallback(
         local_input=local_input,
         output_dir=output_dir,
@@ -457,9 +502,10 @@ async def _run_transcription_pipeline(
         title=title,
         artist=artist,
         source_override=source_override,
+        prefer_openai=prefer_openai,
     )
 
-    # Await fast task to handle any exceptions (it should already be done)
+    # Await fast task (fire-and-forget; result not needed)
     if fast_task is not None:
         try:
             await fast_task

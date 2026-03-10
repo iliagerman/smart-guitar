@@ -14,16 +14,14 @@ from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
 from starlette.middleware.cors import CORSMiddleware
 
-from sqlalchemy import update
-
 from guitar_player.config import get_settings
 from guitar_player.middleware import RequestContextMiddleware
 from guitar_player.request_context import RequestContextFilter
 from guitar_player.database import close_db, init_db
+from guitar_player.dao.job_dao import JobDAO
+from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dependencies import set_storage
 from guitar_player.exceptions import AlreadyExistsError, BadRequestError, NotFoundError
-from guitar_player.models.job import Job
-from guitar_player.models.song import Song
 from guitar_player.routers import (
     admin,
     auth,
@@ -147,40 +145,48 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         now = datetime.now(timezone.utc)
         stale_before = now - timedelta(minutes=16)
         async with session_factory() as session:
-            from sqlalchemy import select as sa_select
+            job_dao = JobDAO(session)
+            song_dao = SongDAO(session)
 
-            # Collect IDs of stale jobs before updating, so we can release
-            # the processing lock on their songs.
-            stale_ids_result = await session.execute(
-                sa_select(Job.id)
-                .where(Job.status.in_(["PENDING", "PROCESSING"]))
-                .where(Job.updated_at < stale_before)
-            )
-            stale_job_ids = [row[0] for row in stale_ids_result.all()]
-
+            stale_job_ids = await job_dao.fail_stale_before(stale_before)
             if stale_job_ids:
-                result = await session.execute(
-                    update(Job)
-                    .where(Job.id.in_(stale_job_ids))
-                    .values(
-                        status="FAILED", stage="failed", error_message="Server restarted"
-                    )
-                )
-                # Release processing locks held by stale jobs.
-                await session.execute(
-                    update(Song)
-                    .where(Song.processing_job_id.in_(stale_job_ids))
-                    .values(processing_job_id=None)
-                )
-                await session.commit()
+                await song_dao.release_processing_locks(stale_job_ids)
+                await job_dao.commit()
                 logger.info(
                     "Marked %d stale jobs as FAILED on startup", len(stale_job_ids)
                 )
             else:
-                await session.commit()
+                await job_dao.commit()
     except Exception:
         logger.warning(
             "Failed to mark stale jobs on startup (will retry on next restart)",
+            exc_info=True,
+        )
+
+    # Cleanup songs with corrupted youtube_ids (trailing underscores from
+    # the old seed dedup logic).  These IDs are invalid and cause 404s on
+    # thumbnail/audio downloads.
+    try:
+        async with session_factory() as session:
+            song_dao = SongDAO(session)
+            job_dao = JobDAO(session)
+
+            bad_songs = await song_dao.find_corrupted_youtube_ids()
+            if bad_songs:
+                bad_ids = [s.id for s in bad_songs]
+                await job_dao.delete_by_song_ids(bad_ids)
+                await song_dao.delete_by_ids(bad_ids)
+                await song_dao.commit()
+                for s in bad_songs:
+                    logger.info(
+                        "Deleted song with corrupted youtube_id: %s (song_name=%s)",
+                        s.youtube_id,
+                        s.song_name,
+                    )
+                logger.info("Cleaned up %d songs with corrupted youtube_ids", len(bad_songs))
+    except Exception:
+        logger.warning(
+            "Failed to clean up corrupted youtube_ids on startup",
             exc_info=True,
         )
 
@@ -197,7 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             count = await sync_local_bucket(
                 session, base_path, user, remove_stale=False
             )
-            await session.commit()
+            await SongDAO(session).commit()
             logger.info("Local sync complete: %d songs synced", count)
 
         # Phase 4: optional background admin heal for songs missing stems/chords/lyrics/thumbnails

@@ -4,12 +4,12 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from guitar_player.models.job import Job
-from guitar_player.models.song import Song
-from guitar_player.models.user import User
+from guitar_player.dao.job_dao import JobDAO
+from guitar_player.dao.song_dao import SongDAO
+from guitar_player.dao.user_dao import UserDAO
+from guitar_player.schemas.records import UserRecord
 
 logger = logging.getLogger(__name__)
 
@@ -65,17 +65,14 @@ def _pretty_name(folder_name: str) -> str:
     return folder_name.replace("_", " ").title()
 
 
-async def ensure_default_user(session: AsyncSession, email: str) -> User:
+async def ensure_default_user(session: AsyncSession, email: str) -> UserRecord:
     """Create the default local dev user if it doesn't exist."""
-    stmt = select(User).where(User.email == email)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    user_dao = UserDAO(session)
+    user = await user_dao.get_by_email(email)
     if user:
         return user
 
-    user = User(cognito_sub=f"local-{email}", email=email)
-    session.add(user)
-    await session.flush()
+    user = await user_dao.create(cognito_sub=f"local-{email}", email=email)
     logger.info("Created default local user: %s", email)
     return user
 
@@ -83,7 +80,7 @@ async def ensure_default_user(session: AsyncSession, email: str) -> User:
 async def sync_local_bucket(
     session: AsyncSession,
     base_path: str,
-    default_user: User,
+    default_user: UserRecord,
     *,
     remove_stale: bool = True,
 ) -> int:
@@ -92,6 +89,9 @@ async def sync_local_bucket(
     Also removes stale DB records whose directories no longer exist on disk.
     Returns the number of songs synced (new records only).
     """
+    song_dao = SongDAO(session)
+    job_dao = JobDAO(session)
+
     bucket = Path(base_path)
     if not bucket.is_dir():
         logger.warning("Local bucket not found: %s", base_path)
@@ -99,9 +99,9 @@ async def sync_local_bucket(
 
     if remove_stale:
         # Remove stale DB records whose song directories are gone from disk
-        all_songs_result = await session.execute(select(Song))
+        all_songs = await song_dao.get_all_songs()
         stale_song_ids = []
-        for song in all_songs_result.scalars().all():
+        for song in all_songs:
             song_dir = bucket / song.song_name
             if not song_dir.is_dir():
                 logger.info(
@@ -110,9 +110,8 @@ async def sync_local_bucket(
                 stale_song_ids.append(song.id)
         if stale_song_ids:
             # Delete associated jobs first (FK constraint)
-            await session.execute(delete(Job).where(Job.song_id.in_(stale_song_ids)))
-            await session.execute(delete(Song).where(Song.id.in_(stale_song_ids)))
-            await session.flush()
+            await job_dao.delete_by_song_ids(stale_song_ids)
+            await song_dao.delete_by_ids(stale_song_ids)
 
     synced = 0
 
@@ -130,24 +129,21 @@ async def sync_local_bucket(
             song_name = f"{artist_folder}/{song_folder}"
 
             # Check if already in DB
-            stmt = select(Song).where(Song.song_name == song_name)
-            result = await session.execute(stmt)
-            existing = result.scalar_one_or_none()
+            existing = await song_dao.get_by_song_name(song_name)
 
             if existing:
                 # Backfill keys for files that appeared since last sync
-                _changed = False
+                updates: dict = {}
                 if not existing.lyrics_quick_key:
                     lq = song_dir / "lyrics_quick.json"
                     if lq.is_file():
-                        existing.lyrics_quick_key = f"{song_name}/lyrics_quick.json"
-                        _changed = True
+                        updates["lyrics_quick_key"] = f"{song_name}/lyrics_quick.json"
                 if not existing.lyrics_key:
                     lf = song_dir / "lyrics.json"
                     if lf.is_file():
-                        existing.lyrics_key = f"{song_name}/lyrics.json"
-                        _changed = True
-                if _changed:
+                        updates["lyrics_key"] = f"{song_name}/lyrics.json"
+                if updates:
+                    await song_dao.update_by_id(existing.id, **updates)
                     logger.info("Backfilled keys for existing song: %s", song_name)
                 continue
 
@@ -163,39 +159,37 @@ async def sync_local_bucket(
                 else _pretty_name(song_folder)
             )
 
-            song = Song(
-                title=title,
-                artist=artist_display,
-                song_name=song_name,
-                audio_key=audio_key,
-                downloaded_by=default_user.id,
-            )
+            create_kwargs: dict = {
+                "title": title,
+                "artist": artist_display,
+                "song_name": song_name,
+                "audio_key": audio_key,
+                "downloaded_by": default_user.id,
+            }
 
             # Populate stem keys from existing files on disk
             for stem_name in STEM_KEYS:
                 stem_file = song_dir / f"{stem_name}.mp3"
                 if stem_file.is_file():
-                    setattr(
-                        song, f"{stem_name}_key", f"{song_name}/{stem_name}.mp3"
-                    )
+                    create_kwargs[f"{stem_name}_key"] = f"{song_name}/{stem_name}.mp3"
 
             # Populate chords key if chords.json exists
             chords_file = song_dir / "chords.json"
             if chords_file.is_file():
-                song.chords_key = f"{song_name}/chords.json"
+                create_kwargs["chords_key"] = f"{song_name}/chords.json"
 
             # Populate lyrics keys if present on disk
             lyrics_file = song_dir / "lyrics.json"
             if lyrics_file.is_file():
-                song.lyrics_key = f"{song_name}/lyrics.json"
+                create_kwargs["lyrics_key"] = f"{song_name}/lyrics.json"
 
             lyrics_quick_file = song_dir / "lyrics_quick.json"
             if lyrics_quick_file.is_file():
-                song.lyrics_quick_key = f"{song_name}/lyrics_quick.json"
+                create_kwargs["lyrics_quick_key"] = f"{song_name}/lyrics_quick.json"
 
-            session.add(song)
+            await song_dao.create(**create_kwargs)
             synced += 1
             logger.info("Synced song: %s / %s", artist_display, title)
 
-    await session.flush()
+    await song_dao.flush()
     return synced

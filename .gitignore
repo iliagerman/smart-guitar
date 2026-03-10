@@ -20,3 +20,4 @@ youtube-cookies.txt
 # Local assistant / agent settings (never commit)
 .claude/
 local_bucket copy
+*.db

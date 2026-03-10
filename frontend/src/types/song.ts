@@ -88,6 +88,8 @@ export interface SongDetail {
   lyrics_source: string | null
   quick_lyrics: LyricsSegment[]
   quick_lyrics_source: string | null
+  corrected_lyrics: LyricsSegment[]
+  corrected_lyrics_source: string | null
   chord_options: ChordOption[]
   tabs: TabNote[]
   strums: StrumEvent[]

@@ -47,6 +47,7 @@ class Song(UUIDMixin, TimestampMixin, Base):
     chords_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     lyrics_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     lyrics_quick_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    lyrics_corrected_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     tabs_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # --- Processing lock & deduplication ---
@@ -55,6 +56,17 @@ class Song(UUIDMixin, TimestampMixin, Base):
     # SELECT FOR UPDATE to prevent concurrent job creation.
     processing_job_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Whether lyrics.json has been corrected by merging quick lyrics text
+    # with Whisper timestamps.  Set once per song to avoid re-running.
+    lyrics_corrected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+
+    # Bumped per deploy to allow a one-time lyrics retry for non-Latin songs.
+    lyrics_heal_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
     )
 
     # Permanent failure flags — prevent automatic retry on every page load.

@@ -67,8 +67,8 @@ async def test_admin_enqueues_tabs_generation_when_missing(
             song_dao = SongDAO(session)
             existing = await song_dao.get_by_song_name(song_name)
             if existing:
-                await song_dao.delete(existing)
-                await session.commit()
+                await song_dao.delete_by_id(existing.id)
+                await song_dao.commit()
 
             song = await song_dao.create(
                 title="Tabs Generation Test Song",

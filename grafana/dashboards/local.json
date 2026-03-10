@@ -120,18 +120,22 @@
               "tsNs": true,
               "labels": true,
               "environment": true,
-              "log_source": true,
               "label_type": true,
-              "filename": true
+              "labelTypes": true,
+              "filename": true,
+              "service_name": true,
+              "detected_level": true,
+              "service": true
             },
             "renameByName": {
               "Line": "msg",
               "request_id": "rid",
-              "user_id": "uid"
+              "user_id": "uid",
+              "log_source": "service"
             },
             "indexByName": {
               "Time": 0,
-              "service": 1,
+              "log_source": 1,
               "level": 2,
               "rid": 3,
               "uid": 4,

@@ -127,6 +127,8 @@ class SongDetailResponse(BaseModel):
     lyrics_source: Optional[str] = None
     quick_lyrics: list[LyricsSegment] = []
     quick_lyrics_source: Optional[str] = None
+    corrected_lyrics: list[LyricsSegment] = []
+    corrected_lyrics_source: Optional[str] = None
     tabs: list[TabNote] = []
     strums: list[StrumEvent] = []
     rhythm: Optional[RhythmInfo] = None

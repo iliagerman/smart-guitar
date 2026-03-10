@@ -41,7 +41,7 @@ async def song(_db, storage):
         song_dao = SongDAO(session)
         existing = await song_dao.get_by_song_name(SONG_NAME)
         if existing:
-            await song_dao.delete(existing)
+            await song_dao.delete_by_id(existing.id)
             await session.commit()
 
         song = await song_dao.create(
@@ -58,7 +58,7 @@ async def song(_db, storage):
         song_dao = SongDAO(session)
         s = await song_dao.get_by_song_name(SONG_NAME)
         if s:
-            await song_dao.delete(s)
+            await song_dao.delete_by_id(s.id)
             await session.commit()
 
 
@@ -126,7 +126,7 @@ async def test_returns_existing_processing_job(_db, song, storage):
         # Advance job to PROCESSING
         job_dao = JobDAO(session)
         job = await job_dao.get_by_id(first.id)
-        await job_dao.update_status(job, "PROCESSING")
+        await job_dao.update_status(job.id, "PROCESSING")
         await session.commit()
 
     async with _db() as session:
@@ -158,7 +158,7 @@ async def test_creates_new_job_after_completed(_db, song, storage):
         # Mark completed
         job_dao = JobDAO(session)
         job = await job_dao.get_by_id(first.id)
-        await job_dao.update_status(job, "COMPLETED", results=[])
+        await job_dao.update_status(job.id, "COMPLETED", results=[])
         await session.commit()
 
     async with _db() as session:
@@ -191,7 +191,7 @@ async def test_creates_new_job_after_failed(_db, song, storage):
         # Mark failed
         job_dao = JobDAO(session)
         job = await job_dao.get_by_id(first.id)
-        await job_dao.update_status(job, "FAILED", error_message="test failure")
+        await job_dao.update_status(job.id, "FAILED", error_message="test failure")
         await session.commit()
 
     async with _db() as session:
@@ -225,7 +225,7 @@ async def test_stale_active_job_is_replaced(_db, song, storage):
         job_dao = JobDAO(session)
         job = await job_dao.get_by_id(first.id)
         stale_time = datetime.now(timezone.utc) - timedelta(minutes=45)
-        await job_dao.update(job, updated_at=stale_time)
+        await job_dao.update_by_id(job.id, updated_at=stale_time)
         await session.commit()
 
     async with _db() as session:

@@ -50,10 +50,10 @@ async def _sweep_once(*, limit: int) -> int:
         failed = 0
         for job in stale_jobs:
             song = await song_dao.get_by_id(job.song_id)
-            await job_dao.update_status(job, "FAILED", error_message="Job timed out")
+            await job_dao.update_status(job.id, "FAILED", error_message="Job timed out")
             # Release processing lock if this job owns it.
             if song and song.processing_job_id == job.id:
-                song.processing_job_id = None
+                await song_dao.update_by_id(song.id, processing_job_id=None)
             failed += 1
 
             if song and song.song_name:
@@ -81,7 +81,7 @@ async def _sweep_once(*, limit: int) -> int:
                         exc_info=True,
                     )
 
-        await session.commit()
+        await job_dao.commit()
         return failed
 
 
@@ -115,7 +115,7 @@ async def _rescue_stale_downloads() -> int:
 
         for song in songs:
             if not song.youtube_id or not song.audio_key:
-                song.download_requested_at = None
+                await song_dao.update_by_id(song.id, download_requested_at=None)
                 continue
 
             # Skip if audio already appeared (homeserver was just slow)
@@ -124,7 +124,7 @@ async def _rescue_stale_downloads() -> int:
                     "Stale download rescue: audio already exists for %s — clearing flag",
                     song.song_name,
                 )
-                song.download_requested_at = None
+                await song_dao.update_by_id(song.id, download_requested_at=None)
                 rescued += 1
                 continue
 
@@ -142,8 +142,8 @@ async def _rescue_stale_downloads() -> int:
                 transcode_audio_to_mp3_cbr192(local_audio, local_mp3)
                 storage.upload_file(local_mp3, song.audio_key)
 
-                song.download_requested_at = None
-                await session.flush()
+                await song_dao.update_by_id(song.id, download_requested_at=None)
+                await song_dao.flush()
 
                 # Trigger processing
                 processing = ProcessingService(settings)
@@ -166,11 +166,11 @@ async def _rescue_stale_downloads() -> int:
                     song.youtube_id,
                 )
                 # Clear flag to prevent infinite retries — the DLQ / admin can handle it
-                song.download_requested_at = None
+                await song_dao.update_by_id(song.id, download_requested_at=None)
             finally:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        await session.commit()
+        await song_dao.commit()
     return rescued
 
 
