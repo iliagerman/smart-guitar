@@ -1,11 +1,13 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { PitchDetector } from 'pitchy'
 import {
   type GuitarString,
   type DetectedNote,
+  STANDARD_TUNING,
   findNearestNote,
   findNearestString,
   centsFromTarget,
+  shiftTuning,
 } from '../lib/tuning'
 
 const CLARITY_THRESHOLD = 0.8
@@ -64,9 +66,12 @@ export interface TunerState {
   clarity: number
   nearestString: GuitarString | null
   selectedString: GuitarString | null
+  semitoneOffset: number
+  activeTuning: GuitarString[]
   start: () => Promise<void>
   stop: () => void
   selectString: (s: GuitarString | null) => void
+  setSemitoneOffset: (offset: number) => void
 }
 
 export function useTuner(): TunerState {
@@ -78,6 +83,12 @@ export function useTuner(): TunerState {
   const [clarity, setClarity] = useState(0)
   const [nearestString, setNearestString] = useState<GuitarString | null>(null)
   const [selectedString, setSelectedString] = useState<GuitarString | null>(null)
+  const [semitoneOffset, setSemitoneOffset] = useState(0)
+
+  const activeTuning = useMemo(
+    () => shiftTuning(STANDARD_TUNING, semitoneOffset),
+    [semitoneOffset]
+  )
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -85,6 +96,7 @@ export function useTuner(): TunerState {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const pitchHistoryRef = useRef<number[]>([])
   const selectedStringRef = useRef<GuitarString | null>(null)
+  const activeTuningRef = useRef<GuitarString[]>(activeTuning)
   const rafRef = useRef<number>(0)
   const isRunningRef = useRef(false)
 
@@ -229,6 +241,10 @@ export function useTuner(): TunerState {
   useEffect(() => {
     selectedStringRef.current = selectedString
   }, [selectedString])
+
+  useEffect(() => {
+    activeTuningRef.current = activeTuning
+  }, [activeTuning])
 
   // Cleanup on unmount
   useEffect(() => {
