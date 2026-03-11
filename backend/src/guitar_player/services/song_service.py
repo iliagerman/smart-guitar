@@ -193,6 +193,7 @@ class SongService:
 
         # Determine whether to offload to homeserver via SQS or download locally.
         from guitar_player.config import get_settings
+
         sqs_queue_url = get_settings().youtube.youtube_download_queue_url
 
         tmp_dir = tempfile.mkdtemp(prefix="song_dl_")
@@ -261,7 +262,9 @@ class SongService:
             ):
                 # Update youtube_id if not set
                 if not existing_by_name.youtube_id:
-                    await self._song_dao.update_by_id(existing_by_name.id, youtube_id=youtube_id)
+                    await self._song_dao.update_by_id(
+                        existing_by_name.id, youtube_id=youtube_id
+                    )
                 return SongResponse.model_validate(existing_by_name)
 
             canonical_audio_filename = "audio.mp3"
@@ -364,7 +367,11 @@ class SongService:
         """Send a YouTube download request to the homeserver via SQS."""
         from guitar_player.config import get_settings
 
-        from guitar_player.request_context import request_id_var, user_id_var, user_email_var
+        from guitar_player.request_context import (
+            request_id_var,
+            user_id_var,
+            user_email_var,
+        )
 
         settings = get_settings()
         sqs = boto3.client("sqs", region_name=settings.aws.region)
@@ -594,7 +601,9 @@ class SongService:
                             is not None
                         ):
                             candidate += "_"
-                        song = await self._song_dao.update_by_id(song.id, youtube_id=candidate)
+                        song = await self._song_dao.update_by_id(
+                            song.id, youtube_id=candidate
+                        )
                         updated = True
                         logger.info(
                             "Admin: discovered youtube_id for %s via query '%s'",
@@ -826,7 +835,9 @@ class SongService:
             candidate = f"{song.song_name}/lyrics_corrected.json"
             if self._storage.file_exists(candidate):
                 corrected_key = candidate
-                await self._song_dao.update_by_id(song.id, lyrics_corrected_key=candidate)
+                await self._song_dao.update_by_id(
+                    song.id, lyrics_corrected_key=candidate
+                )
         if corrected_key and self._storage.file_exists(corrected_key):
             try:
                 raw = self._storage.read_json(corrected_key)

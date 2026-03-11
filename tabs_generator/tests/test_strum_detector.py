@@ -301,7 +301,7 @@ def test_beat_aligned_end_times():
     beat_times = [0.0, 0.5, 1.0]
     strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
 
-    assert strums[0].end_time == 0.5   # next beat
+    assert strums[0].end_time == 0.5  # next beat
     assert round(strums[1].end_time, 2) == 0.76
     assert round(strums[2].end_time, 2) == 1.24
     assert round(strums[3].end_time, 2) == 1.56
@@ -317,15 +317,35 @@ def test_merge_onset_overrides_beat_direction():
     from tabs_generator.schemas import StrumEvent
 
     beat_strums = [
-        StrumEvent(id=0, start_time=0.0, end_time=0.5, direction="down",
-                   confidence=0.5, num_strings=0, onset_spread_ms=0.0),
-        StrumEvent(id=1, start_time=0.5, end_time=1.0, direction="up",
-                   confidence=0.5, num_strings=0, onset_spread_ms=0.0),
+        StrumEvent(
+            id=0,
+            start_time=0.0,
+            end_time=0.5,
+            direction="down",
+            confidence=0.5,
+            num_strings=0,
+            onset_spread_ms=0.0,
+        ),
+        StrumEvent(
+            id=1,
+            start_time=0.5,
+            end_time=1.0,
+            direction="up",
+            confidence=0.5,
+            num_strings=0,
+            onset_spread_ms=0.0,
+        ),
     ]
     onset_strums = [
-        _OnsetStrum(start_time=0.01, end_time=0.4, direction="up",
-                    confidence=0.8, num_strings=4, onset_spread_ms=12.0,
-                    note_indices=[0, 1, 2, 3]),
+        _OnsetStrum(
+            start_time=0.01,
+            end_time=0.4,
+            direction="up",
+            confidence=0.8,
+            num_strings=4,
+            onset_spread_ms=12.0,
+            note_indices=[0, 1, 2, 3],
+        ),
     ]
 
     merged = _merge_strums(beat_strums, onset_strums)
@@ -345,13 +365,26 @@ def test_merge_ambiguous_onset_not_used():
     from tabs_generator.schemas import StrumEvent
 
     beat_strums = [
-        StrumEvent(id=0, start_time=0.0, end_time=0.5, direction="down",
-                   confidence=0.5, num_strings=0, onset_spread_ms=0.0),
+        StrumEvent(
+            id=0,
+            start_time=0.0,
+            end_time=0.5,
+            direction="down",
+            confidence=0.5,
+            num_strings=0,
+            onset_spread_ms=0.0,
+        ),
     ]
     onset_strums = [
-        _OnsetStrum(start_time=0.01, end_time=0.4, direction="ambiguous",
-                    confidence=0.0, num_strings=3, onset_spread_ms=1.0,
-                    note_indices=[0, 1, 2]),
+        _OnsetStrum(
+            start_time=0.01,
+            end_time=0.4,
+            direction="ambiguous",
+            confidence=0.0,
+            num_strings=3,
+            onset_spread_ms=1.0,
+            note_indices=[0, 1, 2],
+        ),
     ]
 
     merged = _merge_strums(beat_strums, onset_strums)

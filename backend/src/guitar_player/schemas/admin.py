@@ -31,7 +31,6 @@ class AdminSongResponse(BaseModel):
     lyrics_enqueued: bool = False
     tabs_enqueued: bool = False
 
-
     # Job ID created by trigger_reprocess (None when no reprocess was needed).
     job_id: uuid.UUID | None = None
 

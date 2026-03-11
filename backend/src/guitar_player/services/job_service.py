@@ -1024,9 +1024,9 @@ class JobService:
             song.guitar_key,
         )
 
-        tabs_key_missing_on_disk = bool(song.tabs_key) and not self._storage.file_exists(
+        tabs_key_missing_on_disk = bool(
             song.tabs_key
-        )
+        ) and not self._storage.file_exists(song.tabs_key)
         if tabs_key_missing_on_disk:
             logger.info(
                 "trigger_tabs: stale tabs_key missing on disk; clearing DB key and bypassing cooldown song_id=%s tabs_key=%s",
@@ -2307,7 +2307,9 @@ async def _process_job(job_id: uuid.UUID) -> None:
                 },
             )
 
-            await processing.generate_tabs(storage.resolve_service_path(guitar_tabs_key))
+            await processing.generate_tabs(
+                storage.resolve_service_path(guitar_tabs_key)
+            )
 
             elapsed_s = time.monotonic() - t0
             logger.info(
@@ -2375,7 +2377,9 @@ async def _process_job(job_id: uuid.UUID) -> None:
     # `updated_at` fresh.  Without this, the stale-job check in `get_job` marks
     # the job as timed-out when these tasks exceed _STALE_ACTIVE_JOB_AFTER_SECONDS.
     async def _all_subtasks() -> None:
-        await asyncio.gather(_do_lyrics(), _do_merge(), _do_tabs(), _check_quick_lyrics())
+        await asyncio.gather(
+            _do_lyrics(), _do_merge(), _do_tabs(), _check_quick_lyrics()
+        )
 
     gather_task = asyncio.create_task(_all_subtasks())
     ltt_tick = asyncio.create_task(
@@ -2650,7 +2654,9 @@ async def _processing_services_healthy(
     return True, None
 
 
-async def _service_healthy(url: str, *, timeout_s: float = 2.0) -> tuple[bool, str | None]:
+async def _service_healthy(
+    url: str, *, timeout_s: float = 2.0
+) -> tuple[bool, str | None]:
     """Best-effort health check for a single downstream service."""
 
     try:
