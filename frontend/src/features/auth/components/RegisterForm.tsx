@@ -20,14 +20,20 @@ export function RegisterForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const normalizedEmail = email.trim()
+
     if (password !== confirmPassword) {
       setMismatchError('Passwords do not match')
       return
     }
+
     setMismatchError('')
-    register.mutate({ email, password }, {
-      onSuccess: () => navigate(ROUTES.CONFIRM_EMAIL, { state: { email } }),
-    })
+    register.mutate(
+      { email: normalizedEmail, password },
+      {
+        onSuccess: () => navigate(`${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`, { state: { email: normalizedEmail } }),
+      },
+    )
   }
 
   return (

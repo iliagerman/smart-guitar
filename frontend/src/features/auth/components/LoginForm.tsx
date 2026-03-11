@@ -26,15 +26,23 @@ export function LoginForm() {
   const login = useLogin()
   const navigate = useNavigate()
   const resend = useMutation({
-    mutationFn: () => authApi.resendCode(email),
-    onSuccess: () => navigate(ROUTES.CONFIRM_EMAIL, { state: { email } }),
+    mutationFn: () => authApi.resendCode(email.trim()),
+    onSuccess: () => {
+      const normalizedEmail = email.trim()
+      navigate(`${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`, {
+        state: { email: normalizedEmail },
+      })
+    },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    login.mutate({ email, password }, {
-      onSuccess: () => navigate(ROUTES.LIBRARY),
-    })
+    login.mutate(
+      { email: email.trim(), password },
+      {
+        onSuccess: () => navigate(ROUTES.LIBRARY),
+      },
+    )
   }
 
   const handleGoogleSignIn = async () => {

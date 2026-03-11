@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
 import { useConfirm } from '../hooks/use-confirm'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { authApi } from '@/api/auth.api'
+
+const CONFIRM_EMAIL_STORAGE_KEY = 'auth.confirmEmail'
 
 function getErrorDetail(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -14,29 +16,54 @@ function getErrorDetail(error: unknown): string | null {
 
 export function ConfirmEmailForm() {
   const location = useLocation()
-  const email = (location.state as { email?: string })?.email || ''
+  const [searchParams] = useSearchParams()
+  const locationState = location.state as { email?: string } | null
+  const initialEmail =
+    locationState?.email?.trim() ||
+    searchParams.get('email')?.trim() ||
+    sessionStorage.getItem(CONFIRM_EMAIL_STORAGE_KEY)?.trim() ||
+    ''
+  const [email, setEmail] = useState(initialEmail)
   const [code, setCode] = useState('')
   const [resendMsg, setResendMsg] = useState('')
   const confirm = useConfirm()
   const navigate = useNavigate()
 
+  const normalizedEmail = email.trim()
+  const normalizedCode = code.trim()
+
+  useEffect(() => {
+    if (normalizedEmail) {
+      sessionStorage.setItem(CONFIRM_EMAIL_STORAGE_KEY, normalizedEmail)
+      return
+    }
+
+    sessionStorage.removeItem(CONFIRM_EMAIL_STORAGE_KEY)
+  }, [normalizedEmail])
+
   const resend = useMutation({
-    mutationFn: () => authApi.resendCode(email),
+    mutationFn: () => authApi.resendCode(normalizedEmail),
     onSuccess: () => setResendMsg('Code resent! Check your email.'),
     onError: () => setResendMsg(''),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    confirm.mutate({ email, confirmation_code: code }, {
-      onSuccess: () => navigate(ROUTES.LOGIN),
-    })
+    confirm.mutate(
+      { email: normalizedEmail, confirmation_code: normalizedCode },
+      {
+        onSuccess: () => {
+          sessionStorage.removeItem(CONFIRM_EMAIL_STORAGE_KEY)
+          navigate(ROUTES.LOGIN)
+        },
+      },
+    )
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full" data-testid="confirm-form">
       <p className="text-smoke-300 text-sm text-center">
-        Enter the verification code sent to <span className="text-flame-400">{email}</span>
+        Enter the verification code sent to <span className="text-flame-400">{normalizedEmail || 'your email'}</span>
       </p>
       <div className="bg-flame-400/10 border border-flame-400/30 rounded-lg px-4 py-3 text-center">
         <p className="text-flame-300 text-sm font-semibold">
@@ -47,6 +74,18 @@ export function ConfirmEmailForm() {
         </p>
       </div>
       <input
+        id="confirm-email"
+        name="email"
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        data-testid="confirm-email"
+        autoComplete="email"
+        required
+      />
+      <input
         id="confirm-code"
         name="code"
         type="text"
@@ -55,11 +94,12 @@ export function ConfirmEmailForm() {
         onChange={(e) => setCode(e.target.value)}
         className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all text-center tracking-widest"
         data-testid="confirm-code"
+        autoComplete="one-time-code"
         required
       />
       <button
         type="submit"
-        disabled={confirm.isPending}
+        disabled={confirm.isPending || !normalizedEmail || !normalizedCode}
         className="w-full py-3 bg-flame-400 hover:bg-flame-500 text-charcoal-950 font-bold rounded-lg transition-colors disabled:opacity-50"
         data-testid="confirm-submit"
       >
@@ -72,7 +112,7 @@ export function ConfirmEmailForm() {
       )}
       <button
         type="button"
-        disabled={resend.isPending}
+        disabled={resend.isPending || !normalizedEmail}
         onClick={() => resend.mutate()}
         className="text-smoke-400 hover:text-flame-400 text-sm transition-colors disabled:opacity-50"
         data-testid="resend-code"
