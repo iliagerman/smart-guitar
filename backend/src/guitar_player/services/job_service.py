@@ -618,6 +618,14 @@ class JobService:
         if not song:
             raise NotFoundError("Song", str(song_id))
 
+        # Determine whether full lyrics already exist before consulting the
+        # failure gate. A previous full-transcription failure should no longer
+        # block a fresh lyrics.json regeneration, but it should still block a
+        # quick-lyrics-only retry when full lyrics already exist.
+        lyrics_ok = bool(song.lyrics_key) and self._storage.file_exists(song.lyrics_key)
+        if not lyrics_ok and song.song_name:
+            lyrics_ok = self._storage.file_exists(f"{song.song_name}/lyrics.json")
+
         # A previous transcription attempt already failed — don't retry
         # automatically on every page load / poll. The user can trigger
         # a manual retry via the full reprocess flow if needed.
@@ -649,7 +657,36 @@ class JobService:
                 song = await self._song_dao.get_by_id(song_id)
                 if not song:
                     return False
+                lyrics_ok = bool(song.lyrics_key) and self._storage.file_exists(
+                    song.lyrics_key
+                )
+                if not lyrics_ok and song.song_name:
+                    lyrics_ok = self._storage.file_exists(
+                        f"{song.song_name}/lyrics.json"
+                    )
                 # fall through to the rest of the method
+            elif not lyrics_ok:
+                logger.info(
+                    "Admin heal: retrying full lyrics transcription despite "
+                    "lyrics_failed=True song_id=%s song_name=%r",
+                    song_id,
+                    song.song_name,
+                    extra={
+                        "event_type": "admin_heal",
+                        "action": "lyrics_only",
+                        "song_id": str(song_id),
+                        "outcome": "retrying",
+                        "reason": "missing_lyrics_after_failure",
+                    },
+                )
+                await self._song_dao.update_by_id(
+                    song.id,
+                    lyrics_failed=False,
+                    lyrics_attempted_at=None,
+                )
+                song = await self._song_dao.get_by_id(song_id)
+                if not song:
+                    return False
             else:
                 if _should_log_admin_heal_info("lyrics_only", song_id):
                     logger.info(
@@ -709,7 +746,6 @@ class JobService:
             return False
 
         # Determine whether we need to generate anything.
-        lyrics_ok = bool(song.lyrics_key) and self._storage.file_exists(song.lyrics_key)
         quick_ok = bool(song.lyrics_quick_key) and self._storage.file_exists(
             song.lyrics_quick_key
         )
@@ -988,15 +1024,51 @@ class JobService:
             song.guitar_key,
         )
 
-        if song.tabs_failed and not force:
-            logger.debug("trigger_tabs: blocked by tabs_failed")
-            return False
+        tabs_key_missing_on_disk = bool(song.tabs_key) and not self._storage.file_exists(
+            song.tabs_key
+        )
+        if tabs_key_missing_on_disk:
+            logger.info(
+                "trigger_tabs: stale tabs_key missing on disk; clearing DB key and bypassing cooldown song_id=%s tabs_key=%s",
+                song_id,
+                song.tabs_key,
+            )
+            await self._song_dao.update_by_id(song.id, tabs_key=None)
+            song.tabs_key = None
+
+        tabs_attempt_age_s: float | None = None
+        if song.tabs_attempted_at:
+            tabs_attempt_age_s = (
+                _utcnow() - _to_aware_utc(song.tabs_attempted_at)
+            ).total_seconds()
+
+        if song.tabs_failed and not force and not tabs_key_missing_on_disk:
+            if (
+                tabs_attempt_age_s is not None
+                and tabs_attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                logger.debug(
+                    "trigger_tabs: blocked by recent tabs_failed cooldown (age=%.0fs)",
+                    tabs_attempt_age_s,
+                )
+                return False
+
+            logger.info(
+                "trigger_tabs: retrying after previous failure song_id=%s age_s=%s",
+                song_id,
+                None if tabs_attempt_age_s is None else round(tabs_attempt_age_s, 1),
+            )
 
         # DB-based cooldown: don't re-enqueue if we attempted recently.
-        if song.tabs_attempted_at and not force:
-            age_s = (_utcnow() - _to_aware_utc(song.tabs_attempted_at)).total_seconds()
-            if age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS:
-                logger.debug("trigger_tabs: blocked by cooldown (age=%.0fs)", age_s)
+        if song.tabs_attempted_at and not force and not tabs_key_missing_on_disk:
+            if (
+                tabs_attempt_age_s is not None
+                and tabs_attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                logger.debug(
+                    "trigger_tabs: blocked by cooldown (age=%.0fs)",
+                    tabs_attempt_age_s,
+                )
                 return False
 
         existing_task = _TABS_TASKS.get(song_id)
@@ -1039,7 +1111,7 @@ class JobService:
 
         # Record the attempt timestamp so concurrent/subsequent polls skip this.
         update_kwargs: dict = {"tabs_attempted_at": _utcnow()}
-        if force and song.tabs_failed:
+        if force or song.tabs_failed:
             update_kwargs["tabs_failed"] = False
         await self._song_dao.update_by_id(song.id, **update_kwargs)
 
@@ -1352,21 +1424,28 @@ async def _transcribe_lyrics_only(
         # Always check for lyrics.json — even when quick_only was requested,
         # the fallback may have run a full transcription.
         lyrics_key = f"{song_name}/lyrics.json"
-        if storage.file_exists(lyrics_key) and not song.lyrics_key:
+        lyrics_present = storage.file_exists(lyrics_key)
+        if lyrics_present and not song.lyrics_key:
             await _cleanup_lyrics_preamble(storage, lyrics_key)
             changes["lyrics_key"] = lyrics_key
         lyrics_corrected_key = f"{song_name}/lyrics_corrected.json"
-        if storage.file_exists(lyrics_corrected_key) and not song.lyrics_corrected_key:
+        lyrics_corrected_present = storage.file_exists(lyrics_corrected_key)
+        if lyrics_corrected_present and not song.lyrics_corrected_key:
             changes["lyrics_corrected_key"] = lyrics_corrected_key
             changes["lyrics_corrected"] = True
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
-        if storage.file_exists(lyrics_quick_key) and not song.lyrics_quick_key:
+        lyrics_quick_present = storage.file_exists(lyrics_quick_key)
+        if lyrics_quick_present and not song.lyrics_quick_key:
             changes["lyrics_quick_key"] = lyrics_quick_key
-        # Clear failure flag and attempt timestamp on success.
-        if changes:
+        # Clear failure flag and attempt timestamp on success, even when the
+        # DB keys were already set and there is nothing else to backfill.
+        if lyrics_present or lyrics_corrected_present or lyrics_quick_present:
             if song.lyrics_failed:
                 changes["lyrics_failed"] = False
-            changes["lyrics_attempted_at"] = None
+            if song.lyrics_attempted_at is not None:
+                changes["lyrics_attempted_at"] = None
+
+        if changes:
             await song_dao.update_by_id(song_id, **changes)
             await song_dao.commit()
 
@@ -2188,6 +2267,74 @@ async def _process_job(job_id: uuid.UUID) -> None:
                 },
             )
 
+    async def _do_tabs() -> None:
+        """Generate tabs from the guitar stem (non-fatal)."""
+        t0 = time.monotonic()
+        try:
+            tabs_key = f"{song_name}/tabs.json"
+            if storage.file_exists(tabs_key):
+                logger.info(
+                    "Skipping tabs: tabs.json already present",
+                    extra={
+                        "event_type": "subtask_skip",
+                        "job_id": str(job_id),
+                        "subtask": "tabs",
+                        "reason": "tabs_cached",
+                    },
+                )
+                return
+
+            guitar_tabs_key = _find_stem(storage, song_name, "guitar")
+            if not guitar_tabs_key:
+                logger.info(
+                    "Skipping tabs: guitar stem not found",
+                    extra={
+                        "event_type": "subtask_skip",
+                        "job_id": str(job_id),
+                        "subtask": "tabs",
+                        "reason": "guitar_stem_missing",
+                    },
+                )
+                return
+
+            logger.info(
+                "Sub-task started: tabs",
+                extra={
+                    "event_type": "subtask_start",
+                    "job_id": str(job_id),
+                    "subtask": "tabs",
+                    "input_key": guitar_tabs_key,
+                },
+            )
+
+            await processing.generate_tabs(storage.resolve_service_path(guitar_tabs_key))
+
+            elapsed_s = time.monotonic() - t0
+            logger.info(
+                "Sub-task finished: tabs (%.1fs)",
+                elapsed_s,
+                extra={
+                    "event_type": "subtask_done",
+                    "job_id": str(job_id),
+                    "subtask": "tabs",
+                    "elapsed_s": round(elapsed_s, 1),
+                },
+            )
+        except Exception as e:
+            elapsed_s = time.monotonic() - t0
+            logger.warning(
+                "Sub-task failed: tabs (non-fatal, %.1fs): %s",
+                elapsed_s,
+                e,
+                extra={
+                    "event_type": "subtask_failed",
+                    "job_id": str(job_id),
+                    "subtask": "tabs",
+                    "elapsed_s": round(elapsed_s, 1),
+                    "error": str(e),
+                },
+            )
+
     async def _check_quick_lyrics() -> None:
         """Poll for lyrics_quick.json appearing during lyrics transcription.
 
@@ -2228,7 +2375,7 @@ async def _process_job(job_id: uuid.UUID) -> None:
     # `updated_at` fresh.  Without this, the stale-job check in `get_job` marks
     # the job as timed-out when these tasks exceed _STALE_ACTIVE_JOB_AFTER_SECONDS.
     async def _all_subtasks() -> None:
-        await asyncio.gather(_do_lyrics(), _do_merge(), _check_quick_lyrics())
+        await asyncio.gather(_do_lyrics(), _do_merge(), _do_tabs(), _check_quick_lyrics())
 
     gather_task = asyncio.create_task(_all_subtasks())
     ltt_tick = asyncio.create_task(
@@ -2294,6 +2441,11 @@ async def _process_job(job_id: uuid.UUID) -> None:
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         if storage.file_exists(lyrics_quick_key):
             song_changes["lyrics_quick_key"] = lyrics_quick_key
+
+        tabs_key = f"{song_name}/tabs.json"
+        if storage.file_exists(tabs_key):
+            song_changes["tabs_key"] = tabs_key
+            song_changes["tabs_failed"] = False
 
         vg_key = _find_stem(storage, song_name, "vocals_guitar")
         if vg_key:
@@ -2498,6 +2650,20 @@ async def _processing_services_healthy(
     return True, None
 
 
+async def _service_healthy(url: str, *, timeout_s: float = 2.0) -> tuple[bool, str | None]:
+    """Best-effort health check for a single downstream service."""
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return False, f"status={resp.status_code}"
+    except Exception as e:
+        return False, str(e)
+
+    return True, None
+
+
 async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
     """Background task: scan every song and heal missing stems/chords/lyrics/thumbnails."""
 
@@ -2525,6 +2691,16 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
             settings.services.inference_demucs,
             settings.services.chords_generator,
             services_reason,
+        )
+
+    tabs_service_ok, tabs_service_reason = await _service_healthy(
+        f"http://{settings.services.tabs_generator}/health"
+    )
+    if not tabs_service_ok:
+        logger.warning(
+            "Startup admin: tabs service not ready (%s): %s. Will skip tabs healing for now.",
+            settings.services.tabs_generator,
+            tabs_service_reason,
         )
 
     # YouTube downloads are only safe/expected in local-ish environments.
@@ -2622,6 +2798,9 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
                 # -- Lyrics (lightweight, only if vocals exist) --
                 if not triggered:
                     await job_svc.trigger_lyrics_transcription_if_missing(song_id)
+
+                if tabs_service_ok:
+                    await job_svc.trigger_tabs_generation_if_missing(song_id)
 
                 await song_dao.commit()
         except Exception as e:

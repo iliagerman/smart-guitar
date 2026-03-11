@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { cn } from '@/lib/cn'
 import { formatChordName } from '@/lib/chord-colors'
+import type { StrumSymbol } from '../lib/strum-pattern'
 
 type Fret = number | 'x'
 
@@ -186,7 +187,7 @@ export function ChordDiagram({ chord }: { chord: string }) {
     if (!shape) {
         return (
             <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
-                <div className="text-sm font-semibold text-smoke-100">{formatChordName(chord)}</div>
+                <div className="text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatChordName(chord)}</div>
                 <div className="mt-1 text-xs text-smoke-500">No diagram yet</div>
             </div>
         )
@@ -200,7 +201,7 @@ export function ChordDiagram({ chord }: { chord: string }) {
     return (
         <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
             <div className="flex items-baseline justify-between gap-2">
-                <div className="text-sm font-semibold text-smoke-100">{formatChordName(chord)}</div>
+                <div className="text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatChordName(chord)}</div>
                 {baseFret > 1 && <div className="text-xs text-smoke-500">fret {baseFret}</div>}
             </div>
 
@@ -267,10 +268,12 @@ export function ChordDiagram({ chord }: { chord: string }) {
 
 export function ChordMap({
     chords,
+    representativePattern,
     showHeader = true,
     className,
 }: {
     chords: string[]
+    representativePattern?: StrumSymbol[]
     showHeader?: boolean
     className?: string
 }) {
@@ -299,6 +302,29 @@ export function ChordMap({
                     <span className="text-xs text-smoke-500">shapes</span>
                 </div>
             )}
+
+            {representativePattern && representativePattern.length > 0 ? (
+                <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-smoke-100">Strumming Pattern</div>
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-smoke-500">song groove</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                        {representativePattern.map((step, index) => (
+                            <span
+                                key={`${step.direction}-${index}`}
+                                className={cn(
+                                    step.className,
+                                    'inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-charcoal-950/60 px-1.5 text-sm font-bold'
+                                )}
+                                title={step.title}
+                            >
+                                {step.symbol}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="grid grid-cols-2 auto-rows-max content-start items-start gap-2 overflow-y-auto flex-1 min-h-0 pr-1">
                 {unique.map((ch) => (

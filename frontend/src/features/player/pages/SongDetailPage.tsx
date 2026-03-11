@@ -5,6 +5,7 @@ import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
 import { useLyricsSync } from '../hooks/use-lyrics-sync'
 import { normalizeWords } from '../lib/normalize-words'
+import { getRepresentativeSongStrumPattern } from '../lib/strum-pattern'
 import { TransportControls } from '../components/TransportControls'
 import { TrackSelector } from '../components/TrackSelector'
 import { ChordSheet } from '../components/ChordSheet'
@@ -17,6 +18,7 @@ import { ChordMap, ChordDiagram } from '../components/ChordMap'
 import { ChordMapDialog } from '../components/ChordMapDialog'
 import { PlaybackSpeedSelector } from '../components/PlaybackSpeedSelector'
 import { ChordDisplayControls } from '../components/ChordDisplayControls'
+import { StrumDisplayControl } from '../components/StrumDisplayControl'
 import { LyricsSyncControl } from '../components/LyricsSyncControl'
 import { LyricsVersionToggle } from '../components/LyricsVersionToggle'
 import { ScrollModeControl } from '../components/ScrollModeControl'
@@ -84,15 +86,13 @@ export function SongDetailPage() {
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
-  const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: false })
+  const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: true })
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
   const transposeSemitones = usePlayerPrefsStore((s) => s.transposeSemitones)
-  // Tabs/strums disabled.
-  // const showStrums = usePlayerPrefsStore((s) => s.showStrums)
-  // const toggleShowStrums = usePlayerPrefsStore((s) => s.toggleShowStrums)
   const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
   const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
+  const showStrums = usePlayerPrefsStore((s) => s.showStrums)
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
   const loadingLabel = useRotatingText(
@@ -184,6 +184,13 @@ export function SongDetailPage() {
   }, [activeChords, transposeSemitones])
 
   const chordNamesForMap = useMemo(() => displayChords.map((c) => c.chord).filter(Boolean), [displayChords])
+  const representativeStrumPattern = useMemo(() => {
+    if (!detail || !showStrums) return []
+    return getRepresentativeSongStrumPattern(displayChords, detail.strums, {
+      rhythm: detail.rhythm,
+      maxSymbols: 8,
+    })
+  }, [detail, displayChords, showStrums])
 
   // --- Lyrics sync debug overlay (Ctrl+Shift+D) ---
   const [showLyricsDebug, setShowLyricsDebug] = useState(
@@ -246,8 +253,7 @@ export function SongDetailPage() {
   const hasLyrics = (detail?.lyrics?.length ?? 0) > 0
   const hasQuickLyrics = (detail?.quick_lyrics?.length ?? 0) > 0
   const hasAnyLyrics = hasLyrics || hasQuickLyrics
-  // Tabs disabled.
-  const hasTabs = false
+  const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
 
   const isJobProcessing =
     detail?.active_job?.status === 'PENDING' || detail?.active_job?.status === 'PROCESSING'
@@ -397,7 +403,7 @@ export function SongDetailPage() {
                   />
                   <ChordOptionSelector chordOptions={detail.chord_options ?? []} hasTabs={hasTabs} />
                   <ChordDisplayControls />
-                  {/* Strums button disabled */}
+                  <StrumDisplayControl />
                   <PlaybackSpeedSelector />
                   <LyricsSyncControl />
                   <LyricsVersionToggle
@@ -458,13 +464,11 @@ export function SongDetailPage() {
                     <ChordSheet
                       chords={displayChords}
                       lyrics={activeLyrics}
-                      strums={[]}
-                      rhythm={null}
                       onSeek={seek}
                     />
                   </div>
                   <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
-                    <ChordMap chords={chordNamesForMap} />
+                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} />
                   </div>
                 </div>
               ) : null}

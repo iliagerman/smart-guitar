@@ -15,6 +15,7 @@ import { FavoritesPage } from '@/features/library/pages/FavoritesPage'
 import { SongDetailPage } from '@/features/player/pages/SongDetailPage'
 import { SubscriptionSuccessPage } from '@/features/subscription/pages/SubscriptionSuccessPage'
 import { SubscriptionFailPage } from '@/features/subscription/pages/SubscriptionFailPage'
+import { TunerPage } from '@/features/tuner/pages/TunerPage'
 import { ROUTES } from './routes'
 
 export const router = createBrowserRouter([
@@ -75,6 +76,15 @@ export const router = createBrowserRouter([
             <SubscriptionGuard>
               <SongDetailPage />
             </SubscriptionGuard>
+          </AuthGuard>
+        ),
+      },
+      // Tuner: auth only, no subscription required
+      {
+        path: ROUTES.TUNER,
+        element: (
+          <AuthGuard>
+            <TunerPage />
           </AuthGuard>
         ),
       },

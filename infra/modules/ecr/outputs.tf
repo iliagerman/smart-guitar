@@ -31,6 +31,14 @@ output "chords_generator_repo_arn" {
   value = aws_ecr_repository.repos["chords_generator"].arn
 }
 
+output "tabs_generator_repo_url" {
+  value = aws_ecr_repository.repos["tabs_generator"].repository_url
+}
+
+output "tabs_generator_repo_arn" {
+  value = aws_ecr_repository.repos["tabs_generator"].arn
+}
+
 output "job_orchestrator_repo_url" {
   value = aws_ecr_repository.repos["job_orchestrator"].repository_url
 }

@@ -228,6 +228,7 @@ resource "aws_iam_role_policy" "lambda_app" {
 
           module.ecr.lyrics_generator_repo_arn,
           module.ecr.chords_generator_repo_arn,
+          module.ecr.tabs_generator_repo_arn,
           module.ecr.inference_demucs_repo_arn,
           module.ecr.job_orchestrator_repo_arn,
           module.ecr.vocals_guitar_stitch_repo_arn,
@@ -462,6 +463,102 @@ resource "aws_lb_listener_rule" "chords" {
   condition {
     host_header {
       values = [local.chords_domain]
+    }
+  }
+}
+
+################################################################################
+# Tabs Generator Lambda
+################################################################################
+
+resource "aws_cloudwatch_log_group" "tabs_generator" {
+  name              = "/aws/lambda/${var.project_name}-tabs-generator"
+  retention_in_days = 3
+  tags              = local.common_tags
+}
+
+resource "aws_lambda_function" "tabs_generator" {
+  function_name = "${var.project_name}-tabs-generator"
+  role          = aws_iam_role.lambda_exec.arn
+  package_type  = "Image"
+  image_uri     = "${module.ecr.tabs_generator_repo_url}:latest"
+  timeout       = 600
+  memory_size   = 4096
+  publish       = true
+
+  logging_config {
+    log_format = "JSON"
+  }
+
+  ephemeral_storage {
+    size = 2048
+  }
+
+  vpc_config {
+    subnet_ids         = module.networking.private_app_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
+}
+
+resource "aws_lambda_alias" "tabs_generator_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.tabs_generator.function_name
+  function_version = aws_lambda_function.tabs_generator.version
+
+  lifecycle {
+    ignore_changes = [function_version, routing_config]
+  }
+}
+
+resource "aws_lambda_provisioned_concurrency_config" "tabs_generator" {
+  function_name                     = aws_lambda_function.tabs_generator.function_name
+  qualifier                         = aws_lambda_alias.tabs_generator_live.name
+  provisioned_concurrent_executions = 1
+}
+
+################################################################################
+# Tabs Generator — ALB Integration
+################################################################################
+
+resource "aws_lb_target_group" "tabs" {
+  name        = "${var.project_name}-tabs-tg"
+  target_type = "lambda"
+  tags        = local.common_tags
+}
+
+resource "aws_lb_target_group_attachment" "tabs" {
+  target_group_arn = aws_lb_target_group.tabs.arn
+  target_id        = aws_lambda_alias.tabs_generator_live.arn
+  depends_on       = [aws_lambda_permission.tabs_alb]
+}
+
+resource "aws_lambda_permission" "tabs_alb" {
+  statement_id  = "AllowALBInvokeTabs"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.tabs_generator.function_name
+  qualifier     = aws_lambda_alias.tabs_generator_live.name
+  principal     = "elasticloadbalancing.amazonaws.com"
+  source_arn    = aws_lb_target_group.tabs.arn
+}
+
+resource "aws_lb_listener_rule" "tabs" {
+  listener_arn = module.ecs.alb_listener_arn
+  priority     = 200
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tabs.arn
+  }
+
+  condition {
+    host_header {
+      values = [local.tabs_domain]
     }
   }
 }
@@ -1001,6 +1098,19 @@ resource "aws_route53_record" "lyrics" {
 resource "aws_route53_record" "chords" {
   zone_id = module.dns.private_hosted_zone_id
   name    = local.chords_domain
+  type    = "A"
+
+  alias {
+    name                   = module.ecs.alb_dns_name
+    zone_id                = module.ecs.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# tabs.smart-guitar.com → Internal ALB (private zone)
+resource "aws_route53_record" "tabs" {
+  zone_id = module.dns.private_hosted_zone_id
+  name    = local.tabs_domain
   type    = "A"
 
   alias {

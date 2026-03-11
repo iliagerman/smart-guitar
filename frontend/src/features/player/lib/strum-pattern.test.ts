@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getStrumPattern } from './strum-pattern'
-import type { StrumEvent } from '@/types/song'
+import type { RhythmInfo, StrumEvent } from '@/types/song'
 
 function makeStrum(
   id: number,
@@ -13,6 +13,11 @@ function makeStrum(
 }
 
 describe('getStrumPattern', () => {
+  const rhythm: RhythmInfo = {
+    bpm: 120,
+    beat_times: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
+  }
+
   it('returns all matching strums within a chord time range', () => {
     const strums: StrumEvent[] = [
       makeStrum(0, 0.0, 0.5, 'down'),
@@ -140,5 +145,45 @@ describe('getStrumPattern', () => {
     expect(pattern).toHaveLength(4)
     expect(pattern.map(p => p.direction)).toEqual(['down', 'up', 'down', 'up'])
     expect(pattern.map(p => p.symbol)).toEqual(['\u2193', '\u2191', '\u2193', '\u2191'])
+  })
+
+  it('shows the synthetic beat-aligned pattern as a suggested fallback', () => {
+    const strums: StrumEvent[] = [
+      makeStrum(0, 0.0, 0.5, 'down', 0.5),
+      makeStrum(1, 0.5, 1.0, 'up', 0.5),
+      makeStrum(2, 1.0, 1.5, 'down', 0.5),
+      makeStrum(3, 1.5, 2.0, 'up', 0.5),
+    ]
+
+    const pattern = getStrumPattern(0.0, 2.0, strums, { rhythm })
+    expect(pattern).toHaveLength(4)
+    expect(pattern.map((p) => p.direction)).toEqual(['down', 'up', 'down', 'up'])
+    expect(pattern.every((p) => p.title.startsWith('suggested'))).toBe(true)
+  })
+
+  it('shows suggested fallback strums even when they do not snap to beat slots', () => {
+    const strums: StrumEvent[] = [
+      makeStrum(0, 0.17, 0.35, 'down', 0.5),
+      makeStrum(1, 0.43, 0.62, 'up', 0.5),
+    ]
+
+    const pattern = getStrumPattern(0.1, 0.7, strums, { rhythm })
+    expect(pattern).toHaveLength(2)
+    expect(pattern.map((p) => p.direction)).toEqual(['down', 'up'])
+    expect(pattern.every((p) => p.title.startsWith('suggested'))).toBe(true)
+  })
+
+  it('prefers onset-backed strums over the suggested fallback when available', () => {
+    const strums: StrumEvent[] = [
+      { ...makeStrum(0, 0.0, 0.5, 'down', 0.82), num_strings: 4, onset_spread_ms: 11 },
+      { ...makeStrum(1, 0.5, 1.0, 'up', 0.5) },
+      { ...makeStrum(2, 1.0, 1.5, 'down', 0.5) },
+      { ...makeStrum(3, 1.5, 2.0, 'up', 0.5) },
+    ]
+
+    const pattern = getStrumPattern(0.0, 1.0, strums, { rhythm })
+    expect(pattern).toHaveLength(1)
+    expect(pattern[0].direction).toBe('down')
+    expect(pattern[0].title).toBe('down strum (82%)')
   })
 })

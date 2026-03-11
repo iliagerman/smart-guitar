@@ -35,6 +35,10 @@ output "ecr_chords_generator_repo_url" {
   value = module.ecr.chords_generator_repo_url
 }
 
+output "ecr_tabs_generator_repo_url" {
+  value = module.ecr.tabs_generator_repo_url
+}
+
 output "ecr_job_orchestrator_repo_url" {
   value = module.ecr.job_orchestrator_repo_url
 }
@@ -176,6 +180,14 @@ output "chords_generator_function_name" {
 
 output "chords_generator_function_arn" {
   value = aws_lambda_function.chords_generator.arn
+}
+
+output "tabs_generator_function_name" {
+  value = aws_lambda_function.tabs_generator.function_name
+}
+
+output "tabs_generator_function_arn" {
+  value = aws_lambda_function.tabs_generator.arn
 }
 
 output "demucs_function_name" {

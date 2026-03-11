@@ -1,10 +1,11 @@
-"""Strum pattern generation combining beat-aligned patterns with onset detection.
+"""Strum pattern generation combining rhythmic fallback patterns with onset detection.
 
 Two complementary approaches:
 
-1. **Beat-aligned patterns**: Given chord durations and beat positions from
-   librosa, generate a strum event at each beat within a chord. Downbeats
-   get "down", upbeats (off-beats) get "up".
+1. **Rhythmic fallback patterns**: Given chord durations and beat positions from
+    librosa, generate a guitar-like strum groove using beat and off-beat slots.
+    This provides a plausible pattern even when we do not have reliable onset
+    evidence from the audio.
 
 2. **Onset-based detection**: Where Basic Pitch provides multi-note chord
    groups, analyze the temporal ordering of note onsets to determine actual
@@ -15,12 +16,33 @@ a strum direction) while using real audio evidence where available.
 """
 
 import logging
+from statistics import median
 from dataclasses import dataclass
 
 from tabs_generator.schemas import NoteResult, StrumEvent
 from tabs_generator.tab_converter import group_into_chords
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CHORD_ATTACK_WINDOW_S = 0.12
+_ONE_BEAT_PATTERN: tuple[tuple[float, str], ...] = ((0.0, "down"),)
+_TWO_BEAT_PATTERN: tuple[tuple[float, str], ...] = (
+    (0.0, "down"),
+    (0.68, "up"),
+)
+_THREE_BEAT_PATTERN: tuple[tuple[float, str], ...] = (
+    (0.0, "down"),
+    (0.44, "down"),
+    (0.82, "up"),
+)
+_FOUR_BEAT_PATTERN: tuple[tuple[float, str], ...] = (
+    (0.0, "down"),
+    (0.25, "down"),
+    (0.38, "up"),
+    (0.62, "up"),
+    (0.78, "down"),
+    (0.92, "up"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -195,17 +217,92 @@ def _detect_onset_strums(
 
 
 # ---------------------------------------------------------------------------
-# Beat-aligned pattern generation
+# Rhythmic fallback pattern generation
 # ---------------------------------------------------------------------------
 
 
-def _assign_beat_direction(strum_index: int) -> str:
-    """Assign down/up based on a running strum index.
+@dataclass
+class _PatternSlot:
+    """Candidate rhythmic slot for synthetic fallback strums."""
 
-    Simple alternating pattern: even strums = down, odd strums = up.
-    This keeps the groove continuous across chord boundaries.
+    time: float
+    direction: str
+
+
+def _estimate_local_beat_duration(
+    chord: ChordInfo,
+    beat_times: list[float],
+    bpm: float,
+) -> float:
+    """Estimate beat duration near a chord from the detected beat grid."""
+    fallback = 60.0 / max(30.0, bpm)
+    if len(beat_times) < 2:
+        return fallback
+
+    intervals: list[float] = []
+    for idx in range(len(beat_times) - 1):
+        start = beat_times[idx]
+        end = beat_times[idx + 1]
+        if end <= start:
+            continue
+        if end < chord.start_time - fallback or start > chord.end_time + fallback:
+            continue
+        intervals.append(end - start)
+
+    if not intervals:
+        intervals = [
+            beat_times[idx + 1] - beat_times[idx]
+            for idx in range(len(beat_times) - 1)
+            if beat_times[idx + 1] > beat_times[idx]
+        ]
+
+    return median(intervals) if intervals else fallback
+
+
+def _choose_fallback_pattern(estimated_beats: float) -> tuple[tuple[float, str], ...]:
+    """Choose a synthetic strum template based on chord duration in beats."""
+    if estimated_beats < 1.5:
+        return _ONE_BEAT_PATTERN
+    if estimated_beats < 2.5:
+        return _TWO_BEAT_PATTERN
+    if estimated_beats < 3.5:
+        return _THREE_BEAT_PATTERN
+    return _FOUR_BEAT_PATTERN
+
+
+def _build_chord_pattern_slots(
+    chord: ChordInfo,
+    beat_times: list[float],
+    bpm: float,
+) -> list[_PatternSlot]:
+    """Build synthetic strum slots for a single chord.
+
+    The template varies with chord duration so short chords get sparse, more
+    believable attacks while longer chords receive a fuller groove.
     """
-    return "down" if strum_index % 2 == 0 else "up"
+    chord_duration = max(0.05, chord.end_time - chord.start_time)
+    beat_duration = _estimate_local_beat_duration(chord, beat_times, bpm)
+    estimated_beats = chord_duration / max(0.05, beat_duration)
+    template = _choose_fallback_pattern(estimated_beats)
+
+    slots: list[_PatternSlot] = []
+    seen_times: set[float] = set()
+    for offset_ratio, direction in template:
+        time = chord.start_time + (chord_duration * offset_ratio)
+        time = min(time, chord.end_time - 0.01)
+        rounded = round(time, 4)
+        if rounded in seen_times:
+            continue
+        seen_times.add(rounded)
+        slots.append(_PatternSlot(time=time, direction=direction))
+
+    if not slots:
+        return [_PatternSlot(time=chord.start_time, direction="down")]
+
+    if slots[0].time - chord.start_time > _DEFAULT_CHORD_ATTACK_WINDOW_S:
+        slots.insert(0, _PatternSlot(time=chord.start_time, direction="down"))
+
+    return slots
 
 
 def _generate_beat_aligned_strums(
@@ -213,13 +310,13 @@ def _generate_beat_aligned_strums(
     beat_times: list[float],
     bpm: float,
 ) -> list[StrumEvent]:
-    """Generate strum events at beat positions within each chord's duration.
+    """Generate fallback strum events within each chord's duration.
 
-    For each chord, finds all beats that fall within [chord.start, chord.end)
-    and creates a strum event at each beat. Direction is assigned by beat
-    position: first beat in chord = down, alternating after that.
+    Uses chord-duration-aware strumming templates rather than one repeated
+    global groove. Short chords get sparse attacks; longer chords get fuller
+    patterns. This avoids every chord looking like the same U/D treadmill.
 
-    If a chord has no beats inside it (short chord or gap in beats),
+    If a chord has no pattern slots inside it (short chord or gap in beats),
     a single strum is placed at the chord's start time.
     """
     if not chords or not beat_times:
@@ -227,58 +324,34 @@ def _generate_beat_aligned_strums(
 
     strums: list[StrumEvent] = []
     strum_id = 0
-    strum_index = 0
 
     for chord in chords:
         if chord.chord == "N":
             continue
 
-        # Find beats within this chord's time range
-        chord_beats = [
-            bt
-            for bt in beat_times
-            if bt >= chord.start_time - 0.02 and bt < chord.end_time
-        ]
+        chord_slots = _build_chord_pattern_slots(chord, beat_times, bpm)
 
-        if not chord_beats:
-            # No beats found — place a single strum at chord start
-            direction = _assign_beat_direction(strum_index)
-            strums.append(
-                StrumEvent(
-                    id=strum_id,
-                    start_time=chord.start_time,
-                    end_time=chord.end_time,
-                    direction=direction,
-                    confidence=0.5,
-                    num_strings=0,
-                    onset_spread_ms=0.0,
-                )
-            )
-            strum_id += 1
-            strum_index += 1
-            continue
-
-        for bi, bt in enumerate(chord_beats):
-            direction = _assign_beat_direction(strum_index)
-            # End time is the next beat or chord end
-            if bi + 1 < len(chord_beats):
-                end_t = chord_beats[bi + 1]
+        for slot_index, slot in enumerate(chord_slots):
+            if slot_index + 1 < len(chord_slots):
+                end_t = chord_slots[slot_index + 1].time
             else:
+                end_t = chord.end_time
+
+            if end_t <= slot.time:
                 end_t = chord.end_time
 
             strums.append(
                 StrumEvent(
                     id=strum_id,
-                    start_time=bt,
+                    start_time=slot.time,
                     end_time=end_t,
-                    direction=direction,
-                    confidence=0.5,  # base confidence for beat-aligned
+                    direction=slot.direction,
+                    confidence=0.45,
                     num_strings=0,
                     onset_spread_ms=0.0,
                 )
             )
             strum_id += 1
-            strum_index += 1
 
     return strums
 

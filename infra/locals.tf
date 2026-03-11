@@ -9,6 +9,7 @@ locals {
   auth_domain     = "auth.${var.domain_name}"
   lyrics_domain   = "lyrics.${var.domain_name}"
   chords_domain   = "chords.${var.domain_name}"
+  tabs_domain     = "tabs.${var.domain_name}"
 
   common_tags = {
     Project     = var.project_name

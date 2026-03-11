@@ -49,6 +49,30 @@ SAMPLE_TABS = {
             "confidence": 0.94,
         },
     ],
+    "strums": [
+        {
+            "id": 1,
+            "start_time": 0.50,
+            "end_time": 0.58,
+            "direction": "down",
+            "confidence": 0.91,
+            "num_strings": 4,
+            "onset_spread_ms": 8.2,
+        },
+        {
+            "id": 2,
+            "start_time": 1.00,
+            "end_time": 1.06,
+            "direction": "up",
+            "confidence": 0.83,
+            "num_strings": 3,
+            "onset_spread_ms": 6.4,
+        },
+    ],
+    "rhythm": {
+        "bpm": 120.0,
+        "beat_times": [0.5, 1.0, 1.5, 2.0],
+    },
 }
 
 
@@ -190,6 +214,62 @@ async def test_song_detail_tabs_structure(settings, storage):
             assert 0 <= note.fret <= 24
             assert isinstance(note.midi_pitch, int)
             assert 0 <= note.confidence <= 1.0
+
+    finally:
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.get_by_song_name(song_name)
+            if song:
+                await song_dao.delete_by_id(song.id)
+                await session.commit()
+        for d in created_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+        await close_db()
+
+
+@pytest.mark.asyncio
+async def test_song_detail_backfills_tabs_key_and_strum_data_from_storage(
+    settings, storage
+):
+    """Song detail should discover tabs.json on disk even when the DB key is missing."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_tabs_backfill_{uuid.uuid4().hex[:8]}/test_song"
+    tabs_key = f"{song_name}/tabs.json"
+    created_dirs: list[Path] = []
+
+    try:
+        tabs_path = _write_tabs_to_storage(settings, tabs_key, SAMPLE_TABS)
+        created_dirs.append(tabs_path.parent.parent)
+
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.create(
+                title="Test Song Tabs Backfill",
+                artist="Test Artist",
+                song_name=song_name,
+                audio_key=f"{song_name}/audio.mp3",
+                tabs_key=None,
+            )
+            await song_dao.commit()
+            song_id = song.id
+
+        async with factory() as session:
+            song_service = _make_song_service(session, storage)
+            detail = await song_service.get_song_detail(song_id)
+
+        assert len(detail.tabs) == 3
+        assert len(detail.strums) == 2
+        assert detail.strums[0].direction == "down"
+        assert detail.rhythm is not None
+        assert detail.rhythm.bpm == 120.0
+        assert detail.rhythm.beat_times == [0.5, 1.0, 1.5, 2.0]
+
+        async with factory() as session:
+            refreshed = await SongDAO(session).get_by_song_name(song_name)
+            assert refreshed is not None
+            assert refreshed.tabs_key == tabs_key
 
     finally:
         async with factory() as session:

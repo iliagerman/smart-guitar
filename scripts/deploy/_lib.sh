@@ -339,7 +339,7 @@ refresh_worker_lambdas() {
   local region
   region="$(read_output aws_region)"
 
-  local workers=("job_orchestrator" "vocals_guitar_stitch" "stale_job_sweeper" "unconfirmed_user_cleanup")
+  local workers=("tabs_generator" "job_orchestrator" "vocals_guitar_stitch" "stale_job_sweeper" "unconfirmed_user_cleanup")
 
   for worker in "${workers[@]}"; do
     local repo_url function_name image_uri version had_pc

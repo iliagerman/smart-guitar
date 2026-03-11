@@ -311,6 +311,16 @@ test-lyrics vocals_file=default_vocals vocals_key=default_vocals_key cleanup='tr
         echo "Done. Stopping server (keeping outputs)."
     fi
 
+# ── Tabs Generator ────────────────────────────────────────────
+
+# Install tabs generator dependencies
+setup-tabs:
+    cd {{project_dir}}/tabs_generator && uv sync --python 3.11 --extra dev
+
+# Start the tabs generator API server
+run-tabs:
+    cd {{project_dir}}/tabs_generator && APP_ENV=local uv run uvicorn tabs_generator.api:app --reload --host 0.0.0.0 --port 8004
+
 # ── Backend ────────────────────────────────────────────────────
 
 # Update backend uv.lock (required for Docker builds using --frozen)
@@ -325,6 +335,7 @@ setup-backend:
 py-compile:
     uv run --directory {{project_dir}}/backend python -m compileall src/guitar_player -q
     uv run --directory {{project_dir}}/lyrics_generator python -m compileall src/lyrics_generator -q
+    uv run --directory {{project_dir}}/tabs_generator python -m compileall src/tabs_generator -q
 
 # Start the backend API server
 dev-backend:
@@ -1134,6 +1145,10 @@ start-app:
     ( cd "{{project_dir}}/lyrics_generator" && unset VIRTUAL_ENV && uv sync --python 3.11 --extra dev )
 
     echo ""
+    echo "═══ Setting up Tabs Generator ═══"
+    ( cd "{{project_dir}}/tabs_generator" && unset VIRTUAL_ENV && uv sync --python 3.11 --extra dev )
+
+    echo ""
     echo "═══ Setting up Backend ═══"
     ( cd "{{project_dir}}/backend" && unset VIRTUAL_ENV && uv sync --extra dev )
 
@@ -1165,7 +1180,7 @@ start-app:
     echo ""
     echo "═══ Preparing log directory ═══"
     mkdir -p "{{project_dir}}/logs"
-    for f in demucs chords lyrics backend frontend; do
+    for f in demucs chords lyrics tabs backend frontend; do
         : > "{{project_dir}}/logs/${f}.log"
     done
 
@@ -1175,8 +1190,8 @@ start-app:
     cleanup() {
         echo ""
         echo "Shutting down all services..."
-        kill $DEMUCS_PID $CHORDS_PID $LYRICS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
-        wait $DEMUCS_PID $CHORDS_PID $LYRICS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+        kill $DEMUCS_PID $CHORDS_PID $LYRICS_PID $TABS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+        wait $DEMUCS_PID $CHORDS_PID $LYRICS_PID $TABS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
         echo "All services stopped."
     }
     trap cleanup EXIT INT TERM
@@ -1190,6 +1205,9 @@ start-app:
     ( cd "{{project_dir}}/lyrics_generator" && unset VIRTUAL_ENV && APP_ENV=local uv run uvicorn lyrics_generator.api:app --reload --host 0.0.0.0 --port 8003 2>&1 | tee "{{project_dir}}/logs/lyrics.log" | sed 's/^/[lyrics]  /' ) &
     LYRICS_PID=$!
 
+    ( cd "{{project_dir}}/tabs_generator" && unset VIRTUAL_ENV && APP_ENV=local uv run uvicorn tabs_generator.api:app --reload --host 0.0.0.0 --port 8004 2>&1 | tee "{{project_dir}}/logs/tabs.log" | sed 's/^/[tabs]    /' ) &
+    TABS_PID=$!
+
     ( cd "{{project_dir}}/backend" && unset VIRTUAL_ENV && APP_ENV=local SKIP_AUTH=1 uv run uvicorn guitar_player.main:app --reload --host 0.0.0.0 --port 8002 --log-level info 2>&1 | tee "{{project_dir}}/logs/backend.log" | sed 's/^/[backend] /' ) &
     BACKEND_PID=$!
 
@@ -1201,6 +1219,7 @@ start-app:
     echo "  Demucs:    http://localhost:8000"
     echo "  Chords:    http://localhost:8001"
     echo "  Lyrics:    http://localhost:8003"
+    echo "  Tabs:      http://localhost:8004"
     echo "  Backend:   http://localhost:8002"
     echo "  Frontend:  http://localhost:5173"
     echo ""
@@ -1219,14 +1238,14 @@ dev:
     cleanup() {
         echo ""
         echo "Shutting down all services..."
-        kill $DEMUCS_PID $CHORDS_PID $LYRICS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
-        wait $DEMUCS_PID $CHORDS_PID $LYRICS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+        kill $DEMUCS_PID $CHORDS_PID $LYRICS_PID $TABS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+        wait $DEMUCS_PID $CHORDS_PID $LYRICS_PID $TABS_PID $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
         echo "All services stopped."
     }
     trap cleanup EXIT INT TERM
 
     mkdir -p "{{project_dir}}/logs"
-    for f in demucs chords lyrics backend frontend; do
+    for f in demucs chords lyrics tabs backend frontend; do
         : > "{{project_dir}}/logs/${f}.log"
     done
 
@@ -1241,6 +1260,10 @@ dev:
     echo "Starting Lyrics Generator on :8003..."
     ( cd "{{project_dir}}/lyrics_generator" && APP_ENV=local uv run uvicorn lyrics_generator.api:app --reload --host 0.0.0.0 --port 8003 2>&1 | tee "{{project_dir}}/logs/lyrics.log" ) &
     LYRICS_PID=$!
+
+    echo "Starting Tabs Generator on :8004..."
+    ( cd "{{project_dir}}/tabs_generator" && APP_ENV=local uv run uvicorn tabs_generator.api:app --reload --host 0.0.0.0 --port 8004 2>&1 | tee "{{project_dir}}/logs/tabs.log" ) &
+    TABS_PID=$!
 
     echo "Starting Backend API on :8002..."
     ( cd "{{project_dir}}/backend" && APP_ENV=local uv run uvicorn guitar_player.main:app --reload --host 0.0.0.0 --port 8002 2>&1 | tee "{{project_dir}}/logs/backend.log" ) &

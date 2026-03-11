@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, User, BarChart3 } from 'lucide-react'
+import { Search, Library, Heart, User, BarChart3, Mic } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
 import { useIsAdmin } from '@/features/analytics/components/AdminGuard'
@@ -10,6 +10,7 @@ export function BottomNav() {
     { to: ROUTES.SEARCH, icon: Search, label: 'Search' },
     { to: ROUTES.LIBRARY, icon: Library, label: 'Library' },
     { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites' },
+    { to: ROUTES.TUNER, icon: Mic, label: 'Tuner' },
     ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics' }] : []),
     { to: ROUTES.PROFILE, icon: User, label: 'Profile' },
   ]

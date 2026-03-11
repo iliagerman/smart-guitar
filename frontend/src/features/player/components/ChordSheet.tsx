@@ -1,73 +1,59 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
-import { getStrumPattern, type StrumSymbol } from '../lib/strum-pattern'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { getChordColor, formatChordName } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
-import type { ChordEntry, LyricsSegment, RhythmInfo, StrumEvent } from '@/types/song'
+import type { ChordEntry, LyricsSegment } from '@/types/song'
 
 interface ChordSheetProps {
   chords: ChordEntry[]
   lyrics: LyricsSegment[]
-  strums: StrumEvent[]
-  rhythm?: RhythmInfo | null
   onSeek?: (time: number) => void
 }
 
-function StrumArrows({ pattern }: { pattern: StrumSymbol[] }) {
-  if (pattern.length === 0) return null
-  return (
-    <span className="text-xs tracking-wider leading-none">
-      {pattern.map((s, i) => (
-        <span key={i} className={cn(s.className, 'font-bold')} title={s.title}>
-          {s.symbol}
-        </span>
-      ))}
-    </span>
-  )
+function estimateChordLabelWidth(chordName: string) {
+  return formatChordName(chordName).length + 1
 }
 
-function ChordWithPattern({
+
+function ChordLabel({
   chord,
   isActive,
-  strumPattern,
+  isRtl,
   onClick,
 }: {
   chord: { chord: string; start_time: number; end_time: number }
   isActive: boolean
-  strumPattern: StrumSymbol[]
+  isRtl: boolean
   onClick: () => void
 }) {
   return (
-    <span
+    <button
+      type="button"
+      dir="ltr"
       className={cn(
-        'inline-flex flex-col items-center cursor-pointer hover:opacity-80',
+        'inline-flex min-w-0 rounded-md px-1 py-0.5 transition-colors hover:bg-charcoal-950/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70 whitespace-nowrap',
+        isRtl ? 'justify-end text-right' : 'justify-start text-left',
         isActive && 'chord-sheet-chord-active'
       )}
+      style={{ unicodeBidi: 'isolate' }}
       onClick={onClick}
-      role="button"
-      tabIndex={0}
       aria-current={isActive ? 'true' : undefined}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
-        }
-      }}
     >
-      <span className={cn(getChordColor(chord.chord, 'dark'), 'font-bold text-lg md:text-xl')}>
+      <span
+        dir="ltr"
+        className={cn(getChordColor(chord.chord, 'dark'), 'font-bold text-lg md:text-xl leading-none')}
+        style={{ unicodeBidi: 'isolate' }}
+      >
         {formatChordName(chord.chord)}
       </span>
-      <StrumArrows pattern={strumPattern} />
-    </span>
+    </button>
   )
 }
 
-export function ChordSheet({ chords, lyrics, strums, rhythm, onSeek }: ChordSheetProps) {
-  const rhythmInfo = rhythm ?? null
-  const showStrums = usePlayerPrefsStore((s) => s.showStrums)
+export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
   const lines = useMemo(
     () => mergeChordLyrics(chords, lyrics),
@@ -128,19 +114,18 @@ export function ChordSheet({ chords, lyrics, strums, rhythm, onSeek }: ChordShee
             dir={line.direction}
           >
             {isInstrumental ? (
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
+              <div className="flex flex-wrap gap-x-5 gap-y-3">
                 <span className="text-smoke-500 italic text-xs w-full">
                   [Instrumental]
                 </span>
                 {line.chords.map((chord, ci) => {
                   const isChordActive = isActive && showHighlight && ci === activeChordIndex
-                  const pattern = showStrums ? getStrumPattern(chord.start_time, chord.end_time, strums, { rhythm: rhythmInfo }) : []
                   return (
-                    <ChordWithPattern
+                    <ChordLabel
                       key={ci}
                       chord={chord}
                       isActive={isChordActive}
-                      strumPattern={pattern}
+                      isRtl={false}
                       onClick={() => handleChordClick(chord.start_time)}
                     />
                   )
@@ -150,37 +135,43 @@ export function ChordSheet({ chords, lyrics, strums, rhythm, onSeek }: ChordShee
               <div className={cn('leading-normal', (!isActive || !showHighlight) && 'text-smoke-500')}>
                 {line.words.length > 0 ? (
                   (() => {
-                    let currentOffset = 0;
+                    let currentOffset = 0
                     return line.words.map((word, wi) => {
                       const isActiveWord = isActive && showHighlight && wi === activeWordIndex
-                      const nextOffset = currentOffset + word.word.length + 1;
-                      const isLastWord = wi === line.words.length - 1;
-                      const wordChords = line.chords.filter(c =>
-                        c.charOffset >= currentOffset &&
-                        (isLastWord ? true : c.charOffset < nextOffset)
-                      );
-                      currentOffset = nextOffset;
+                      const nextOffset = currentOffset + word.word.length + 1
+                      const isLastWord = wi === line.words.length - 1
+                      const wordChords = line.chords.filter((chord) =>
+                        chord.charOffset >= currentOffset &&
+                        (isLastWord ? true : chord.charOffset < nextOffset)
+                      )
+                      const reservedWidthCh = Math.max(
+                        word.word.length + 1,
+                        wordChords.reduce((total, chord) => total + estimateChordLabelWidth(chord.chord), 0)
+                      )
+                      currentOffset = nextOffset
 
                       return (
-                        <div key={wi} className="inline-flex flex-col align-bottom mr-1">
-                          {/* Chord + strum pattern row */}
-                          <div className="min-h-6 flex gap-1">
+                        <div
+                          key={wi}
+                          className="inline-flex flex-col align-top gap-1 px-1 pb-1"
+                          style={{ minWidth: `${reservedWidthCh}ch` }}
+                        >
+                          <div className={cn('min-h-7 flex flex-wrap gap-1', isRtl ? 'justify-end' : 'justify-start')}>
                             {wordChords.map((chord, ci) => {
                               const globalCi = line.chords.indexOf(chord)
                               const isChordActive = isActive && showHighlight && globalCi === activeChordIndex
-                              const pattern = showStrums ? getStrumPattern(chord.start_time, chord.end_time, strums, { rhythm: rhythmInfo }) : []
                               return (
-                                <ChordWithPattern
+                                <ChordLabel
                                   key={ci}
                                   chord={chord}
                                   isActive={isChordActive}
-                                  strumPattern={pattern}
+                                  isRtl={isRtl}
                                   onClick={() => handleChordClick(chord.start_time)}
                                 />
                               )
                             })}
                           </div>
-                          {/* Word */}
+
                           <span
                             className={cn(
                               'cursor-pointer rounded px-0.5',
@@ -201,16 +192,15 @@ export function ChordSheet({ chords, lyrics, strums, rhythm, onSeek }: ChordShee
                   })()
                 ) : (
                   <div className="flex flex-col">
-                    <div className="min-h-6 flex gap-2">
+                    <div className="min-h-8 flex flex-wrap items-end gap-2">
                       {line.chords.map((chord, ci) => {
                         const isChordActive = isActive && showHighlight && ci === activeChordIndex
-                        const pattern = showStrums ? getStrumPattern(chord.start_time, chord.end_time, strums, { rhythm: rhythmInfo }) : []
                         return (
-                          <ChordWithPattern
+                          <ChordLabel
                             key={ci}
                             chord={chord}
                             isActive={isChordActive}
-                            strumPattern={pattern}
+                            isRtl={isRtl}
                             onClick={() => handleChordClick(chord.start_time)}
                           />
                         )

@@ -846,18 +846,29 @@ class SongService:
                     "Failed to read corrected lyrics for %s: %s", song.song_name, e
                 )
 
-        # Read tabs from storage.
+        # Read tabs, strums, and rhythm from storage.
         tabs: list[TabNote] = []
-        if song.tabs_key and self._storage.file_exists(song.tabs_key):
-            try:
-                raw = self._storage.read_json(song.tabs_key)
-                if isinstance(raw, dict) and "notes" in raw:
-                    tabs = [TabNote(**n) for n in raw["notes"]]
-            except Exception as e:
-                logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
-
         strums: list[StrumEvent] = []
         rhythm: RhythmInfo | None = None
+        tabs_key = song.tabs_key
+        if not tabs_key and song.song_name:
+            candidate = f"{song.song_name}/tabs.json"
+            if self._storage.file_exists(candidate):
+                tabs_key = candidate
+                await self._song_dao.update_by_id(song.id, tabs_key=candidate)
+                await self._song_dao.commit()
+        if tabs_key and self._storage.file_exists(tabs_key):
+            try:
+                raw = self._storage.read_json(tabs_key)
+                if isinstance(raw, dict):
+                    if isinstance(raw.get("notes"), list):
+                        tabs = [TabNote(**n) for n in raw["notes"]]
+                    if isinstance(raw.get("strums"), list):
+                        strums = [StrumEvent(**s) for s in raw["strums"]]
+                    if isinstance(raw.get("rhythm"), dict):
+                        rhythm = RhythmInfo(**raw["rhythm"])
+            except Exception as e:
+                logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
 
         return SongDetailResponse(
             song=song_resp,

@@ -103,7 +103,9 @@ async def _reset_song_for_trigger(db_factory, song_id):
         # Fail any active jobs so they don't block triggers
         active = await job_dao.get_active_job(song_id)
         while active:
-            await job_dao.update_status(active.id, "FAILED", error_message="test cleanup")
+            await job_dao.update_status(
+                active.id, "FAILED", error_message="test cleanup"
+            )
             await job_dao.flush()
             active = await job_dao.get_active_job(song_id)
         await song_dao.commit()
@@ -270,7 +272,9 @@ async def test_recent_lyrics_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, lyrics_attempted_at=datetime.now(timezone.utc))
+        await song_dao.update_by_id(
+            song.id, lyrics_attempted_at=datetime.now(timezone.utc)
+        )
         await song_dao.commit()
 
     async with _db() as session:
@@ -289,7 +293,9 @@ async def test_expired_lyrics_attempted_at_does_not_block(_db, song, storage):
     )
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, lyrics_attempted_at=expired, vocals_key=f"{SONG_NAME}/vocals.mp3")
+        await song_dao.update_by_id(
+            song.id, lyrics_attempted_at=expired, vocals_key=f"{SONG_NAME}/vocals.mp3"
+        )
         await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/vocals.mp3")
@@ -324,7 +330,9 @@ async def test_recent_tabs_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, tabs_attempted_at=datetime.now(timezone.utc))
+        await song_dao.update_by_id(
+            song.id, tabs_attempted_at=datetime.now(timezone.utc)
+        )
         await song_dao.commit()
 
     async with _db() as session:
@@ -343,7 +351,9 @@ async def test_expired_tabs_attempted_at_does_not_block(_db, song, storage):
     )
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, tabs_attempted_at=expired, guitar_key=f"{SONG_NAME}/guitar.mp3")
+        await song_dao.update_by_id(
+            song.id, tabs_attempted_at=expired, guitar_key=f"{SONG_NAME}/guitar.mp3"
+        )
         await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/guitar.mp3")
@@ -378,7 +388,9 @@ async def test_recent_merge_attempted_at_blocks_trigger(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, merge_attempted_at=datetime.now(timezone.utc))
+        await song_dao.update_by_id(
+            song.id, merge_attempted_at=datetime.now(timezone.utc)
+        )
         await song_dao.commit()
 
     async with _db() as session:
@@ -440,7 +452,9 @@ async def test_tabs_force_bypasses_failed_flag(_db, song, storage):
     await _reset_song_for_trigger(_db, song.id)
     async with _db() as session:
         song_dao = SongDAO(session)
-        await song_dao.update_by_id(song.id, tabs_failed=True, guitar_key=f"{SONG_NAME}/guitar.mp3")
+        await song_dao.update_by_id(
+            song.id, tabs_failed=True, guitar_key=f"{SONG_NAME}/guitar.mp3"
+        )
         await song_dao.commit()
 
     dummy = _write_dummy_file(storage, f"{SONG_NAME}/guitar.mp3")
@@ -494,7 +508,9 @@ async def test_concurrent_creation_returns_same_job(_db, song, storage):
         )
         await session.commit()
 
-    assert first.id == second.id, "Both should return the same job via processing_job_id"
+    assert first.id == second.id, (
+        "Both should return the same job via processing_job_id"
+    )
 
 
 @pytest.mark.asyncio

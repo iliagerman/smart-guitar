@@ -1,7 +1,8 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 
 import { mergeTabsLyrics, type PositionedTabNote } from '../lib/merge-tabs-lyrics'
-import { buildGridSlots, chooseSubdivision, quantizeStrumsToSlots, type GridMode } from '../lib/strum-grid'
+import { getStrumGridDisplay, getSuggestedStrums } from '../lib/strum-pattern'
+import type { GridMode } from '../lib/strum-grid'
 import { useTabsSheetSync } from '../hooks/use-tabs-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { cn } from '@/lib/cn'
@@ -122,9 +123,7 @@ function computeGridRows(opts: {
   const empty = { countRow: ' '.repeat(staffWidth), strumRow: ' '.repeat(staffWidth) }
   if (!showStrums || !rhythm) return empty
 
-  const subdivision = chooseSubdivision(gridMode, startTime, endTime, rhythm, strums)
-  const slots = buildGridSlots(startTime, endTime, rhythm, subdivision)
-  if (slots.length === 0) return empty
+  const { slots, quantized } = getStrumGridDisplay(startTime, endTime, strums, { rhythm })
 
   const duration = Math.max(0.001, endTime - startTime)
   const toCol = (t: number) => {
@@ -133,13 +132,27 @@ function computeGridRows(opts: {
     return Math.max(0, Math.min(staffWidth - 1, col))
   }
 
+  if (slots.length === 0 || quantized.size === 0) {
+    const suggestedStrums = getSuggestedStrums(startTime, endTime, strums)
+    if (suggestedStrums.length === 0) return empty
+
+    const strumChars = Array.from({ length: staffWidth }, () => ' ')
+    for (const s of suggestedStrums) {
+      strumChars[toCol(s.start_time)] = s.direction === 'down' ? 'D' : 'U'
+    }
+
+    return {
+      countRow: ' '.repeat(staffWidth),
+      strumRow: strumChars.join(''),
+    }
+  }
+
   const countChars = Array.from({ length: staffWidth }, () => ' ')
   for (const slot of slots) {
     if (!slot.label) continue
     countChars[toCol(slot.time)] = slot.label
   }
 
-  const quantized = quantizeStrumsToSlots(slots, strums)
   const strumChars = Array.from({ length: staffWidth }, () => ' ')
   for (const [slotIndex, qs] of quantized.entries()) {
     const t = slots[slotIndex]?.time

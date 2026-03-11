@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, User, BarChart3 } from 'lucide-react'
+import { Search, Library, Heart, User, BarChart3, Mic } from 'lucide-react'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
 import { useIsAdmin } from '@/features/analytics/components/AdminGuard'
@@ -10,6 +10,7 @@ export function SidebarNav() {
         { to: ROUTES.SEARCH, icon: Search, label: 'Search', testId: 'sidebar-search' },
         { to: ROUTES.LIBRARY, icon: Library, label: 'Library', testId: 'sidebar-library' },
         { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites', testId: 'sidebar-favorites' },
+        { to: ROUTES.TUNER, icon: Mic, label: 'Tuner', testId: 'sidebar-tuner' },
         ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics', testId: 'sidebar-analytics' }] : []),
     ]
 

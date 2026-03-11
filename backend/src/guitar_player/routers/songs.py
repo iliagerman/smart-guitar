@@ -346,12 +346,11 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("Admin lyrics check failed for %s: %s", song_id, e)
 
-    # Tabs generation disabled — skip trigger.
-    # try:
-    #     tabs_triggered = await job_service.trigger_tabs_generation_if_missing(song_id)
-    #     _ = tabs_triggered
-    # except Exception as e:
-    #     logger.warning("Admin tabs check failed for %s: %s", song_id, e)
+    try:
+        tabs_triggered = await job_service.trigger_tabs_generation_if_missing(song_id)
+        _ = tabs_triggered
+    except Exception as e:
+        logger.warning("Admin tabs check failed for %s: %s", song_id, e)
 
     # If vocals+guitar merge is missing (but both source stems exist),
     # kick off a lightweight merge without requiring a full reprocess.

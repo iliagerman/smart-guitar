@@ -8,6 +8,7 @@ export const ROUTES = {
   FAVORITES: '/favorites',
   ANALYTICS: '/analytics',
   SONG_DETAIL: '/songs/:songId',
+  TUNER: '/tuner',
   PROFILE: '/profile',
   SUBSCRIPTION_SUCCESS: '/subscription/success',
   SUBSCRIPTION_FAIL: '/subscription/fail',

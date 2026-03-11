@@ -2,8 +2,9 @@ locals {
   repositories = {
     inference_demucs = "${var.project_name}-inference-demucs"
     backend_api      = "${var.project_name}-backend-api"
-lyrics_generator = "${var.project_name}-lyrics-generator"
+    lyrics_generator = "${var.project_name}-lyrics-generator"
     chords_generator = "${var.project_name}-chords-generator"
+    tabs_generator   = "${var.project_name}-tabs-generator"
 
     job_orchestrator         = "${var.project_name}-job-orchestrator"
     vocals_guitar_stitch     = "${var.project_name}-vocals-guitar-stitch"

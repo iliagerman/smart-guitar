@@ -29,6 +29,7 @@ class AdminSongResponse(BaseModel):
     audio_thumbnail_fixed: bool = False
     reprocess_triggered: bool = False
     lyrics_enqueued: bool = False
+    tabs_enqueued: bool = False
 
 
     # Job ID created by trigger_reprocess (None when no reprocess was needed).

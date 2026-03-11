@@ -210,24 +210,28 @@ def test_empty_notes():
 
 
 def test_beat_aligned_basic():
-    """Beat-aligned strums should generate D-U-D-U pattern at beat positions."""
+    """Long chords should get a fuller duration-aware fallback groove."""
     chords = [
         ChordInfo(start_time=0.0, end_time=2.0, chord="D:maj"),
     ]
     beat_times = [0.0, 0.5, 1.0, 1.5]
     strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
 
-    assert len(strums) == 4
+    assert len(strums) == 6
     assert strums[0].direction == "down"
-    assert strums[1].direction == "up"
-    assert strums[2].direction == "down"
+    assert strums[1].direction == "down"
+    assert strums[2].direction == "up"
     assert strums[3].direction == "up"
+    assert strums[4].direction == "down"
+    assert strums[5].direction == "up"
 
-    # Times should match beat positions
+    # Times should be distributed across the full chord duration
     assert strums[0].start_time == 0.0
     assert strums[1].start_time == 0.5
-    assert strums[2].start_time == 1.0
-    assert strums[3].start_time == 1.5
+    assert round(strums[2].start_time, 2) == 0.76
+    assert round(strums[3].start_time, 2) == 1.24
+    assert round(strums[4].start_time, 2) == 1.56
+    assert round(strums[5].start_time, 2) == 1.84
 
 
 def test_beat_aligned_skips_n_chords():
@@ -245,7 +249,7 @@ def test_beat_aligned_skips_n_chords():
 
 
 def test_beat_aligned_multiple_chords():
-    """Each chord should reset the D-U pattern."""
+    """Shorter chords should get simpler patterns than long held chords."""
     chords = [
         ChordInfo(start_time=0.0, end_time=1.0, chord="D:maj"),
         ChordInfo(start_time=1.0, end_time=2.0, chord="A:min"),
@@ -254,10 +258,10 @@ def test_beat_aligned_multiple_chords():
     strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
 
     assert len(strums) == 4
-    # D:maj chord: D, U
+    # D:maj chord: two-beat template => D, U
     assert strums[0].direction == "down"
     assert strums[1].direction == "up"
-    # A:min chord: resets to D, U
+    # A:min chord: same two-beat template
     assert strums[2].direction == "down"
     assert strums[3].direction == "up"
 
@@ -273,7 +277,7 @@ def test_beat_aligned_chord_with_no_beats():
     assert len(strums) == 1
     assert strums[0].direction == "down"
     assert strums[0].start_time == 0.5
-    assert strums[0].confidence == 0.5
+    assert strums[0].confidence == 0.45
 
 
 def test_beat_aligned_empty_chords():
@@ -290,7 +294,7 @@ def test_beat_aligned_empty_beats():
 
 
 def test_beat_aligned_end_times():
-    """Each strum's end_time should be the next beat or chord end."""
+    """Each fallback strum should end at the next template slot or chord end."""
     chords = [
         ChordInfo(start_time=0.0, end_time=2.0, chord="D:maj"),
     ]
@@ -298,8 +302,11 @@ def test_beat_aligned_end_times():
     strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
 
     assert strums[0].end_time == 0.5   # next beat
-    assert strums[1].end_time == 1.0   # next beat
-    assert strums[2].end_time == 2.0   # chord end
+    assert round(strums[1].end_time, 2) == 0.76
+    assert round(strums[2].end_time, 2) == 1.24
+    assert round(strums[3].end_time, 2) == 1.56
+    assert round(strums[4].end_time, 2) == 1.84
+    assert strums[5].end_time == 2.0
 
 
 # -- Merge tests --
@@ -356,7 +363,7 @@ def test_merge_ambiguous_onset_not_used():
 
 
 def test_combined_mode_full_coverage():
-    """With chords and beats, every beat in every chord should get a strum."""
+    """With chords and beats, each chord should get a duration-aware fallback groove."""
     chords = [
         ChordInfo(start_time=0.0, end_time=2.0, chord="D:maj"),
         ChordInfo(start_time=2.0, end_time=4.0, chord="A:min"),
@@ -377,15 +384,15 @@ def test_combined_mode_full_coverage():
         bpm=120.0,
     )
 
-    # Should have 8 strums (one per beat), not just the 1 from onset
-    assert len(strums) == 8
+    # Should have 12 strums (6 per 4-beat chord), not just the 1 from onset
+    assert len(strums) == 12
     # All should have a direction (no ambiguous in beat-aligned mode)
     for s in strums:
         assert s.direction in ("down", "up")
 
 
 def test_combined_mode_onset_overrides():
-    """In combined mode, onset detection should override beat-aligned directions."""
+    """In combined mode, onset detection should override fallback directions."""
     chords = [
         ChordInfo(start_time=0.0, end_time=2.0, chord="D:maj"),
     ]
@@ -409,15 +416,15 @@ def test_combined_mode_onset_overrides():
         bpm=120.0,
     )
 
-    assert len(strums) == 4
-    # First beat should be overridden to "up" by onset detection
+    assert len(strums) == 6
+    # First fallback slot should be overridden to "up" by onset detection
     assert strums[0].direction == "up"
     assert strums[0].confidence > 0.5  # boosted
     assert strums[0].num_strings == 6
 
 
 def test_combined_mode_no_notes():
-    """Combined mode with no notes should still produce beat-aligned strums."""
+    """Combined mode with no notes should still produce duration-aware fallback strums."""
     chords = [
         ChordInfo(start_time=0.0, end_time=2.0, chord="G:maj"),
     ]
@@ -430,7 +437,34 @@ def test_combined_mode_no_notes():
         bpm=120.0,
     )
 
-    assert len(strums) == 4
+    assert len(strums) == 6
+    assert strums[0].direction == "down"
+    assert strums[1].direction == "down"
+
+
+def test_beat_aligned_single_beat_chord_is_sparse():
+    """A roughly one-beat chord should get a single downstroke, not D/U spam."""
+    chords = [
+        ChordInfo(start_time=0.0, end_time=0.45, chord="C:maj"),
+    ]
+    beat_times = [0.0, 0.5, 1.0]
+
+    strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
+
+    assert len(strums) == 1
+    assert strums[0].direction == "down"
+
+
+def test_beat_aligned_two_beat_chord_gets_down_up_pattern():
+    """Two-beat chords should get a simple down-up pattern."""
+    chords = [
+        ChordInfo(start_time=0.0, end_time=1.0, chord="C:maj"),
+    ]
+    beat_times = [0.0, 0.5, 1.0, 1.5]
+
+    strums = _generate_beat_aligned_strums(chords, beat_times, bpm=120.0)
+
+    assert len(strums) == 2
     assert strums[0].direction == "down"
     assert strums[1].direction == "up"
 

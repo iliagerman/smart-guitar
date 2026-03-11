@@ -188,11 +188,23 @@ async def admin_heal_song(
         warnings.append(f"lyrics_failed:{type(e).__name__}")
         await SongDAO(session).rollback()
 
+    tabs_enqueued = False
+    try:
+        tabs_enqueued = await job_service.trigger_tabs_generation_if_missing(
+            song_id,
+            force=True,
+        )
+    except Exception as e:
+        logger.warning("Admin (service) tabs check failed for %s: %s", song_id, e)
+        warnings.append(f"tabs_failed:{type(e).__name__}")
+        await SongDAO(session).rollback()
+
     return AdminSongResponse(
         song_id=song_id,
         audio_thumbnail_fixed=audio_thumb_fixed,
         reprocess_triggered=reprocess_job_id is not None,
         lyrics_enqueued=lyrics_enqueued,
+        tabs_enqueued=tabs_enqueued,
         job_id=reprocess_job_id,
         warnings=warnings,
     )
