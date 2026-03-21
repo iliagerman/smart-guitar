@@ -4,7 +4,7 @@ Provides /health and /transcribe-tabs endpoints. Storage backend (local or S3)
 is selected via config, initialized on startup.
 
 Internal pipeline:
-    guitar.mp3 → [audio cleaning] → [basic-pitch] → [post-processing] → [tab conversion] → [strum detection] → tabs.json
+    guitar.mp3 → [audio cleaning] → [basic-pitch] → [post-processing] → [tab conversion] → tabs.json
 """
 
 import logging
@@ -24,8 +24,6 @@ from tabs_generator.config import get_settings
 from tabs_generator.note_processor import post_process_notes
 from tabs_generator.schemas import (
     RhythmInfo,
-    StrumEvent,
-    StrumEventResponse,
     TabNote,
     TranscribeTabsRequest,
     TranscribeTabsResponse,
@@ -35,7 +33,6 @@ from tabs_generator.request_context import (
     RequestContextMiddleware,
 )
 from tabs_generator.storage import StorageBackend, create_storage
-from tabs_generator.strum_detector import ChordInfo, detect_strums
 from tabs_generator.tab_converter import (
     TUNING_NAMES,
     assign_fret_positions,
@@ -169,67 +166,24 @@ def transcribe_tabs(request: TranscribeTabsRequest):
             max_fret=tabs_cfg.max_fret,
         )
 
-        # Step 5: Detect strumming patterns (beat-aligned + onset-based)
-        strum_cfg = settings.strum_detection
-        strum_events: list[StrumEvent] = []
-        beat_times: list[float] | None = None
-        bpm: float | None = None
-        if strum_cfg.enabled:
-            # 5a: Read chords from storage (chords.json next to the input file)
-            chord_infos: list[ChordInfo] | None = None
-            chords_path = _storage.resolve_sibling(request.input_path, "chords.json")
-            if chords_path:
-                try:
-                    raw_chords = _storage.read_json(chords_path)
-                    chord_infos = [
-                        ChordInfo(
-                            start_time=c["start_time"],
-                            end_time=c["end_time"],
-                            chord=c["chord"],
-                        )
-                        for c in raw_chords
-                    ]
-                    logger.info("Loaded %d chords from storage", len(chord_infos))
-                except Exception:
-                    logger.warning(
-                        "Failed to read chords.json, falling back to onset-only",
-                        exc_info=True,
-                    )
-
-            # 5b: Detect beats from the guitar audio
-            try:
-                bpm, beat_times = detect_beats(local_input)
-            except Exception:
-                logger.warning(
-                    "Beat detection failed, continuing without beat grid", exc_info=True
-                )
-
-            # 5c: Generate strumming patterns
-            notes, strum_events = detect_strums(
-                notes,
-                min_onset_spread_ms=strum_cfg.min_onset_spread_ms,
-                full_confidence_spread_ms=strum_cfg.full_confidence_spread_ms,
-                min_strum_confidence=strum_cfg.min_strum_confidence,
-                min_chord_size=strum_cfg.min_chord_size,
-                chords=chord_infos,
-                beat_times=beat_times,
-                bpm=bpm or 120.0,
-            )
-
-        # Step 6: Write tabs.json (notes + strum events)
-        rhythm = None
-        if bpm is not None and beat_times:
+        # Step 5: Detect beats for rhythm data (used by external strum aligner)
+        rhythm: dict | None = None
+        rhythm_resp: RhythmInfo | None = None
+        try:
+            bpm, beat_times = detect_beats(local_input)
             rhythm = {
                 "bpm": round(float(bpm), 3),
                 "beat_times": [round(float(t), 6) for t in beat_times],
             }
+            rhythm_resp = RhythmInfo(**rhythm)
+        except Exception:
+            logger.warning(
+                "Beat detection failed, continuing without rhythm",
+                exc_info=True,
+            )
 
-        write_tabs_json(
-            notes,
-            output_dir,
-            strum_events=strum_events or None,
-            rhythm=rhythm,
-        )
+        # Step 6: Write tabs.json
+        write_tabs_json(notes, output_dir, rhythm=rhythm)
 
         # Store outputs alongside the input file (same song directory)
         output_path = _storage.store_outputs(output_dir, request.input_path)
@@ -243,34 +197,15 @@ def transcribe_tabs(request: TranscribeTabsRequest):
                 fret=n.fret,
                 midi_pitch=n.midi_pitch,
                 confidence=n.confidence,
-                strum_id=n.strum_id,
             )
             for n in notes
         ]
-
-        strum_responses = [
-            StrumEventResponse(
-                id=s.id,
-                start_time=s.start_time,
-                end_time=s.end_time,
-                direction=s.direction,
-                confidence=s.confidence,
-                num_strings=s.num_strings,
-                onset_spread_ms=s.onset_spread_ms,
-            )
-            for s in strum_events
-        ]
-
-        rhythm_resp = None
-        if rhythm:
-            rhythm_resp = RhythmInfo(**rhythm)
 
         return TranscribeTabsResponse(
             status="done",
             output_path=output_path,
             tuning=TUNING_NAMES,
             notes=tab_notes,
-            strums=strum_responses,
             rhythm=rhythm_resp,
             input_path=request.input_path,
         )

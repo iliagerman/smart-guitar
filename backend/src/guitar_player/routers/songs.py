@@ -352,6 +352,11 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("Admin tabs check failed for %s: %s", song_id, e)
 
+    try:
+        await job_service.trigger_external_strums_if_missing(song_id)
+    except Exception as e:
+        logger.warning("External strums check failed for %s: %s", song_id, e)
+
     # If vocals+guitar merge is missing (but both source stems exist),
     # kick off a lightweight merge without requiring a full reprocess.
     try:

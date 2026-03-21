@@ -27,13 +27,6 @@ post_processing:
   max_polyphony: 6
   min_confidence: 0.5
 
-strum_detection:
-  enabled: true
-  min_onset_spread_ms: 2.0
-  full_confidence_spread_ms: 5.0
-  min_strum_confidence: 0.3
-  min_chord_size: 2
-
 processing:
   temp_dir: "/tmp/tabs_generator"
   cleanup_temp: true

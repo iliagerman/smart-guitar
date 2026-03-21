@@ -16,11 +16,7 @@ export interface StrumGridCell {
   direction: 'down' | 'up' | null
 }
 
-type RenderableStrum = StrumEvent & {
-  direction: 'down' | 'up'
-}
-
-type SuggestedStrum = StrumEvent & {
+type DirectionalStrum = StrumEvent & {
   direction: 'down' | 'up'
 }
 
@@ -36,31 +32,17 @@ function getDirectionTitle(direction: 'down' | 'up', confidence: number) {
   return `${direction} strum (${Math.round(confidence * 100)}%)`
 }
 
-function isRenderableStrum(strum: StrumEvent): strum is RenderableStrum {
-  if (strum.direction === 'ambiguous') return false
-
-  // Beat-aligned fallback strums are synthetic placeholders with no onset evidence.
-  // Rendering them makes every song look like a generic D/U exercise, which is
-  // more misleading than helpful.
-  return strum.num_strings > 0 || strum.onset_spread_ms > 0
+function isDirectionalStrum(strum: StrumEvent): strum is DirectionalStrum {
+  return strum.direction !== 'ambiguous'
 }
 
 export function getRenderableStrums(strums: StrumEvent[]) {
-  return strums.filter(isRenderableStrum)
+  return strums.filter(isDirectionalStrum)
 }
 
-function isSuggestedStrum(strum: StrumEvent): strum is SuggestedStrum {
-  return strum.direction !== 'ambiguous' && !isRenderableStrum(strum)
-}
-
-function getSyntheticFallbackStrums(strums: StrumEvent[]) {
-  return strums.filter(isSuggestedStrum)
-}
-
-export function getSuggestedStrums(start: number, end: number, strums: StrumEvent[]) {
-  return getSyntheticFallbackStrums(strums).filter(
-    (strum) => strum.start_time >= start - 0.05 && strum.start_time < end
-  )
+export function getSuggestedStrums(_start: number, _end: number, _strums: StrumEvent[]) {
+  // No suggested strums — all external strums are real
+  return [] as DirectionalStrum[]
 }
 
 export function getStrumGridDisplay(
@@ -102,7 +84,7 @@ export function getStrumGridPattern(
     rhythm?: RhythmInfo | null
   }
 ): StrumGridCell[] {
-  const { slots, quantized, isSuggested } = getStrumGridDisplay(start, end, strums, opts)
+  const { slots, quantized } = getStrumGridDisplay(start, end, strums, opts)
   if (slots.length === 0 || quantized.size === 0) {
     return []
   }
@@ -123,9 +105,7 @@ export function getStrumGridPattern(
       countLabel: slot.label,
       symbol: getDirectionSymbol(qs.direction),
       className: getDirectionClassName(qs.direction),
-      title: isSuggested
-        ? `suggested ${qs.direction} strum`
-        : getDirectionTitle(qs.direction, qs.confidence),
+      title: getDirectionTitle(qs.direction, qs.confidence),
       direction: qs.direction,
     }
   })
@@ -159,13 +139,6 @@ export function getStrumPattern(
     if (gridPattern.length > 0) {
       return gridPattern
     }
-
-    return getSuggestedStrums(start, end, strums).map((s) => ({
-      symbol: getDirectionSymbol(s.direction),
-      className: getDirectionClassName(s.direction),
-      title: `suggested ${s.direction} strum`,
-      direction: s.direction,
-    }))
   }
 
   const pattern: StrumSymbol[] = []
@@ -218,26 +191,12 @@ export function getRepresentativeSongStrumPattern(
     return best.pattern.slice(0, maxSymbols)
   }
 
-  const fallback = getRenderableStrums(strums)
+  return getRenderableStrums(strums)
     .slice(0, maxSymbols)
     .map((s) => ({
       symbol: getDirectionSymbol(s.direction),
       className: getDirectionClassName(s.direction),
       title: getDirectionTitle(s.direction, s.confidence),
-      direction: s.direction,
-    }))
-
-  if (fallback.length > 0) {
-    return fallback
-  }
-
-  return strums
-    .filter((s): s is SuggestedStrum => isSuggestedStrum(s))
-    .slice(0, maxSymbols)
-    .map((s) => ({
-      symbol: getDirectionSymbol(s.direction),
-      className: getDirectionClassName(s.direction),
-      title: `suggested ${s.direction} strum`,
       direction: s.direction,
     }))
 }

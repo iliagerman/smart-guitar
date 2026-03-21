@@ -45,6 +45,7 @@ class SongRecord(BaseModel):
     lyrics_quick_key: Optional[str] = None
     lyrics_corrected_key: Optional[str] = None
     tabs_key: Optional[str] = None
+    external_strums_key: Optional[str] = None
 
     # Processing lock & deduplication
     processing_job_id: Optional[uuid.UUID] = None
@@ -52,11 +53,13 @@ class SongRecord(BaseModel):
     lyrics_heal_version: int = 0
     lyrics_failed: bool = False
     tabs_failed: bool = False
+    external_strums_failed: bool = False
 
     # Cooldown timestamps
     lyrics_attempted_at: Optional[datetime] = None
     tabs_attempted_at: Optional[datetime] = None
     merge_attempted_at: Optional[datetime] = None
+    external_strums_attempted_at: Optional[datetime] = None
     download_requested_at: Optional[datetime] = None
 
     downloaded_by: Optional[uuid.UUID] = None

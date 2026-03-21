@@ -10,7 +10,7 @@ import logging
 import os
 from itertools import product
 
-from tabs_generator.schemas import NoteResult, StrumEvent
+from tabs_generator.schemas import NoteResult
 
 logger = logging.getLogger(__name__)
 
@@ -214,15 +214,14 @@ def assign_fret_positions(
 def write_tabs_json(
     notes: list[NoteResult],
     output_dir: str,
-    strum_events: list[StrumEvent] | None = None,
     rhythm: dict | None = None,
 ) -> str:
-    """Write tabs.json with notes and optional strum data.
+    """Write tabs.json with notes and optional rhythm data.
 
     Args:
         notes: Notes with string/fret assigned.
         output_dir: Directory to write tabs.json.
-        strum_events: Optional list of detected strum events.
+        rhythm: Optional rhythm dict with bpm and beat_times.
 
     Returns:
         Path to the written tabs.json file.
@@ -239,25 +238,10 @@ def write_tabs_json(
                 "fret": n.fret,
                 "midi_pitch": n.midi_pitch,
                 "confidence": n.confidence,
-                "strum_id": n.strum_id,
             }
             for n in notes
         ],
     }
-
-    if strum_events:
-        tabs_data["strums"] = [
-            {
-                "id": s.id,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "direction": s.direction,
-                "confidence": round(s.confidence, 3),
-                "num_strings": s.num_strings,
-                "onset_spread_ms": round(s.onset_spread_ms, 3),
-            }
-            for s in strum_events
-        ]
 
     if rhythm:
         tabs_data["rhythm"] = rhythm

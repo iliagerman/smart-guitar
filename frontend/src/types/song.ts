@@ -52,7 +52,6 @@ export interface TabNote {
   fret: number
   midi_pitch: number
   confidence: number
-  strum_id: number | null
 }
 
 export interface StrumEvent {

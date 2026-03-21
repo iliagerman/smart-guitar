@@ -173,6 +173,12 @@ class TelegramConfig(BaseModel):
     enabled: bool = False
 
 
+class ExternalStrumsConfig(BaseModel):
+    enabled: bool = True
+    fetch_timeout_seconds: float = 15.0
+    min_alignment_confidence: float = 0.6
+
+
 class AnalyticsConfig(BaseModel):
     allowed_emails: list[str] = Field(default_factory=list)
 
@@ -196,6 +202,7 @@ class Settings(BaseModel):
     allpay: AllPayConfig = AllPayConfig()
     telegram: TelegramConfig = TelegramConfig()
     analytics: AnalyticsConfig = AnalyticsConfig()
+    external_strums: ExternalStrumsConfig = ExternalStrumsConfig()
     subscription_bypass_emails: list[str] = []
 
 

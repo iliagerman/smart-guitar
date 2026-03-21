@@ -70,7 +70,6 @@ class TabNoteInfo:
     fret: int
     midi_pitch: int
     confidence: float
-    strum_id: int | None = None
 
 
 @dataclass

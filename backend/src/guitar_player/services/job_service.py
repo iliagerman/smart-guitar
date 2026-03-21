@@ -299,6 +299,27 @@ def _enqueue_tabs_generation(song_id: uuid.UUID) -> None:
     task.add_done_callback(_done)
 
 
+# ---- External strums background fetch ----
+
+_EXTERNAL_STRUMS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
+
+
+def _enqueue_external_strums_fetch(song_id: uuid.UUID) -> None:
+    """Fire-and-forget external strums fetch in the background."""
+    existing = _EXTERNAL_STRUMS_TASKS.get(song_id)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_fetch_external_strums(song_id))
+    _EXTERNAL_STRUMS_TASKS[song_id] = task
+
+    def _done(t: asyncio.Task) -> None:
+        if _EXTERNAL_STRUMS_TASKS.get(song_id) is t:
+            _EXTERNAL_STRUMS_TASKS.pop(song_id, None)
+
+    task.add_done_callback(_done)
+
+
 class JobService:
     def __init__(
         self,
@@ -1122,6 +1143,80 @@ class JobService:
         _enqueue_tabs_generation(song_id)
         return True
 
+    async def trigger_external_strums_if_missing(
+        self,
+        song_id: uuid.UUID,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """If external strums are missing, enqueue background Songsterr fetch.
+
+        Returns True if a background task was enqueued.
+        """
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            return False
+
+        if not song.song_name or not song.artist:
+            return False
+
+        # Already present on disk
+        if (
+            song.external_strums_key
+            and self._storage.file_exists(song.external_strums_key)
+            and not force
+        ):
+            return False
+
+        # Check on disk even if DB key is missing
+        candidate = f"{song.song_name}/external_strums.json"
+        if not force and self._storage.file_exists(candidate):
+            await self._song_dao.update_by_id(
+                song.id, external_strums_key=candidate
+            )
+            return False
+
+        # Cooldown check
+        attempt_age_s: float | None = None
+        if song.external_strums_attempted_at:
+            attempt_age_s = (
+                _utcnow() - _to_aware_utc(song.external_strums_attempted_at)
+            ).total_seconds()
+
+        if song.external_strums_failed and not force:
+            if (
+                attempt_age_s is not None
+                and attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                return False
+
+        if song.external_strums_attempted_at and not force:
+            if (
+                attempt_age_s is not None
+                and attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                return False
+
+        # Check for existing in-flight task
+        existing_task = _EXTERNAL_STRUMS_TASKS.get(song_id)
+        if existing_task and not existing_task.done():
+            return False
+
+        # Record attempt timestamp
+        update_kwargs: dict = {"external_strums_attempted_at": _utcnow()}
+        if force or song.external_strums_failed:
+            update_kwargs["external_strums_failed"] = False
+        await self._song_dao.update_by_id(song.id, **update_kwargs)
+
+        logger.info(
+            "External strums: enqueuing fetch for %s (%s - %s)",
+            song_id,
+            song.artist,
+            song.title,
+        )
+        _enqueue_external_strums_fetch(song_id)
+        return True
+
     async def get_active_job_for_song(self, song_id: uuid.UUID) -> JobRecord | None:
         """Return the active (PENDING/PROCESSING) job for a song, if any."""
         job = await self._job_dao.get_active_job(song_id)
@@ -1663,6 +1758,160 @@ async def _generate_tabs_only(song_id: uuid.UUID) -> None:
                 song_id, tabs_key=tabs_key, tabs_failed=False, tabs_attempted_at=None
             )
             await song_dao.commit()
+
+
+async def _fetch_external_strums(song_id: uuid.UUID) -> None:
+    """Fetch strum patterns from Songsterr, align to audio, and store."""
+    try:
+        storage = get_storage()
+    except Exception:
+        return
+
+    from guitar_player.config import get_settings
+
+    settings = get_settings()
+    ext_cfg = settings.external_strums
+    if not ext_cfg.enabled:
+        return
+
+    # Load song metadata
+    async with safe_session() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_id(song_id)
+        if not song or not song.song_name or not song.artist:
+            return
+        artist = song.artist
+        title = song.title
+        song_name = song.song_name
+
+    t0 = time.monotonic()
+    try:
+        from guitar_player.services.external_strum_fetcher import fetch_songsterr_strums
+
+        # Step 1: Fetch and parse strums from Songsterr
+        result = await fetch_songsterr_strums(
+            artist=artist,
+            title=title,
+            timeout_seconds=ext_cfg.fetch_timeout_seconds,
+        )
+        if not result or not result.strums:
+            raise ValueError(f"No strums found on Songsterr for {artist} - {title}")
+
+        # Step 2: Read rhythm data from tabs.json for alignment
+        tabs_key = f"{song_name}/tabs.json"
+        if not storage.file_exists(tabs_key):
+            raise ValueError("No tabs.json found — need rhythm data for alignment")
+
+        tabs_data = storage.read_json(tabs_key)
+        if not isinstance(tabs_data, dict) or not isinstance(tabs_data.get("rhythm"), dict):
+            raise ValueError("No rhythm data in tabs.json")
+
+        rhythm = tabs_data["rhythm"]
+        beat_times = rhythm.get("beat_times", [])
+        detected_bpm = rhythm.get("bpm", 120.0)
+
+        if not beat_times:
+            raise ValueError("No beat_times in rhythm data")
+
+        # Step 3: Align strums to detected beat grid
+        from guitar_player.services.strum_aligner import (
+            align_strums,
+            ExternalStrumPattern,
+            ExternalStrum,
+        )
+
+        pattern = ExternalStrumPattern(
+            source="songsterr",
+            source_bpm=result.source_bpm,
+            strums=[
+                ExternalStrum(
+                    beat_position=s.beat_position,
+                    time_seconds=s.time_seconds,
+                    direction=s.direction,
+                    num_strings=s.num_strings,
+                )
+                for s in result.strums
+            ],
+        )
+
+        aligned = align_strums(
+            pattern=pattern,
+            beat_times=beat_times,
+            detected_bpm=detected_bpm,
+            min_confidence=ext_cfg.min_alignment_confidence,
+        )
+        if not aligned:
+            raise ValueError("Strum alignment failed — quality too low")
+
+        # Step 4: Write external_strums.json to storage
+        strums_data = [
+            {
+                "id": s.id,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "direction": s.direction,
+                "confidence": s.confidence,
+                "num_strings": s.num_strings,
+                "onset_spread_ms": s.onset_spread_ms,
+            }
+            for s in aligned
+        ]
+
+        strums_key = f"{song_name}/external_strums.json"
+        storage.write_json(strums_key, strums_data)
+
+        elapsed_s = time.monotonic() - t0
+        logger.info(
+            "External strums: wrote %d strums (%.1fs) song_id=%s",
+            len(aligned),
+            elapsed_s,
+            song_id,
+            extra={
+                "event_type": "background_task_done",
+                "task": "external_strums",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+                "strum_count": len(aligned),
+            },
+        )
+
+        # Update DB
+        async with safe_session() as session:
+            song_dao = SongDAO(session)
+            await song_dao.update_by_id(
+                song_id,
+                external_strums_key=strums_key,
+                external_strums_failed=False,
+                external_strums_attempted_at=None,
+            )
+            await song_dao.commit()
+
+    except Exception as e:
+        elapsed_s = time.monotonic() - t0
+        logger.warning(
+            "External strums fetch failed (%.1fs): %s song_id=%s",
+            elapsed_s,
+            e,
+            song_id,
+            extra={
+                "event_type": "background_task_failed",
+                "task": "external_strums",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+                "error": str(e),
+            },
+        )
+        try:
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, external_strums_failed=True)
+                await song_dao.commit()
+        except Exception:
+            logger.debug(
+                "Failed to persist external_strums_failed for %s",
+                song_id,
+                exc_info=True,
+            )
 
 
 _LYRICS_CLEANUP_TIMEOUT_S = 30

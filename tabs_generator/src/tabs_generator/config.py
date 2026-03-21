@@ -52,14 +52,6 @@ class PostProcessingConfig(BaseModel):
     min_confidence: float = 0.5
 
 
-class StrumDetectionConfig(BaseModel):
-    enabled: bool = True
-    min_onset_spread_ms: float = 2.0
-    full_confidence_spread_ms: float = 5.0
-    min_strum_confidence: float = 0.3
-    min_chord_size: int = 2
-
-
 class ProcessingConfig(BaseModel):
     temp_dir: str = "/tmp/tabs_generator"
     cleanup_temp: bool = True
@@ -86,7 +78,6 @@ class Settings(BaseModel):
     tabs: TabsConfig = TabsConfig()
     audio_cleaning: AudioCleaningConfig = AudioCleaningConfig()
     post_processing: PostProcessingConfig = PostProcessingConfig()
-    strum_detection: StrumDetectionConfig = StrumDetectionConfig()
     processing: ProcessingConfig = ProcessingConfig()
     aws: AwsConfig = AwsConfig()
     storage: StorageConfig = StorageConfig()

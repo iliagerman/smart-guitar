@@ -97,7 +97,6 @@ class TabNote(BaseModel):
     fret: int
     midi_pitch: int
     confidence: float
-    strum_id: int | None = None
 
 
 class StrumEvent(BaseModel):

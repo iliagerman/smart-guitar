@@ -877,9 +877,8 @@ class SongService:
                     "Failed to read corrected lyrics for %s: %s", song.song_name, e
                 )
 
-        # Read tabs, strums, and rhythm from storage.
+        # Read tabs and rhythm from storage.
         tabs: list[TabNote] = []
-        strums: list[StrumEvent] = []
         rhythm: RhythmInfo | None = None
         tabs_key = song.tabs_key
         if not tabs_key and song.song_name:
@@ -894,12 +893,23 @@ class SongService:
                 if isinstance(raw, dict):
                     if isinstance(raw.get("notes"), list):
                         tabs = [TabNote(**n) for n in raw["notes"]]
-                    if isinstance(raw.get("strums"), list):
-                        strums = [StrumEvent(**s) for s in raw["strums"]]
                     if isinstance(raw.get("rhythm"), dict):
                         rhythm = RhythmInfo(**raw["rhythm"])
             except Exception as e:
                 logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
+
+        # Read external strums from dedicated file (fetched async from Songsterr).
+        strums: list[StrumEvent] = []
+        external_strums_key = song.external_strums_key
+        if external_strums_key and self._storage.file_exists(external_strums_key):
+            try:
+                raw_strums = self._storage.read_json(external_strums_key)
+                if isinstance(raw_strums, list):
+                    strums = [StrumEvent(**s) for s in raw_strums]
+            except Exception as e:
+                logger.warning(
+                    "Failed to read external strums for %s: %s", song.song_name, e
+                )
 
         return SongDetailResponse(
             song=song_resp,

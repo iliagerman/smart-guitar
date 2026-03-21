@@ -49,6 +49,9 @@ class Song(UUIDMixin, TimestampMixin, Base):
     lyrics_quick_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     lyrics_corrected_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     tabs_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    external_strums_key: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
 
     # --- Processing lock & deduplication ---
 
@@ -76,6 +79,9 @@ class Song(UUIDMixin, TimestampMixin, Base):
     tabs_failed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    external_strums_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Timestamps for lightweight task cooldowns — prevent re-enqueuing
     # background lyrics/tabs/merge on every poll (5-6 sec interval).
@@ -86,6 +92,9 @@ class Song(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     merge_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    external_strums_attempted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
