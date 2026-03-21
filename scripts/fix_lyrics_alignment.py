@@ -62,7 +62,9 @@ def flatten_words(segments: list[dict[str, Any]]) -> list[FlatWord]:
     return flattened
 
 
-def align_words(quick_words: list[FlatWord], timed_words: list[FlatWord]) -> AlignmentResult:
+def align_words(
+    quick_words: list[FlatWord], timed_words: list[FlatWord]
+) -> AlignmentResult:
     quick_norm = [normalize_word(word.word) for word in quick_words]
     timed_norm = [normalize_word(word.word) for word in timed_words]
 
@@ -82,7 +84,9 @@ def align_words(quick_words: list[FlatWord], timed_words: list[FlatWord]) -> Ali
 
     for i in range(1, rows):
         for j in range(1, cols):
-            diag = scores[i - 1][j - 1] + similarity(quick_norm[i - 1], timed_norm[j - 1])
+            diag = scores[i - 1][j - 1] + similarity(
+                quick_norm[i - 1], timed_norm[j - 1]
+            )
             up = scores[i - 1][j] + gap
             left = scores[i][j - 1] + gap
             best = max(diag, up, left)
@@ -141,10 +145,14 @@ def interpolate_word_times(
         end_index = index - 1
 
         prev_assigned = assigned[start_index - 1] if start_index > 0 else None
-        next_assigned = assigned[end_index + 1] if end_index + 1 < len(assigned) else None
+        next_assigned = (
+            assigned[end_index + 1] if end_index + 1 < len(assigned) else None
+        )
 
         block_indices = list(range(start_index, end_index + 1))
-        block_duration = sum(quick_durations[word_index] for word_index in block_indices)
+        block_duration = sum(
+            quick_durations[word_index] for word_index in block_indices
+        )
         original_start = quick_words[start_index].start
         original_end = quick_words[end_index].end
         original_span = max(original_end - original_start, 0.001)
@@ -209,9 +217,15 @@ def build_output(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Merge clean lyric words with better timing data.")
-    parser.add_argument("--quick", required=True, help="Path to the quick lyrics JSON file.")
-    parser.add_argument("--timed", required=True, help="Path to the timed lyrics JSON file.")
+    parser = argparse.ArgumentParser(
+        description="Merge clean lyric words with better timing data."
+    )
+    parser.add_argument(
+        "--quick", required=True, help="Path to the quick lyrics JSON file."
+    )
+    parser.add_argument(
+        "--timed", required=True, help="Path to the timed lyrics JSON file."
+    )
     parser.add_argument(
         "--output",
         help="Output path. Defaults to overwriting the timed JSON file.",
@@ -234,7 +248,9 @@ def main() -> None:
     timed_words = flatten_words(timed_data["segments"])
 
     alignment = align_words(quick_words, timed_words)
-    assigned_times = interpolate_word_times(quick_words, timed_words, alignment.quick_to_timed)
+    assigned_times = interpolate_word_times(
+        quick_words, timed_words, alignment.quick_to_timed
+    )
     merged = build_output(
         quick_data=quick_data,
         quick_words=quick_words,

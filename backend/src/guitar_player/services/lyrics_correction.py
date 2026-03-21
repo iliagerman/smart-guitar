@@ -156,10 +156,14 @@ def interpolate_word_times(
         end_index = index - 1
 
         prev_assigned = assigned[start_index - 1] if start_index > 0 else None
-        next_assigned = assigned[end_index + 1] if end_index + 1 < len(assigned) else None
+        next_assigned = (
+            assigned[end_index + 1] if end_index + 1 < len(assigned) else None
+        )
 
         block_indices = list(range(start_index, end_index + 1))
-        block_duration = sum(quick_durations[word_index] for word_index in block_indices)
+        block_duration = sum(
+            quick_durations[word_index] for word_index in block_indices
+        )
         original_start = quick_words[start_index].start
         original_end = quick_words[end_index].end
         original_span = max(original_end - original_start, 0.001)
@@ -268,9 +272,9 @@ def _build_group_segments(
 
     output_segments = [copy.deepcopy(segment) for segment in quick_group]
     for quick_word, timed in zip(quick_words, assigned_times, strict=True):
-        word_data = output_segments[
-            quick_word.segment_index - segment_offset
-        ]["words"][quick_word.word_index]
+        word_data = output_segments[quick_word.segment_index - segment_offset]["words"][
+            quick_word.word_index
+        ]
         word_data["word"] = quick_word.word
         word_data["start"] = round(timed.start, 3)
         word_data["end"] = round(timed.end, 3)

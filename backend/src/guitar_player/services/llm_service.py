@@ -399,12 +399,12 @@ class LlmService:
                     raise ValueError(f"No JSON array found in LLM response: {raw_text}")
 
                 raw_list = json.loads(json_match.group())
-                parsed = [LyricsSegmentMapping.model_validate(item) for item in raw_list]
+                parsed = [
+                    LyricsSegmentMapping.model_validate(item) for item in raw_list
+                ]
 
                 if len(parsed) != expected:
-                    raise ValueError(
-                        f"Expected {expected} mappings, got {len(parsed)}"
-                    )
+                    raise ValueError(f"Expected {expected} mappings, got {len(parsed)}")
 
                 for idx, mapping in enumerate(parsed):
                     if mapping.quick_index != idx:
