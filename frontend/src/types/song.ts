@@ -90,11 +90,18 @@ export interface SongDetail {
   quick_lyrics_source: string | null
   corrected_lyrics: LyricsSegment[]
   corrected_lyrics_source: string | null
+  ver1_lyrics?: LyricsSegment[]
+  ver1_lyrics_source?: string | null
+  ver2_lyrics?: LyricsSegment[]
+  ver2_lyrics_source?: string | null
+  ver3_lyrics?: LyricsSegment[]
+  ver3_lyrics_source?: string | null
   chord_options: ChordOption[]
   tabs: TabNote[]
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
   active_job: ActiveJobInfo | null
+  download_pending: boolean
 }
 
 export interface SearchResult {

@@ -1,10 +1,11 @@
 import { cn } from '@/lib/cn'
-import { STANDARD_TUNING, type GuitarString } from '../lib/tuning'
+import { type GuitarString } from '../lib/tuning'
 
 interface StringSelectorProps {
   selectedString: GuitarString | null
   nearestString: GuitarString | null
   active: boolean
+  tuning: GuitarString[]
   onSelect: (s: GuitarString | null) => void
 }
 
@@ -12,6 +13,7 @@ export function StringSelector({
   selectedString,
   nearestString,
   active,
+  tuning,
   onSelect,
 }: StringSelectorProps) {
   const highlightedString = selectedString || (active ? nearestString : null)
@@ -33,7 +35,7 @@ export function StringSelector({
         </button>
 
         {/* String buttons */}
-        {STANDARD_TUNING.map((str) => {
+        {tuning.map((str) => {
           const isSelected = selectedString?.stringNumber === str.stringNumber
           const isDetected =
             !selectedString && active && nearestString?.stringNumber === str.stringNumber

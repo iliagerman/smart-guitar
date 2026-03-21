@@ -108,7 +108,11 @@ def separate(request: SeparateRequest):
             )
 
         input_parent = Path(request.input_path).parent
-        output_name = str(Path(input_parent.parent.name) / input_parent.name)
+        # Use the full parent path as the output prefix so stems land next to
+        # the source audio.  The previous two-level construction
+        # (grandparent.name / parent.name) broke when the folder structure
+        # gained an extra youtube_id level (artist/song/yt_id/audio.mp3).
+        output_name = str(input_parent)
         requested = (
             set(request.requested_outputs)
             if request.requested_outputs

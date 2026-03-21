@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Search } from 'lucide-react'
 import { SearchBar } from '../components/SearchBar'
 import { SearchResults } from '../components/SearchResults'
 import { useSearchSongs } from '../hooks/use-search-songs'
 import { useRotatingText } from '../hooks/use-rotating-text'
 import { songsApi } from '@/api/songs.api'
+import { queryKeys } from '@/api/query-keys'
 import { songDetailPath } from '@/router/routes'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -17,6 +18,7 @@ const DOWNLOAD_PHRASES = ['Fetching the music…', 'Getting it…', 'Almost ther
 
 export function SearchPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const search = useSearchSongs()
   const [hasSearched, setHasSearched] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -28,6 +30,7 @@ export function SearchPage() {
       songsApi.select(`${result.artist}/${result.song}`, result.youtube_id),
     onSuccess: (detail) => {
       setSelectingYoutubeId(null)
+      queryClient.setQueryData(queryKeys.songs.detail(detail.song.id), detail)
       navigate(songDetailPath(detail.song.id))
     },
     onError: () => {

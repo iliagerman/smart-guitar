@@ -11,7 +11,7 @@ export function StrumDisplayControl({ className }: { className?: string }) {
         <button
             type="button"
             className={cn(
-                'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition-colors',
+                'inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors',
                 showStrums
                     ? 'border-flame-400/60 bg-flame-400/15 text-flame-200 hover:border-flame-300 hover:bg-flame-400/25'
                     : 'border-charcoal-600 bg-charcoal-700 text-smoke-100 hover:border-flame-400/50 hover:bg-charcoal-800/80 hover:text-smoke-50',
@@ -23,8 +23,7 @@ export function StrumDisplayControl({ className }: { className?: string }) {
             title={showStrums ? 'Hide strumming arrows and beat counts' : 'Show strumming arrows and beat counts'}
             data-testid="strum-display-control"
         >
-            <ArrowDownUp size={12} />
-            <span className="whitespace-nowrap">Strums</span>
+            <ArrowDownUp size={18} />
         </button>
     )
 }

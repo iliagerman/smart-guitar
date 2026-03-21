@@ -129,10 +129,17 @@ class SongDetailResponse(BaseModel):
     quick_lyrics_source: Optional[str] = None
     corrected_lyrics: list[LyricsSegment] = []
     corrected_lyrics_source: Optional[str] = None
+    ver1_lyrics: list[LyricsSegment] = []
+    ver1_lyrics_source: Optional[str] = None
+    ver2_lyrics: list[LyricsSegment] = []
+    ver2_lyrics_source: Optional[str] = None
+    ver3_lyrics: list[LyricsSegment] = []
+    ver3_lyrics_source: Optional[str] = None
     tabs: list[TabNote] = []
     strums: list[StrumEvent] = []
     rhythm: Optional[RhythmInfo] = None
     active_job: Optional[ActiveJobInfo] = None
+    download_pending: bool = False
 
 
 class EnrichedSearchResult(BaseModel):

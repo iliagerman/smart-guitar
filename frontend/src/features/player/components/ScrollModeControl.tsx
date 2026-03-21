@@ -1,4 +1,4 @@
-import { Minus, Plus } from 'lucide-react'
+import { ChevronsDown, Minus, Plus } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -15,7 +15,7 @@ export function ScrollModeControl({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'inline-flex items-center rounded-lg px-1 py-1 text-xs font-medium',
+        'inline-flex items-center rounded-lg px-1.5 py-1.5 text-sm font-medium',
         'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
         'hover:border-flame-400/30 transition-colors',
         'w-auto',
@@ -26,26 +26,27 @@ export function ScrollModeControl({ className }: { className?: string }) {
     >
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-0.5 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
         onClick={() => setAutoScrollSpeed(autoScrollSpeed - SPEED_STEP)}
         aria-label="Slower scroll"
         title="Slower scroll"
       >
-        <Minus size={12} />
+        <Minus size={16} />
       </button>
 
-      <span className="font-mono text-[10px] text-smoke-200 whitespace-nowrap min-w-[3ch] text-center">
+      <ChevronsDown size={16} className="text-smoke-300" />
+      <span className="font-mono text-xs text-smoke-200 whitespace-nowrap min-w-[3ch] text-center">
         {autoScrollSpeed}
       </span>
 
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-0.5 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
         onClick={() => setAutoScrollSpeed(autoScrollSpeed + SPEED_STEP)}
         aria-label="Faster scroll"
         title="Faster scroll"
       >
-        <Plus size={12} />
+        <Plus size={16} />
       </button>
     </div>
   )

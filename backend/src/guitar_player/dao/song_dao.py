@@ -47,9 +47,9 @@ class SongDAO(BaseDAO[Song, SongRecord]):
         return [self._to_record(obj) for obj in result.scalars().all()]
 
     async def get_by_song_name(self, song_name: str) -> SongRecord | None:
-        stmt = select(Song).where(Song.song_name == song_name)
+        stmt = select(Song).where(Song.song_name == song_name).limit(1)
         result = await self._session.execute(stmt)
-        obj = result.scalar_one_or_none()
+        obj = result.scalars().first()
         return self._to_record(obj) if obj else None
 
     async def search(

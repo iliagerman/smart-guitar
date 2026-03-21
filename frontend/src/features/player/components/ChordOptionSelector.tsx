@@ -1,5 +1,4 @@
-import * as Select from '@radix-ui/react-select'
-import { ChevronDown } from 'lucide-react'
+import { SlidersHorizontal } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
@@ -10,8 +9,12 @@ interface ChordOptionSelectorProps {
   hasTabs?: boolean
 }
 
-const STANDARD_VALUE = 'standard'
-const TABS_VALUE = 'tabs'
+interface OptionEntry {
+  key: string
+  label: string
+  capo: number
+  apply: () => void
+}
 
 export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOptionSelectorProps) {
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
@@ -21,104 +24,64 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOpti
 
   if (chordOptions.length === 0 && !hasTabs) return null
 
-  const selectedCapo =
-    selectedChordOptionIndex !== null ? chordOptions[selectedChordOptionIndex]?.capo ?? 0 : 0
+  // Build cycle list
+  const entries: OptionEntry[] = [
+    {
+      key: 'standard',
+      label: 'Standard',
+      capo: 0,
+      apply: () => {
+        setSheetMode('chords')
+        setSelectedChordOptionIndex(null)
+      },
+    },
+    ...chordOptions.map((option, index) => ({
+      key: String(index),
+      label: option.name,
+      capo: option.capo,
+      apply: () => {
+        setSheetMode('chords')
+        setSelectedChordOptionIndex(index)
+      },
+    })),
+  ]
 
-  const value =
+  // Find current index
+  const currentKey =
     sheetMode === 'tabs'
-      ? TABS_VALUE
+      ? 'standard'
       : selectedChordOptionIndex !== null
         ? String(selectedChordOptionIndex)
-        : STANDARD_VALUE
+        : 'standard'
 
-  function handleValueChange(val: string) {
-    if (val === TABS_VALUE) {
-      setSheetMode('tabs')
-      return
-    }
+  const currentIdx = entries.findIndex((e) => e.key === currentKey)
+  const current = entries[currentIdx >= 0 ? currentIdx : 0]
 
-    // Switching away from tabs implies chord/lyrics view.
-    setSheetMode('chords')
-
-    if (val === STANDARD_VALUE) {
-      setSelectedChordOptionIndex(null)
-    } else {
-      setSelectedChordOptionIndex(Number(val))
-    }
+  function cycleNext() {
+    const nextIdx = ((currentIdx >= 0 ? currentIdx : 0) + 1) % entries.length
+    entries[nextIdx].apply()
   }
 
   return (
-    <div className="flex items-center gap-2 min-w-0" data-testid="chord-option-selector">
-      <Select.Root value={value} onValueChange={handleValueChange}>
-        <Select.Trigger
-          className={cn(
-            'flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg text-xs font-medium',
-            'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-            'hover:border-flame-400/30 transition-colors',
-            'outline-none focus:ring-1 focus:ring-flame-400/40',
-            'w-auto'
-          )}
-        >
-          <Select.Value />
-          <Select.Icon>
-            <ChevronDown size={12} className="text-smoke-400" />
-          </Select.Icon>
-        </Select.Trigger>
-
-        <Select.Portal>
-          <Select.Content
-            className={cn(
-              'bg-charcoal-800 border border-charcoal-600 rounded-lg shadow-xl',
-              'min-w-(--radix-select-trigger-width) max-h-(--radix-select-content-available-height)',
-              'overflow-hidden z-50'
-            )}
-            position="popper"
-            sideOffset={4}
-          >
-            <Select.Viewport className="p-1 max-h-(--radix-select-content-available-height) overflow-y-auto whitespace-nowrap">
-              {/* Tabs option disabled */}
-
-              <Select.Item
-                value={STANDARD_VALUE}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer outline-none',
-                  'text-smoke-100 transition-colors',
-                  'data-highlighted:bg-flame-400/20 data-highlighted:text-flame-400'
-                )}
-              >
-                <Select.ItemText>Standard</Select.ItemText>
-              </Select.Item>
-
-              {chordOptions.map((option, index) => (
-                <Select.Item
-                  key={index}
-                  value={String(index)}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer outline-none',
-                    'text-smoke-100 transition-colors',
-                    'data-highlighted:bg-flame-400/20 data-highlighted:text-flame-400'
-                  )}
-                >
-                  <Select.ItemText>
-                    <span className="flex items-center gap-2">
-                      <span>{option.name}</span>
-                      {option.capo > 0 && (
-                        <span className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded">
-                          Capo {option.capo}
-                        </span>
-                      )}
-                    </span>
-                  </Select.ItemText>
-                </Select.Item>
-              ))}
-            </Select.Viewport>
-          </Select.Content>
-        </Select.Portal>
-      </Select.Root>
-
-      {sheetMode === 'chords' && selectedCapo > 0 && (
+    <div className="flex items-center gap-1 min-w-0" data-testid="chord-option-selector">
+      <button
+        type="button"
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
+          'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
+          'hover:border-flame-400/30 transition-colors',
+          'outline-none focus:ring-1 focus:ring-flame-400/40',
+        )}
+        onClick={cycleNext}
+        title={`Chords: ${current.label}. Click to cycle.`}
+        aria-label={`Chord option: ${current.label}`}
+      >
+        <SlidersHorizontal size={16} className="text-smoke-300" />
+        <span className="truncate">{current.label}</span>
+      </button>
+      {current.capo > 0 && (
         <span className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded">
-          Capo {selectedCapo}
+          Capo {current.capo}
         </span>
       )}
     </div>

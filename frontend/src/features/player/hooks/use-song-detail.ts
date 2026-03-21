@@ -3,6 +3,30 @@ import { songsApi } from '@/api/songs.api'
 import { queryKeys } from '@/api/query-keys'
 import type { SongDetail } from '@/types/song'
 
+function getVer1Lyrics(detail: SongDetail): SongDetail['lyrics'] {
+  return detail.ver1_lyrics ?? detail.quick_lyrics ?? []
+}
+
+function getVer2Lyrics(detail: SongDetail): SongDetail['lyrics'] {
+  return detail.ver2_lyrics ?? detail.lyrics ?? []
+}
+
+function getVer3Lyrics(detail: SongDetail): SongDetail['lyrics'] {
+  return detail.ver3_lyrics ?? detail.corrected_lyrics ?? []
+}
+
+function getVer1Source(detail: SongDetail): string {
+  return detail.ver1_lyrics_source ?? detail.quick_lyrics_source ?? ''
+}
+
+function getVer2Source(detail: SongDetail): string {
+  return detail.ver2_lyrics_source ?? detail.lyrics_source ?? ''
+}
+
+function getVer3Source(detail: SongDetail): string {
+  return detail.ver3_lyrics_source ?? detail.corrected_lyrics_source ?? ''
+}
+
 /**
  * Lightweight fingerprint of the meaningful content in a SongDetail.
  * Excludes presigned S3 URLs (which rotate on every API response)
@@ -11,18 +35,19 @@ import type { SongDetail } from '@/types/song'
 function contentFingerprint(d: SongDetail): string {
   return [
     d.chords.length,
-    d.lyrics.length,
-    d.quick_lyrics.length,
-    d.corrected_lyrics?.length ?? 0,
+    getVer1Lyrics(d).length,
+    getVer2Lyrics(d).length,
+    getVer3Lyrics(d).length,
     d.tabs.length,
     d.strums.length,
     d.chord_options.length,
     Object.values(d.stems).filter(Boolean).length,
     d.active_job?.id ?? '',
     d.active_job?.status ?? '',
-    d.lyrics_source ?? '',
-    d.quick_lyrics_source ?? '',
-    d.corrected_lyrics_source ?? '',
+    d.download_pending,
+    getVer1Source(d),
+    getVer2Source(d),
+    getVer3Source(d),
   ].join('|')
 }
 
@@ -37,14 +62,20 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       const detail = query.state.data as SongDetail | undefined
       if (!detail) return 6000
 
+      // Audio is being downloaded — keep polling until it completes.
+      if (detail.download_pending) return 6000
+
       // If there's an active job, keep polling until it finishes.
       if (detail.active_job) return 6000
 
       const missingAnyStem = detail.stem_types.some((s) => !detail.stems[s.name])
-      const missingAccurateLyrics = (detail.lyrics?.length ?? 0) === 0
-      const missingQuickLyrics = (detail.quick_lyrics?.length ?? 0) === 0
-      // Poll until *both* versions are present. Accurate lyrics may arrive later,
-      // even after quick lyrics are already shown.
+      const ver1Lyrics = getVer1Lyrics(detail)
+      const ver2Lyrics = getVer2Lyrics(detail)
+      const ver3Lyrics = getVer3Lyrics(detail)
+      const missingVer1Lyrics = ver1Lyrics.length === 0
+      const missingVer2Lyrics = ver2Lyrics.length === 0
+      const missingVer3Lyrics =
+        ver1Lyrics.length > 0 && ver2Lyrics.length > 0 && ver3Lyrics.length === 0
       const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
 
       // Keep polling while data is still missing (background retries may fill it in).
@@ -54,11 +85,14 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       // Tabs are interactive UI in 'tabs' mode; keep this snappy.
       if (missingTabs) return 5000
 
-      // Quick lyrics are meant to appear ASAP.
-      if (missingQuickLyrics) return 5000
+      // Ver 1 lyrics are meant to appear ASAP.
+      if (missingVer1Lyrics) return 5000
 
-      // Accurate lyrics can take longer; poll less aggressively once quick lyrics exist.
-      if (missingAccurateLyrics) return 12000
+      // Ver 2 can take longer; poll less aggressively once ver1 exists.
+      if (missingVer2Lyrics) return 12000
+
+      // When ver1 + ver2 exist, keep polling for the auto-generated merged ver3.
+      if (missingVer3Lyrics) return 8000
 
       return false
     },

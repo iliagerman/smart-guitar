@@ -12,7 +12,7 @@ export function ChordDisplayControls({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'inline-flex items-center rounded-lg px-1 py-1 text-xs font-medium',
+        'inline-flex items-center rounded-lg px-1.5 py-1.5 text-sm font-medium',
         'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
         'hover:border-flame-400/30 transition-colors',
         'w-auto',
@@ -23,23 +23,23 @@ export function ChordDisplayControls({ className }: { className?: string }) {
     >
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-0.5 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
         onClick={transposeDown}
         aria-label="Transpose down"
         title="Transpose down"
       >
-        <Minus size={12} />
+        <Minus size={16} />
       </button>
 
       <button
         type="button"
-        className="inline-flex items-center gap-0.5 rounded px-0.5 py-0.5 hover:bg-charcoal-800/60 transition-colors"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-charcoal-800/60 transition-colors"
         onClick={resetTranspose}
         aria-label="Reset transpose"
         title="Reset transpose"
       >
-        <Music2 size={12} className="text-smoke-300" />
-        <span className="font-mono text-[10px] text-smoke-200 whitespace-nowrap">
+        <Music2 size={16} className="text-smoke-300" />
+        <span className="font-mono text-xs text-smoke-200 whitespace-nowrap">
           {transposeSemitones === 0
             ? '0'
             : transposeSemitones > 0
@@ -50,12 +50,12 @@ export function ChordDisplayControls({ className }: { className?: string }) {
 
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-0.5 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
         onClick={transposeUp}
         aria-label="Transpose up"
         title="Transpose up"
       >
-        <Plus size={12} />
+        <Plus size={16} />
       </button>
     </div>
   )

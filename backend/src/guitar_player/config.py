@@ -81,6 +81,7 @@ class PresignedUrlConfig(BaseModel):
 
 class LlmModelsConfig(BaseModel):
     name_parsing: str = "us.amazon.nova-2-lite-v1:0"
+    lyrics_merging: str | None = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 class ServicesConfig(BaseModel):

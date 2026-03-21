@@ -496,6 +496,27 @@ test-auth:
 backfill-genres:
     cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/backfill_genres.py
 
+# Create lyrics_corrected.json by combining quick wording with regular timing via LLM.
+merge-lyrics quick regular output="" backup='true':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_dir}}/backend"
+
+    args=(
+        --quick "{{quick}}"
+        --regular "{{regular}}"
+    )
+
+    if [[ -n "{{output}}" ]]; then
+        args+=(--output "{{output}}")
+    fi
+
+    if [[ "{{backup}}" == "true" ]]; then
+        args+=(--backup)
+    fi
+
+    APP_ENV=local uv run python scripts/merge_lyrics_with_llm.py "${args[@]}"
+
 # Cleanup local_bucket/ by removing original-audio files whose filenames suggest
 # live concert/show recordings.
 #

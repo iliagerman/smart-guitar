@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Heart, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
+import { useWakeLock } from '../hooks/use-wake-lock'
 import { useLyricsSync } from '../hooks/use-lyrics-sync'
 import { normalizeWords } from '../lib/normalize-words'
 import { getRepresentativeSongStrumPattern } from '../lib/strum-pattern'
@@ -36,6 +37,18 @@ import { songsApi } from '@/api/songs.api'
 import { cn } from '@/lib/cn'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { transposeChordLabel } from '@/lib/chord-utils'
+import type { LyricsSegment } from '@/types/song'
+
+function pickLyricsVersion(
+  preferred: LyricsSegment[] | undefined,
+  legacy: LyricsSegment[] | undefined,
+): LyricsSegment[] {
+  return preferred ?? legacy ?? []
+}
+
+function pickLyricsSource(preferred?: string | null, legacy?: string | null): string | null {
+  return preferred ?? legacy ?? null
+}
 
 function CurrentChordPanel({ chords }: { chords: { chord: string; start_time: number; end_time: number }[] }) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
@@ -86,6 +99,7 @@ export function SongDetailPage() {
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  useWakeLock(isPlaying)
   const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: true })
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
@@ -213,16 +227,63 @@ export function SongDetailPage() {
   }, [])
 
   // Resolve which lyrics version to display (hook must be before early return)
+  const ver1Lyrics = useMemo(
+    () => (detail ? pickLyricsVersion(detail.ver1_lyrics, detail.quick_lyrics) : []),
+    [detail],
+  )
+  const ver2Lyrics = useMemo(
+    () => (detail ? pickLyricsVersion(detail.ver2_lyrics, detail.lyrics) : []),
+    [detail],
+  )
+  const ver3Lyrics = useMemo(
+    () => (detail ? pickLyricsVersion(detail.ver3_lyrics, detail.corrected_lyrics) : []),
+    [detail],
+  )
+  const ver1LyricsSource = detail
+    ? pickLyricsSource(detail.ver1_lyrics_source, detail.quick_lyrics_source)
+    : null
+  const ver2LyricsSource = detail
+    ? pickLyricsSource(detail.ver2_lyrics_source, detail.lyrics_source)
+    : null
+  const ver3LyricsSource = detail
+    ? pickLyricsSource(detail.ver3_lyrics_source, detail.corrected_lyrics_source)
+    : null
+
   const activeLyrics = useMemo(() => {
     if (!detail) return []
-    const hasL = (detail.lyrics?.length ?? 0) > 0
-    const hasQL = (detail.quick_lyrics?.length ?? 0) > 0
-    if (lyricsMode === 'accurate' && hasL) return detail.lyrics
-    if (lyricsMode === 'quick' && hasQL) return detail.quick_lyrics
+    const hasVer1 = ver1Lyrics.length > 0
+    const hasVer2 = ver2Lyrics.length > 0
+    const hasVer3 = ver3Lyrics.length > 0
+    if (lyricsMode === 'ver3' && hasVer3) return ver3Lyrics
+    if (lyricsMode === 'ver2' && hasVer2) return ver2Lyrics
+    if (lyricsMode === 'ver1' && hasVer1) return ver1Lyrics
     // For 'none' or when preferred version isn't available, fall back
-    if (hasQL) return detail.quick_lyrics
-    return detail.lyrics
-  }, [lyricsMode, detail])
+    if (hasVer3) return ver3Lyrics
+    if (hasVer2) return ver2Lyrics
+    return ver1Lyrics
+  }, [detail, lyricsMode, ver1Lyrics, ver2Lyrics, ver3Lyrics])
+
+  const activeLyricsSource = useMemo(() => {
+    if (!detail) return null
+    const hasVer1 = ver1Lyrics.length > 0
+    const hasVer2 = ver2Lyrics.length > 0
+    const hasVer3 = ver3Lyrics.length > 0
+    if (lyricsMode === 'ver3' && hasVer3) return ver3LyricsSource
+    if (lyricsMode === 'ver2' && hasVer2) return ver2LyricsSource
+    if (lyricsMode === 'ver1' && hasVer1) return ver1LyricsSource
+    if (hasVer3) return ver3LyricsSource
+    if (hasVer2) return ver2LyricsSource
+    return ver1LyricsSource
+  }, [
+    detail,
+    lyricsMode,
+    ver1Lyrics.length,
+    ver1LyricsSource,
+    ver2Lyrics.length,
+    ver2LyricsSource,
+    ver3Lyrics.length,
+    ver3LyricsSource,
+  ])
 
   // Normalize lyrics for the debug overlay (same transform the display components use)
   const debugNormalizedSegments = useMemo(
@@ -250,32 +311,35 @@ export function SongDetailPage() {
 
   const thumbnailSrc = (!thumbFailed ? cachedThumbnail : null) ?? '/art/album-placeholder.png'
 
-  const hasLyrics = (detail?.lyrics?.length ?? 0) > 0
-  const hasQuickLyrics = (detail?.quick_lyrics?.length ?? 0) > 0
-  const hasAnyLyrics = hasLyrics || hasQuickLyrics
+  const hasVer1Lyrics = ver1Lyrics.length > 0
+  const hasVer2Lyrics = ver2Lyrics.length > 0
+  const hasVer3Lyrics = ver3Lyrics.length > 0
+  const hasAnyLyrics = hasVer1Lyrics || hasVer2Lyrics || hasVer3Lyrics
   const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
 
   const isJobProcessing =
     detail?.active_job?.status === 'PENDING' || detail?.active_job?.status === 'PROCESSING'
 
-  // Accurate lyrics can arrive after quick lyrics. While they're being generated,
-  // keep the toggle visible and show a spinner on the Accurate option.
-  const isAccurateLyricsGenerating =
-    !!detail && !hasLyrics && hasQuickLyrics && (isJobProcessing || !detail.active_job)
+  // Ver 3 is generated from ver1 + ver2. While it's being created,
+  // keep the toggle visible and show a spinner on the Ver 3 option.
+  const isVer3LyricsGenerating =
+    !!detail && !hasVer3Lyrics && hasVer1Lyrics && hasVer2Lyrics && (isJobProcessing || !detail.active_job)
 
   // When a song loads, pick the best available lyrics mode:
-  // accurate > quick > none. This also corrects stale persisted values.
+  // ver3 > ver2 > ver1 > none. This also corrects stale persisted values.
   useEffect(() => {
     if (!detail) return
 
-    if (hasLyrics) {
-      setLyricsMode('accurate')
-    } else if (hasQuickLyrics) {
-      setLyricsMode('quick')
+    if (hasVer3Lyrics) {
+      setLyricsMode('ver3')
+    } else if (hasVer2Lyrics) {
+      setLyricsMode('ver2')
+    } else if (hasVer1Lyrics) {
+      setLyricsMode('ver1')
     } else {
       setLyricsMode('none')
     }
-  }, [detail, hasLyrics, hasQuickLyrics, setLyricsMode])
+  }, [detail, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, setLyricsMode])
 
   if (isLoading || !detail) {
     return (
@@ -322,20 +386,6 @@ export function SongDetailPage() {
                 className="w-full h-full object-cover"
                 onError={() => songId && markThumbnailFailed(songId)}
               />
-              <button
-                onClick={handleToggleFavorite}
-                className="absolute top-1 right-1 p-1 rounded-full bg-charcoal-900/60 backdrop-blur-sm transition-colors hover:bg-charcoal-900/80"
-                data-testid={`favorite-toggle-${songId}`}
-                aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Heart
-                  size={14}
-                  className={cn(
-                    'transition-colors',
-                    isFavorited ? 'fill-flame-400 text-flame-400 animate-favorite-ignite' : 'text-smoke-300'
-                  )}
-                />
-              </button>
             </div>
 
             <div className="min-w-0 flex-1">
@@ -393,26 +443,50 @@ export function SongDetailPage() {
             <TransportControls
               onTogglePlay={handleTogglePlay}
               onSeek={seek}
-              selectors={
+              primaryControls={
                 <>
+                  <button
+                    onClick={handleToggleFavorite}
+                    className={cn(
+                      'inline-flex items-center justify-center rounded-lg w-16 h-16',
+                      'bg-charcoal-700 border border-charcoal-600',
+                      'hover:border-flame-400/30 transition-colors',
+                      'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+                    )}
+                    data-testid={`favorite-toggle-${songId}`}
+                    aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart
+                      size={28}
+                      className={cn(
+                        'transition-colors',
+                        isFavorited ? 'fill-flame-400 text-flame-400 animate-favorite-ignite' : 'text-flame-400/70'
+                      )}
+                    />
+                  </button>
                   <TrackSelector
                     activeStem={currentStem}
                     onStemChange={handleStemChange}
                     availableStems={detail.stems}
                     stemTypes={detail.stem_types}
                   />
+                  <LyricsVersionToggle
+                    hasVer1Lyrics={hasVer1Lyrics}
+                    hasVer2Lyrics={hasVer2Lyrics}
+                    hasVer3Lyrics={hasVer3Lyrics}
+                    isVer3Generating={isVer3LyricsGenerating}
+                  />
+                  <ChordMapDialog chords={chordNamesForMap} iconOnly />
+                </>
+              }
+              secondaryControls={
+                <>
                   <ChordOptionSelector chordOptions={detail.chord_options ?? []} hasTabs={hasTabs} />
                   <ChordDisplayControls />
                   <StrumDisplayControl />
                   <PlaybackSpeedSelector />
                   <LyricsSyncControl />
-                  <LyricsVersionToggle
-                    hasQuickLyrics={hasQuickLyrics}
-                    hasPreciseLyrics={hasLyrics}
-                    isPreciseGenerating={isAccurateLyricsGenerating}
-                  />
                   <ScrollModeControl />
-                  <ChordMapDialog chords={chordNamesForMap} iconOnly />
                 </>
               }
             />
@@ -420,11 +494,11 @@ export function SongDetailPage() {
         </div>
       </div>
 
-      {/* Accurate lyrics generating banner */}
-      {isAccurateLyricsGenerating && (
+      {/* Ver 3 lyrics generating banner */}
+      {isVer3LyricsGenerating && (
         <div className="relative z-20 bg-flame-400/10 border-b border-flame-400/20 px-4 py-2 flex items-center justify-center gap-2 text-sm text-flame-300">
           <div className="h-3 w-3 rounded-full border-2 border-flame-400/40 border-t-flame-400 animate-spin" />
-          <span>Generating accurate lyrics — using quick lyrics in the meantime</span>
+          <span>Generating Ver 3 lyrics — using Ver 2 in the meantime</span>
         </div>
       )}
 
@@ -442,6 +516,7 @@ export function SongDetailPage() {
             hasTabs={hasTabs}
             stemNames={detail.stem_types.map(({ name }) => name)}
             activeJobId={detail.active_job?.id ?? null}
+            downloadPending={detail.download_pending}
           />
 
           {/* Show chords/tabs once stems and chords are available.
@@ -483,7 +558,7 @@ export function SongDetailPage() {
           segments={debugNormalizedSegments}
           activeSegmentIndex={debugSync.activeSegmentIndex}
           activeWordIndex={debugSync.activeWordIndex}
-          lyricsSource={detail.lyrics_source}
+          lyricsSource={activeLyricsSource}
         />
       )}
     </div>

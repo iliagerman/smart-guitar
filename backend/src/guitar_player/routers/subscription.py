@@ -6,19 +6,25 @@ is active (AllPay or Paddle) via the dependency factory.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import _is_bypass_user
 from guitar_player.config import Settings, get_settings
-from guitar_player.dependencies import get_payment_provider, get_telegram_service
+from guitar_player.dao.user_dao import UserDAO
+from guitar_player.dependencies import get_db, get_payment_provider, get_telegram_service
 from guitar_player.schemas.subscription import (
     CancelSubscriptionResponse,
     CheckoutRequest,
     CheckoutResponse,
     PricesResponse,
     SubscriptionStatusResponse,
+)
+from guitar_player.services.analytics_helpers import (
+    analytics_identity_from_user,
+    track_event,
 )
 from guitar_player.services.payment_provider import PaymentProviderProtocol
 from guitar_player.services.telegram_service import TelegramService
@@ -30,13 +36,39 @@ router = APIRouter(prefix="/subscription", tags=["subscription"])
 
 @router.get("/status", response_model=SubscriptionStatusResponse)
 async def get_subscription_status(
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     provider: PaymentProviderProtocol = Depends(get_payment_provider),
+    session: AsyncSession = Depends(get_db),
+    telegram: TelegramService = Depends(get_telegram_service),
     settings: Settings = Depends(get_settings),
 ) -> SubscriptionStatusResponse:
+    user_dao = UserDAO(session)
+    is_new = (await user_dao.get_by_cognito_sub(user.sub)) is None
+
     status = await provider.get_status(user.sub, user.email)
     if not status.has_access and _is_bypass_user(user.email, settings):
         status.has_access = True
+
+    if is_new:
+        method = "Google OAuth" if user.username.startswith("Google_") else "email/password"
+        track_event(
+            background_tasks,
+            event_type="user_provisioned",
+            event_category="auth",
+            **analytics_identity_from_user(user),
+            properties={"method": method},
+        )
+        logger.info(
+            "New user registered (%s): %s",
+            method,
+            user.email,
+            extra={"email": user.email, "event_type": "user_registered"},
+        )
+        await telegram.send_event(
+            f"<b>New user registered</b>\nEmail: {user.email}\nMethod: {method}"
+        )
+
     return status
 
 

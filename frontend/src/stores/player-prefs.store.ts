@@ -7,7 +7,7 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, rounded))
 }
 
-export type LyricsMode = 'quick' | 'accurate' | 'none'
+export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'none'
 
 export interface PlayerPrefsState {
   /** Display-only transpose in semitones. */
@@ -20,8 +20,9 @@ export interface PlayerPrefsState {
   /** Auto-scroll speed in pixels per second (used when lyricsMode is 'none'). */
   autoScrollSpeed: number
   /** Lyrics display mode:
-   *  - 'quick': show fast-aligned LRCLIB lyrics with highlighting
-   *  - 'accurate': show Whisper-transcribed lyrics with highlighting
+    *  - 'ver1': show the quick/base lyrics version with highlighting
+    *  - 'ver2': show the regular/timed lyrics version with highlighting
+    *  - 'ver3': show the merged/fixed lyrics version with highlighting
    *  - 'none': disable highlighting, use auto-scroll */
   lyricsMode: LyricsMode
   setTransposeSemitones: (semitones: number) => void
@@ -42,7 +43,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       showStrums: true,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
-      lyricsMode: 'quick' as LyricsMode,
+      lyricsMode: 'ver1' as LyricsMode,
       setTransposeSemitones: (semitones) =>
         set({ transposeSemitones: clampInt(semitones, -12, 12) }),
       transposeUp: () => {
@@ -67,22 +68,31 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       // Migrate old persisted state that had showHighlight + lyricsVersion
       migrate: (persisted: unknown) => {
         const state = persisted as Record<string, unknown>
+        if (state) {
+          const currentMode = state.lyricsMode as string | undefined
+          if (currentMode === 'quick') {
+            state.lyricsMode = 'ver1'
+          } else if (currentMode === 'accurate' || currentMode === 'precise') {
+            state.lyricsMode = 'ver2'
+          }
+        }
+
         if (state && !state.lyricsMode) {
           const hadHighlight = state.showHighlight !== false
           const oldVersion = state.lyricsVersion as string | undefined
           if (!hadHighlight) {
             state.lyricsMode = 'none'
           } else if (oldVersion === 'precise') {
-            state.lyricsMode = 'accurate'
+            state.lyricsMode = 'ver2'
           } else {
-            state.lyricsMode = 'quick'
+            state.lyricsMode = 'ver1'
           }
           delete state.showHighlight
           delete state.lyricsVersion
         }
         return state as unknown as PlayerPrefsState
       },
-      version: 1,
+      version: 2,
     }
   )
 )

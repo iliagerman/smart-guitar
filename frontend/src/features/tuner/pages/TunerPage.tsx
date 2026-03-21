@@ -7,6 +7,7 @@ import { TunerGauge } from '../components/TunerGauge'
 import { NoteDisplay } from '../components/NoteDisplay'
 import { StringSelector } from '../components/StringSelector'
 import { TunerControls } from '../components/TunerControls'
+import { TuningOffsetSelector } from '../components/TuningOffsetSelector'
 
 export function TunerPage() {
   const {
@@ -17,9 +18,12 @@ export function TunerPage() {
     cents,
     nearestString,
     selectedString,
+    semitoneOffset,
+    activeTuning,
     start,
     stop,
     selectString,
+    setSemitoneOffset,
   } = useTuner()
 
   const handleToggle = () => {
@@ -46,10 +50,13 @@ export function TunerPage() {
           active={isListening}
         />
 
+        <TuningOffsetSelector offset={semitoneOffset} onChange={setSemitoneOffset} />
+
         <StringSelector
           selectedString={selectedString}
           nearestString={nearestString}
           active={isListening}
+          tuning={activeTuning}
           onSelect={selectString}
         />
 

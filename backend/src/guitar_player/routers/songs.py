@@ -359,6 +359,13 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("Admin vocals+guitar merge check failed for %s: %s", song_id, e)
 
+    # Clear download_requested_at as soon as the audio file lands in S3,
+    # so this response already returns download_pending=false.
+    try:
+        await song_service.clear_download_if_audio_ready(song_id)
+    except Exception as e:
+        logger.warning("clear_download check failed for %s: %s", song_id, e)
+
     detail = await song_service.get_song_detail(song_id)
 
     # Attach active job info so the frontend can resume polling without

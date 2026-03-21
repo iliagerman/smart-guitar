@@ -1,11 +1,14 @@
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
+import { useState } from 'react'
+import { Play, Pause, SkipBack, SkipForward, Settings2, ChevronDown } from 'lucide-react'
 import { formatDuration } from '@/lib/format-duration'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { cn } from '@/lib/cn'
 
 interface TransportControlsProps {
   onTogglePlay: () => void
   onSeek: (time: number) => void
-  selectors?: React.ReactNode
+  primaryControls?: React.ReactNode
+  secondaryControls?: React.ReactNode
   /**
    * By default, hide play/skip buttons on mobile to free vertical space.
    * Use this if you want the full transport row on small screens.
@@ -16,9 +19,11 @@ interface TransportControlsProps {
 export function TransportControls({
   onTogglePlay,
   onSeek,
-  selectors,
+  primaryControls,
+  secondaryControls,
   showButtonsOnMobile = false,
 }: TransportControlsProps) {
+  const [showSecondary, setShowSecondary] = useState(false)
   const { isPlaying, currentTime, duration } = usePlaybackStore()
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
@@ -45,10 +50,32 @@ export function TransportControls({
         <span>{formatDuration(currentTime)}<span className="text-smoke-600">.{String(Math.floor((currentTime % 1) * 1000)).padStart(3, '0')}</span></span>
         <span>{formatDuration(duration)}</span>
       </div>
-      {selectors && (
-        <div className="flex flex-wrap items-center gap-1 pt-1 min-w-0 lg:flex-nowrap lg:justify-center">
-          {selectors}
+      {/* Primary controls row */}
+      {primaryControls && (
+        <div className="flex items-center gap-2 justify-center pt-1">
+          {primaryControls}
         </div>
+      )}
+
+      {/* Secondary controls row */}
+      {secondaryControls && (
+        <>
+          <button
+            className="sm:hidden flex items-center gap-1.5 text-smoke-400 hover:text-smoke-200 mx-auto py-1 transition-colors"
+            onClick={() => setShowSecondary(!showSecondary)}
+            aria-label="Toggle secondary controls"
+          >
+            <Settings2 size={20} />
+            <ChevronDown size={16} className={cn('transition-transform', showSecondary && 'rotate-180')} />
+          </button>
+          <div className={cn(
+            'flex flex-wrap items-center gap-1 justify-center border-t border-charcoal-700/40 pt-1.5 mt-0.5',
+            'opacity-75 hover:opacity-100 transition-opacity',
+            showSecondary ? 'flex' : 'hidden sm:flex',
+          )}>
+            {secondaryControls}
+          </div>
+        </>
       )}
 
       <div className={showButtonsOnMobile ? 'flex items-center justify-center gap-6' : 'hidden sm:flex items-center justify-center gap-6'}>

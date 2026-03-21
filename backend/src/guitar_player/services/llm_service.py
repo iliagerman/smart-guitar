@@ -34,6 +34,15 @@ class LyricsCleanupResult(BaseModel):
     first_lyrics_index: int
 
 
+class LyricsSegmentMapping(BaseModel):
+    """Maps one quick lyrics segment to a contiguous range of regular segments."""
+
+    quick_index: int
+    regular_start_index: int
+    regular_end_index: int
+    confidence: float = 0.0
+
+
 def _to_snake_case(name: str) -> str:
     """Normalize a name to snake_case for filesystem paths."""
     s = name.lower().strip()
@@ -48,6 +57,9 @@ MAX_LLM_RETRIES = 3
 class LlmService:
     def __init__(self, settings: Settings) -> None:
         self._model_id = settings.llm_models.name_parsing
+        self._lyrics_merge_model_id = (
+            settings.llm_models.lyrics_merging or settings.llm_models.name_parsing
+        )
 
         kwargs: dict = {"region_name": settings.aws.region}
         if not settings.aws.use_iam_role:
@@ -319,3 +331,156 @@ class LlmService:
         return await asyncio.to_thread(
             self._cleanup_lyrics_preamble_sync, segment_texts
         )
+
+    # ---- Lyrics source merging ----
+
+    def _align_lyrics_segments_sync(
+        self,
+        quick_segments: list[dict],
+        regular_segments: list[dict],
+    ) -> list[LyricsSegmentMapping]:
+        """Map quick lyric segments to regular lyric timing segments via Bedrock."""
+        quick_block = "\n".join(
+            (
+                f"Q{segment['index']}: text={segment['text']!r}; "
+                f"words={segment.get('words', [])}; count={segment.get('word_count', 0)}"
+            )
+            for segment in quick_segments
+        )
+        regular_block = "\n".join(
+            (
+                f"R{segment['index']}: {segment['start']:.3f}-{segment['end']:.3f}; "
+                f"text={segment['text']!r}; words={segment.get('words', [])}; "
+                f"count={segment.get('word_count', 0)}"
+            )
+            for segment in regular_segments
+        )
+
+        prompt = (
+            "You are merging two lyric sources for the SAME song.\n\n"
+            "Source A (quick lyrics) has the CORRECT wording and segmentation.\n"
+            "Source B (regular lyrics) has the BETTER timing, but wording and segmentation may be wrong, collapsed, duplicated, or messy.\n\n"
+            "Your task: for EVERY quick segment, map it to the best contiguous inclusive range of regular segment indices that carries the timing for that quick segment.\n\n"
+            "Rules:\n"
+            "- Return exactly one mapping object per quick segment.\n"
+            "- quick_index must match the quick segment index exactly.\n"
+            "- Preserve order: mappings must be non-decreasing in regular_start_index and regular_end_index.\n"
+            "- If one regular segment covers multiple quick segments, it is OK for adjacent quick segments to share the same regular_start_index/regular_end_index range.\n"
+            "- Prefer timing structure over exact wording when the regular text is noisy.\n"
+            f"- regular_start_index and regular_end_index must be between 0 and {len(regular_segments) - 1} inclusive. Do NOT use any index outside this range.\n"
+            "- confidence is a float from 0.0 to 1.0.\n\n"
+            f"There are {len(quick_segments)} quick segments (indices 0-{len(quick_segments) - 1}) and "
+            f"{len(regular_segments)} regular segments (indices 0-{len(regular_segments) - 1}).\n\n"
+            f"{schema_instruction(LyricsSegmentMapping, is_list=True)}\n\n"
+            f"Quick segments:\n{quick_block}\n\n"
+            f"Regular segments:\n{regular_block}"
+        )
+
+        messages: list[dict] = [
+            {"role": "user", "content": [{"text": prompt}]},
+        ]
+
+        expected = len(quick_segments)
+        max_regular_index = max(len(regular_segments) - 1, 0)
+
+        for attempt in range(MAX_LLM_RETRIES):
+            raw_text = self._client.converse(
+                modelId=self._lyrics_merge_model_id,
+                messages=messages,
+                inferenceConfig={"maxTokens": 50000},
+            )["output"]["message"]["content"][0]["text"]
+            cleaned_text = raw_text.strip()
+            cleaned_text = re.sub(r"^```(?:json)?\s*", "", cleaned_text)
+            cleaned_text = re.sub(r"\s*```$", "", cleaned_text)
+
+            try:
+                json_match = re.search(r"\[.*\]", cleaned_text, re.DOTALL)
+                if not json_match:
+                    raise ValueError(f"No JSON array found in LLM response: {raw_text}")
+
+                raw_list = json.loads(json_match.group())
+                parsed = [LyricsSegmentMapping.model_validate(item) for item in raw_list]
+
+                if len(parsed) != expected:
+                    raise ValueError(
+                        f"Expected {expected} mappings, got {len(parsed)}"
+                    )
+
+                for idx, mapping in enumerate(parsed):
+                    if mapping.quick_index != idx:
+                        raise ValueError(
+                            f"Expected quick_index {idx}, got {mapping.quick_index}"
+                        )
+                    if mapping.regular_start_index < 0 or mapping.regular_end_index < 0:
+                        raise ValueError("Regular segment indices must be non-negative")
+                    if mapping.regular_start_index > mapping.regular_end_index:
+                        raise ValueError(
+                            "regular_start_index cannot be greater than regular_end_index"
+                        )
+                    if mapping.regular_end_index > max_regular_index:
+                        raise ValueError(
+                            f"Regular segment index out of range: {mapping.regular_end_index} > {max_regular_index}"
+                        )
+                    if idx > 0:
+                        prev = parsed[idx - 1]
+                        if mapping.regular_start_index < prev.regular_start_index:
+                            raise ValueError(
+                                "Mappings are not monotonic in regular_start_index"
+                            )
+                        if mapping.regular_end_index < prev.regular_end_index:
+                            raise ValueError(
+                                "Mappings are not monotonic in regular_end_index"
+                            )
+
+                return parsed
+            except Exception as e:
+                logger.warning(
+                    "LLM lyrics segment alignment attempt %d/%d failed: %s",
+                    attempt + 1,
+                    MAX_LLM_RETRIES,
+                    e,
+                )
+                if attempt < MAX_LLM_RETRIES - 1:
+                    messages.append(
+                        {"role": "assistant", "content": [{"text": raw_text}]}
+                    )
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": (
+                                        f"Your response could not be parsed or validated: {e}\n\n"
+                                        f"Return ONLY a JSON array of exactly {expected} mapping objects. "
+                                        "Each object must contain quick_index, regular_start_index, "
+                                        "regular_end_index, and confidence. quick_index must match the "
+                                        "quick segment index in order, and regular indices must stay monotonic."
+                                    )
+                                }
+                            ],
+                        },
+                    )
+                else:
+                    raise
+
+        raise RuntimeError("Unreachable")
+
+    async def align_lyrics_segments(
+        self,
+        quick_segments: list[dict],
+        regular_segments: list[dict],
+    ) -> list[LyricsSegmentMapping]:
+        """Map quick lyric segments to regular lyric timing segments via Bedrock."""
+        return await asyncio.to_thread(
+            self._align_lyrics_segments_sync,
+            quick_segments,
+            regular_segments,
+        )
+
+    def align_lyrics_segments_sync(
+        self,
+        quick_segments: list[dict],
+        regular_segments: list[dict],
+    ) -> list[LyricsSegmentMapping]:
+        """Synchronous lyrics segment mapper for scripts and batch jobs."""
+        return self._align_lyrics_segments_sync(quick_segments, regular_segments)

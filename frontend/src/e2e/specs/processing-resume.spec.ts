@@ -32,6 +32,7 @@ function makeSongDetail(overrides: Record<string, unknown> = {}) {
     strums: [],
     rhythm: null,
     active_job: null,
+    download_pending: false,
     ...overrides,
   }
 }

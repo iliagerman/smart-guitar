@@ -10,6 +10,7 @@ import tempfile
 import time as _time
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 import boto3
 
@@ -44,6 +45,7 @@ from guitar_player.schemas.song import (
 )
 from guitar_player.services.artwork_service import ArtworkService
 from guitar_player.services.llm_service import LlmService
+from guitar_player.services.lyrics_correction import merge_lyrics_with_llm
 from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 from guitar_player.utils.youtube_filters import is_probable_live_performance_title
@@ -85,6 +87,24 @@ def _slug_to_display(slug: str) -> str:
     return " ".join(p[:1].upper() + p[1:].lower() for p in parts)
 
 
+def _parse_lyrics_payload(
+    raw: dict[str, Any] | list[Any],
+) -> tuple[list[LyricsSegment], str | None, dict[str, Any] | None]:
+    if not (isinstance(raw, dict) and "segments" in raw):
+        return [], None, None
+
+    segments = [
+        LyricsSegment(
+            start=segment["start"],
+            end=segment["end"],
+            text=segment["text"],
+            words=[LyricsWord(**word) for word in segment.get("words", [])],
+        )
+        for segment in raw["segments"]
+    ]
+    return segments, raw.get("source"), raw
+
+
 class SongService:
     def __init__(
         self,
@@ -115,48 +135,32 @@ class SongService:
         # Batch-parse all titles via LLM
         parsed_items = await self._llm.parse_search_results(raw_results)
 
-        # Enrich each result: add link, check local existence.
-        # Also dedupe by (artist, song) so we show one result per combination.
-        # Multiple artists for the same song are allowed.
-        enriched_by_key: dict[tuple[str, str], EnrichedSearchResult] = {}
+        # Enrich each result: add link, check local existence by youtube_id.
+        # All versions are shown (no dedup by artist/song).
+        enriched: list[EnrichedSearchResult] = []
 
         for raw, parsed in zip(raw_results, parsed_items):
             youtube_id = raw["youtube_id"]
-            song_path = f"{parsed.artist}/{parsed.song}"
 
-            # Check if this song exists in the DB (not filesystem)
-            db_song = await self._song_dao.get_by_song_name(song_path)
+            # Check if this specific version exists in the DB
+            db_song = await self._song_dao.get_by_youtube_id(youtube_id)
             exists = db_song is not None and db_song.audio_key is not None
 
-            candidate = EnrichedSearchResult(
-                artist=parsed.artist,
-                song=parsed.song,
-                genre=parsed.genre,
-                youtube_id=youtube_id,
-                title=raw.get("title", ""),
-                link=f"https://www.youtube.com/watch?v={youtube_id}",
-                thumbnail_url=raw.get("thumbnail_url"),
-                duration_seconds=raw.get("duration_seconds"),
-                view_count=raw.get("view_count"),
-                exists_locally=exists,
-                song_id=db_song.id if db_song else None,
+            enriched.append(
+                EnrichedSearchResult(
+                    artist=parsed.artist,
+                    song=parsed.song,
+                    genre=parsed.genre,
+                    youtube_id=youtube_id,
+                    title=raw.get("title", ""),
+                    link=f"https://www.youtube.com/watch?v={youtube_id}",
+                    thumbnail_url=raw.get("thumbnail_url"),
+                    duration_seconds=raw.get("duration_seconds"),
+                    view_count=raw.get("view_count"),
+                    exists_locally=exists,
+                    song_id=db_song.id if db_song else None,
+                )
             )
-
-            key = (candidate.artist, candidate.song)
-            existing = enriched_by_key.get(key)
-            if not existing:
-                enriched_by_key[key] = candidate
-                continue
-
-            # Dedup: local songs always win; among same locality, highest view_count wins.
-            if candidate.exists_locally and not existing.exists_locally:
-                enriched_by_key[key] = candidate
-            elif not candidate.exists_locally and existing.exists_locally:
-                pass  # existing (local) stays
-            elif (candidate.view_count or 0) > (existing.view_count or 0):
-                enriched_by_key[key] = candidate
-
-        enriched = list(enriched_by_key.values())
 
         # Sort: local songs first, preserve original order within each group
         enriched.sort(key=lambda r: (not r.exists_locally,))
@@ -250,22 +254,9 @@ class SongService:
                 thumb_path = await self._youtube.download_thumbnail(youtube_id, tmp_dir)
                 thumbnail_filename = f"{youtube_id}.jpg"
 
-            song_name = f"{artist_folder}/{song_folder}"
-
-            # Check if this song already exists locally by song_name
-            # (handles songs synced from local_bucket that lack youtube_id)
-            existing_by_name = await self._song_dao.get_by_song_name(song_name)
-            if (
-                existing_by_name
-                and existing_by_name.audio_key
-                and self._storage.file_exists(existing_by_name.audio_key)
-            ):
-                # Update youtube_id if not set
-                if not existing_by_name.youtube_id:
-                    await self._song_dao.update_by_id(
-                        existing_by_name.id, youtube_id=youtube_id
-                    )
-                return SongResponse.model_validate(existing_by_name)
+            # Include youtube_id in song_name to allow multiple versions
+            # of the same artist/song combination.
+            song_name = f"{artist_folder}/{song_folder}/{youtube_id}"
 
             canonical_audio_filename = "audio.mp3"
             canonical_audio_key = f"{song_name}/{canonical_audio_filename}"
@@ -413,6 +404,21 @@ class SongService:
         song = await self._song_dao.get_by_id(song_id)
         if song and getattr(song, column_name, None):
             await self._song_dao.update_by_id(song.id, **{column_name: None})
+
+    async def clear_download_if_audio_ready(self, song_id: uuid.UUID) -> bool:
+        """Clear download_requested_at if the audio file now exists in storage.
+
+        Called on each poll so the frontend sees download_pending=false
+        as soon as the homeserver finishes uploading.
+        Returns True if the flag was cleared.
+        """
+        song = await self._song_dao.get_by_id(song_id)
+        if not song or song.download_requested_at is None:
+            return False
+        if song.audio_key and self._storage.file_exists(song.audio_key):
+            await self._song_dao.update_by_id(song_id, download_requested_at=None)
+            return True
+        return False
 
     async def admin_heal_audio_and_thumbnail(
         self,
@@ -779,26 +785,18 @@ class SongService:
         # Read lyrics from DB-stored path
         lyrics: list[LyricsSegment] = []
         lyrics_source: str | None = None
+        lyrics_payload: dict[str, Any] | None = None
         if song.lyrics_key and self._storage.file_exists(song.lyrics_key):
             try:
                 raw = self._storage.read_json(song.lyrics_key)
-                if isinstance(raw, dict) and "segments" in raw:
-                    lyrics_source = raw.get("source")
-                    lyrics = [
-                        LyricsSegment(
-                            start=s["start"],
-                            end=s["end"],
-                            text=s["text"],
-                            words=[LyricsWord(**w) for w in s.get("words", [])],
-                        )
-                        for s in raw["segments"]
-                    ]
+                lyrics, lyrics_source, lyrics_payload = _parse_lyrics_payload(raw)
             except Exception as e:
                 logger.warning("Failed to read lyrics for %s: %s", song.song_name, e)
 
         # Read quick (fast-track) lyrics
         quick_lyrics: list[LyricsSegment] = []
         quick_lyrics_source: str | None = None
+        quick_lyrics_payload: dict[str, Any] | None = None
         quick_lyrics_key = song.lyrics_quick_key
         # If no DB key yet, probe disk for the file (covers newly-produced files
         # that haven't been persisted to DB yet, e.g. during active processing).
@@ -811,17 +809,9 @@ class SongService:
         if quick_lyrics_key and self._storage.file_exists(quick_lyrics_key):
             try:
                 raw = self._storage.read_json(quick_lyrics_key)
-                if isinstance(raw, dict) and "segments" in raw:
-                    quick_lyrics_source = raw.get("source")
-                    quick_lyrics = [
-                        LyricsSegment(
-                            start=s["start"],
-                            end=s["end"],
-                            text=s["text"],
-                            words=[LyricsWord(**w) for w in s.get("words", [])],
-                        )
-                        for s in raw["segments"]
-                    ]
+                quick_lyrics, quick_lyrics_source, quick_lyrics_payload = (
+                    _parse_lyrics_payload(raw)
+                )
             except Exception as e:
                 logger.warning(
                     "Failed to read quick lyrics for %s: %s", song.song_name, e
@@ -838,20 +828,50 @@ class SongService:
                 await self._song_dao.update_by_id(
                     song.id, lyrics_corrected_key=candidate
                 )
+        corrected_payload: dict[str, Any] | None = None
+
+        should_generate_ver3 = (
+            song.song_name
+            and lyrics_payload is not None
+            and quick_lyrics_payload is not None
+            and not (corrected_key and self._storage.file_exists(corrected_key))
+        )
+        if should_generate_ver3:
+            corrected_candidate = f"{song.song_name}/lyrics_corrected.json"
+            try:
+                assert quick_lyrics_payload is not None
+                assert lyrics_payload is not None
+                corrected_payload, diagnostics = await asyncio.to_thread(
+                    merge_lyrics_with_llm,
+                    quick_lyrics_payload,
+                    lyrics_payload,
+                    self._llm,
+                )
+                self._storage.write_json(corrected_candidate, corrected_payload)
+                corrected_key = corrected_candidate
+                await self._song_dao.update_by_id(
+                    song.id, lyrics_corrected_key=corrected_candidate
+                )
+                logger.info(
+                    "Generated lyrics ver3 for %s (%s/%s aligned words across %s groups)",
+                    song.song_name,
+                    diagnostics.aligned_words,
+                    diagnostics.total_words,
+                    diagnostics.mapping_groups,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to generate lyrics ver3 for %s",
+                    song.song_name,
+                    exc_info=True,
+                )
+
         if corrected_key and self._storage.file_exists(corrected_key):
             try:
-                raw = self._storage.read_json(corrected_key)
-                if isinstance(raw, dict) and "segments" in raw:
-                    corrected_lyrics_source = raw.get("source")
-                    corrected_lyrics = [
-                        LyricsSegment(
-                            start=s["start"],
-                            end=s["end"],
-                            text=s["text"],
-                            words=[LyricsWord(**w) for w in s.get("words", [])],
-                        )
-                        for s in raw["segments"]
-                    ]
+                raw = corrected_payload or self._storage.read_json(corrected_key)
+                corrected_lyrics, corrected_lyrics_source, _ = _parse_lyrics_payload(
+                    raw
+                )
             except Exception as e:
                 logger.warning(
                     "Failed to read corrected lyrics for %s: %s", song.song_name, e
@@ -895,9 +915,16 @@ class SongService:
             quick_lyrics_source=quick_lyrics_source,
             corrected_lyrics=corrected_lyrics,
             corrected_lyrics_source=corrected_lyrics_source,
+            ver1_lyrics=quick_lyrics,
+            ver1_lyrics_source=quick_lyrics_source,
+            ver2_lyrics=lyrics,
+            ver2_lyrics_source=lyrics_source,
+            ver3_lyrics=corrected_lyrics,
+            ver3_lyrics_source=corrected_lyrics_source,
             tabs=tabs,
             strums=strums,
             rhythm=rhythm,
+            download_pending=song.download_requested_at is not None,
         )
 
     def _enrich_song_response(self, song) -> SongResponse:
@@ -1009,11 +1036,16 @@ class SongService:
         user_email: str,
     ) -> SongDetailResponse:
         """Select a song: return existing detail or download + index first."""
-        existing = await self._song_dao.get_by_song_name(song_name)
-        if existing and existing.audio_key:
-            return await self.get_song_detail(existing.id)
-
-        if not youtube_id:
+        # Check by youtube_id first to allow multiple versions of the same song
+        if youtube_id:
+            existing = await self._song_dao.get_by_youtube_id(youtube_id)
+            if existing and existing.audio_key:
+                return await self.get_song_detail(existing.id)
+        else:
+            # No youtube_id — fall back to song_name lookup (e.g. synced songs)
+            existing = await self._song_dao.get_by_song_name(song_name)
+            if existing and existing.audio_key:
+                return await self.get_song_detail(existing.id)
             raise NotFoundError("Song", song_name)
 
         song_resp = await self.download_song(youtube_id, user_sub, user_email)

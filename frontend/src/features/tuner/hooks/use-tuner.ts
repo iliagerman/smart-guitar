@@ -207,7 +207,7 @@ export function useTuner(): TunerState {
           const normalizedPitch = normalizePitchForGuitar(pitch, selectedTarget)
           const stablePitch = smoothPitch(pitchHistoryRef.current, normalizedPitch)
           const note = findNearestNote(stablePitch)
-          const nearest = findNearestString(stablePitch)
+          const nearest = findNearestString(stablePitch, activeTuningRef.current)
 
           setDetectedNote(note)
           setDetectedFrequency(roundToTenth(stablePitch))
@@ -244,7 +244,12 @@ export function useTuner(): TunerState {
 
   useEffect(() => {
     activeTuningRef.current = activeTuning
-  }, [activeTuning])
+    // Update selected string to match new tuning frequencies
+    if (selectedString) {
+      const updated = activeTuning.find((s) => s.stringNumber === selectedString.stringNumber)
+      if (updated) setSelectedString(updated)
+    }
+  }, [activeTuning]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup on unmount
   useEffect(() => {
@@ -272,8 +277,11 @@ export function useTuner(): TunerState {
     clarity,
     nearestString,
     selectedString,
+    semitoneOffset,
+    activeTuning,
     start,
     stop: stopInternal,
     selectString,
+    setSemitoneOffset,
   }
 }

@@ -18,6 +18,7 @@ interface ProcessButtonProps {
   hasTabs: boolean
   stemNames: string[]
   activeJobId?: string | null
+  downloadPending?: boolean
 }
 
 const RING_SIZE = 144
@@ -57,6 +58,7 @@ export function ProcessButton({
   hasTabs,
   stemNames,
   activeJobId,
+  downloadPending,
 }: ProcessButtonProps) {
   const [jobId, setJobId] = useState<string | null>(activeJobId ?? null)
   const createJob = useCreateJob()
@@ -72,9 +74,11 @@ export function ProcessButton({
   // or when the backend job finishes. Tabs/lyrics continue in background.
   const shouldDismiss = coreReady || jobDone
 
-  // Register an already-active job with the watcher (e.g. page reload while processing).
+  // Sync jobId when the backend reports an active job (e.g. page reload,
+  // or trigger_reprocess created a job while we were showing "Downloading audio...").
   useEffect(() => {
     if (activeJobId) {
+      setJobId(activeJobId)
       watchJob({ jobId: activeJobId, songId, songTitle, songArtist })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,7 +103,7 @@ export function ProcessButton({
   // If stems+chords already exist, don't re-run the full pipeline — the
   // backend retries missing lyrics/tabs in the background automatically.
   useEffect(() => {
-    if (hasStemsProcessed || coreReady || jobId || started.current) return
+    if (hasStemsProcessed || coreReady || jobId || started.current || downloadPending) return
     started.current = true
     requestNotificationPermission()
     createJob.mutate(
@@ -130,11 +134,59 @@ export function ProcessButton({
 
   // Already processed (stems exist) before this mount (e.g. page reload).
   // Missing lyrics/tabs are handled by background retries, not a new job.
-  if (hasStemsProcessed && !jobId) return null
+  if (hasStemsProcessed && !jobId && !downloadPending) return null
   // Core data ready — dismiss immediately so user can interact with chords/stems.
   if (coreReady) return null
   // Job finished (with or without all data) — dismiss after delay.
   if (dismissed) return null
+
+  // Audio is being downloaded by the homeserver — show a waiting state
+  // instead of auto-creating a job that would fail with "Audio file not found".
+  if (downloadPending && !jobId) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 py-8">
+        <div className="relative flex items-center justify-center">
+          <svg
+            className="absolute animate-spin"
+            style={{ animationDuration: '3s' }}
+            width={RING_SIZE}
+            height={RING_SIZE}
+            viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+          >
+            <circle
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              r={RADIUS}
+              fill="none"
+              stroke="currentColor"
+              className="text-charcoal-700"
+              strokeWidth={STROKE}
+            />
+            <circle
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              r={RADIUS}
+              fill="none"
+              stroke="currentColor"
+              className="text-flame-400"
+              strokeWidth={STROKE}
+              strokeLinecap="round"
+              strokeDasharray={CIRCUMFERENCE}
+              strokeDashoffset={CIRCUMFERENCE * 0.75}
+              transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+            />
+          </svg>
+          <div className="relative z-10 flex items-center justify-center rounded-full size-28 bg-charcoal-800 border-2 border-charcoal-600">
+            <Loader2 size={24} className="animate-spin text-flame-400" />
+          </div>
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-smoke-300 text-sm">Downloading audio...</p>
+          <p className="text-smoke-500 text-xs">Processing will start automatically</p>
+        </div>
+      </div>
+    )
+  }
 
   const isProcessing = job?.status === 'PENDING' || job?.status === 'PROCESSING' || createJob.isPending
   const rawProgress = typeof job?.progress === 'number' ? job.progress : 0

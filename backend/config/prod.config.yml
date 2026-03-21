@@ -30,6 +30,7 @@ telegram:
 
 subscription_bypass_emails:
   - "iliagerman@gmail.com"
+  - "Shmulik.segal@gmail.com"
 
 cors:
   allowed_origins:

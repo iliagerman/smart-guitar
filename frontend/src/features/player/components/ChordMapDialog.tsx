@@ -1,8 +1,34 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Shapes, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { ChordMap } from './ChordMap'
+
+function ChordMapIcon({ size = 48, className }: { size?: number; className?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={cn('shrink-0', className)}>
+            {/* Grid / chord diagram */}
+            {/* Frets (horizontal) */}
+            <line x1="8" y1="8" x2="40" y2="8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            <line x1="8" y1="16" x2="40" y2="16" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="8" y1="24" x2="40" y2="24" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="8" y1="32" x2="40" y2="32" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="8" y1="40" x2="40" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            {/* Strings (vertical) */}
+            <line x1="8" y1="8" x2="8" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="14.4" y1="8" x2="14.4" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="20.8" y1="8" x2="20.8" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="27.2" y1="8" x2="27.2" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="33.6" y1="8" x2="33.6" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="40" y1="8" x2="40" y2="40" stroke="currentColor" strokeWidth="1.5" />
+            {/* Finger dots */}
+            <circle cx="14.4" cy="12" r="3" fill="currentColor" />
+            <circle cx="27.2" cy="20" r="3" fill="currentColor" />
+            <circle cx="33.6" cy="20" r="3" fill="currentColor" />
+            <circle cx="20.8" cy="28" r="3" fill="currentColor" />
+        </svg>
+    )
+}
 
 interface ChordMapDialogProps {
     chords: string[]
@@ -22,17 +48,18 @@ export function ChordMapDialog({ chords, className, iconOnly = false }: ChordMap
                 <button
                     type="button"
                     className={cn(
-                        'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
-                        'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-                        'hover:border-flame-400/30 transition-colors',
+                        iconOnly
+                            ? 'inline-flex items-center justify-center rounded-lg w-16 h-16'
+                            : 'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
+                        'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
+                        'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
                         'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-                        iconOnly && 'px-2',
                         className,
                     )}
                     aria-label={iconOnly ? 'Open chord map' : undefined}
                 >
                     {iconOnly ? (
-                        <Shapes size={18} className="text-smoke-200" />
+                        <ChordMapIcon size={40} />
                     ) : (
                         'Chord Map'
                     )}
