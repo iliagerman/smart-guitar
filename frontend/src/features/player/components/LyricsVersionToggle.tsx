@@ -8,6 +8,7 @@ interface LyricsVersionToggleProps {
   hasVer1Lyrics: boolean
   hasVer2Lyrics: boolean
   hasVer3Lyrics: boolean
+  hasVer4Lyrics?: boolean
   isVer3Generating?: boolean
 }
 
@@ -15,6 +16,7 @@ const OPTIONS: { value: LyricsMode; label: string; shortLabel: string }[] = [
   { value: 'ver1', label: 'Ver 1', shortLabel: 'V1' },
   { value: 'ver2', label: 'Ver 2', shortLabel: 'V2' },
   { value: 'ver3', label: 'Ver 3', shortLabel: 'V3' },
+  { value: 'ver4', label: 'Ver 4', shortLabel: 'V4' },
   { value: 'none', label: 'None', shortLabel: 'Off' },
 ]
 
@@ -49,6 +51,7 @@ export function LyricsVersionToggle({
   hasVer1Lyrics,
   hasVer2Lyrics,
   hasVer3Lyrics,
+  hasVer4Lyrics = false,
   isVer3Generating = false,
 }: LyricsVersionToggleProps) {
   const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
@@ -58,6 +61,7 @@ export function LyricsVersionToggle({
     if (opt.value === 'ver1') return hasVer1Lyrics
     if (opt.value === 'ver2') return hasVer2Lyrics
     if (opt.value === 'ver3') return hasVer3Lyrics || isVer3Generating
+    if (opt.value === 'ver4') return hasVer4Lyrics
     return true // 'none' is always available
   })
 

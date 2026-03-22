@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo, useCallback } from 'react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
+import { scrollToCenter } from '../lib/scroll-to-center'
 import { getChordColor, formatChordName } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -65,10 +66,7 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
 
   useEffect(() => {
     if (showHighlight && activeLineRef.current && scrollRef.current) {
-      activeLineRef.current.scrollIntoView({
-        behavior: 'auto',
-        block: 'center',
-      })
+      scrollToCenter(scrollRef.current, activeLineRef.current)
     }
   }, [activeLineIndex, showHighlight])
 

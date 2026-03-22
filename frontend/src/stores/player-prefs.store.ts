@@ -7,7 +7,8 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, rounded))
 }
 
-export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'none'
+export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
+export type StrumSource = 'songsterr' | 'ai'
 
 export interface PlayerPrefsState {
   /** Display-only transpose in semitones. */
@@ -25,6 +26,8 @@ export interface PlayerPrefsState {
     *  - 'ver3': show the merged/fixed lyrics version with highlighting
    *  - 'none': disable highlighting, use auto-scroll */
   lyricsMode: LyricsMode
+  /** Strum pattern source: 'songsterr' (tab data) or 'ai' (LLM-generated). */
+  strumSource: StrumSource
   setTransposeSemitones: (semitones: number) => void
   transposeUp: () => void
   transposeDown: () => void
@@ -34,6 +37,8 @@ export interface PlayerPrefsState {
   setLyricsOffsetMs: (ms: number) => void
   setAutoScrollSpeed: (pxPerSec: number) => void
   setLyricsMode: (mode: LyricsMode) => void
+  setStrumSource: (source: StrumSource) => void
+  cycleStrumSource: () => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -44,6 +49,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
       lyricsMode: 'ver1' as LyricsMode,
+      strumSource: 'songsterr' as StrumSource,
       setTransposeSemitones: (semitones) =>
         set({ transposeSemitones: clampInt(semitones, -12, 12) }),
       transposeUp: () => {
@@ -62,10 +68,12 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setAutoScrollSpeed: (pxPerSec) =>
         set({ autoScrollSpeed: clampInt(pxPerSec, 10, 200) }),
       setLyricsMode: (mode) => set({ lyricsMode: mode }),
+      setStrumSource: (source) => set({ strumSource: source }),
+      cycleStrumSource: () =>
+        set({ strumSource: get().strumSource === 'songsterr' ? 'ai' : 'songsterr' }),
     }),
     {
       name: 'player-prefs',
-      // Migrate old persisted state that had showHighlight + lyricsVersion
       migrate: (persisted: unknown) => {
         const state = persisted as Record<string, unknown>
         if (state) {
@@ -90,9 +98,15 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           delete state.showHighlight
           delete state.lyricsVersion
         }
+
+        // Default strumSource if not present
+        if (state && !state.strumSource) {
+          state.strumSource = 'songsterr'
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 2,
+      version: 3,
     }
   )
 )

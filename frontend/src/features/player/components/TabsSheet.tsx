@@ -5,6 +5,7 @@ import { getStrumGridDisplay, getSuggestedStrums } from '../lib/strum-pattern'
 import type { GridMode } from '../lib/strum-grid'
 import { useTabsSheetSync } from '../hooks/use-tabs-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
+import { scrollToCenter } from '../lib/scroll-to-center'
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { LyricsSegment, RhythmInfo, StrumEvent, TabNote } from '@/types/song'
@@ -168,7 +169,7 @@ function computeGridRows(opts: {
 
 export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
-  const showStrums = usePlayerPrefsStore((s) => s.showStrums)
+
   const lines = useMemo(() => mergeTabsLyrics(tabs, lyrics), [tabs, lyrics])
   const { activeLineIndex, activeWordIndex, activeNoteTime } = useTabsSheetSync(lines)
 
@@ -177,7 +178,7 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
 
   useEffect(() => {
     if (showHighlight && activeLineRef.current && scrollRef.current) {
-      activeLineRef.current.scrollIntoView({ behavior: 'auto', block: 'center' })
+      scrollToCenter(scrollRef.current, activeLineRef.current)
     }
   }, [activeLineIndex, showHighlight])
 
@@ -220,7 +221,7 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
           startTime: line.startTime,
           endTime: line.endTime,
           staffWidth,
-          showStrums,
+          showStrums: true,
           rhythm,
           strums,
           gridMode: 'auto',
@@ -240,16 +241,14 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
             dir={line.direction}
           >
             {/* Count + strum rows (tab-style) */}
-            {showStrums ? (
-              <div className="mb-2" dir="ltr">
-                <div className="leading-5 whitespace-nowrap text-xs text-smoke-600 select-none">
-                  {'  '}{countRow}
-                </div>
-                <div className="leading-5 whitespace-nowrap text-xs text-smoke-400 select-none">
-                  {'  '}{strumRow}
-                </div>
+            <div className="mb-2" dir="ltr">
+              <div className="leading-5 whitespace-nowrap text-xs text-smoke-600 select-none">
+                {'  '}{countRow}
               </div>
-            ) : null}
+              <div className="leading-5 whitespace-nowrap text-xs text-smoke-400 select-none">
+                {'  '}{strumRow}
+              </div>
+            </div>
 
             {/* Tab staff (6 strings) */}
             <div className="flex flex-col gap-0.5" dir="ltr">

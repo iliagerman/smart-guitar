@@ -17,4 +17,7 @@ export const subscriptionApi = {
     api
       .post<{ message: string; effective_date: string | null }>('/api/v1/subscription/cancel')
       .then((r) => r.data),
+
+  markOnboardingSeen: () =>
+    api.post('/api/v1/subscription/onboarding-seen').then((r) => r.data),
 }

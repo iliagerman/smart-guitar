@@ -69,6 +69,16 @@ export interface RhythmInfo {
   beat_times: number[]
 }
 
+export interface SongSection {
+  name: string
+  start_time: number
+  end_time: number
+  strum_pattern: ('down' | 'up')[]
+  songsterr_pattern?: ('down' | 'up')[] | null
+  llm_pattern?: ('down' | 'up')[] | null
+  llm_generated?: boolean
+}
+
 export interface ActiveJobInfo {
   id: string
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
@@ -95,10 +105,19 @@ export interface SongDetail {
   ver2_lyrics_source?: string | null
   ver3_lyrics?: LyricsSegment[]
   ver3_lyrics_source?: string | null
+  ver4_lyrics?: LyricsSegment[]
+  ver4_lyrics_source?: string | null
   chord_options: ChordOption[]
   tabs: TabNote[]
+  tabs_source?: string | null
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
+  sections: SongSection[]
+  source_bpm?: number | null
+  time_signature?: [number, number] | null
+  strum_notes?: string | null
+  tutorial_url?: string | null
+  songsterr_status?: string | null  // null=pending, "ready", "failed", "unavailable"
   active_job: ActiveJobInfo | null
   download_pending: boolean
 }

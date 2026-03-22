@@ -26,6 +26,8 @@ class SubscriptionStatusResponse(BaseModel):
     trial_ends_at: Optional[datetime] = None
     trial_active: bool = False
     subscription: Optional[SubscriptionDetail] = None
+    has_seen_onboarding: bool = False
+    is_admin: bool = False
 
 
 class PriceDetail(BaseModel):

@@ -10,6 +10,7 @@ presigned_url:
 
 llm_models:
   name_parsing: us.amazon.nova-2-lite-v1:0
+  strum_patterns: us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 paddle:
   enabled: false
@@ -35,6 +36,9 @@ telegram:
 analytics:
   allowed_emails:
     - "iliagerman@gmail.com"
+
+admin_users:
+  - "iliagerman@gmail.com"
 
 subscription_bypass_emails:
   - "iliagerman@gmail.com"

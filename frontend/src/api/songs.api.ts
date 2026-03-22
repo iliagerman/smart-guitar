@@ -1,5 +1,5 @@
 import { api } from '../config/api'
-import type { Song, SongDetail, SearchResult } from '../types/song'
+import type { Song, SongDetail, SongSection, SearchResult } from '../types/song'
 
 export type PaginatedResponse<T> = {
   items: T[]
@@ -37,4 +37,15 @@ export const songsApi = {
 
   submitFeedback: (songId: string, rating: 'thumbs_up' | 'thumbs_down', comment?: string) =>
     api.post(`/api/v1/songs/${songId}/feedback`, { rating, comment }),
+
+  generateAiStrumPatterns: (songId: string) =>
+    api.post<SongSection[]>(`/api/v1/songs/${songId}/strum-patterns/ai`).then((r) => r.data),
+
+  regenerate: (songId: string, targets: string[]) =>
+    api
+      .post<{ enqueued: string[]; skipped: string[]; errors: string[] }>(
+        `/api/v1/songs/${songId}/regenerate`,
+        { targets },
+      )
+      .then((r) => r.data),
 }

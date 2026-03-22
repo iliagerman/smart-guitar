@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { ChordMap } from './ChordMap'
+import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
 
 function ChordMapIcon({ size = 48, className }: { size?: number; className?: string }) {
     return (
@@ -32,18 +34,32 @@ function ChordMapIcon({ size = 48, className }: { size?: number; className?: str
 
 interface ChordMapDialogProps {
     chords: string[]
+    representativePattern?: StrumSymbol[]
+    sectionPatterns?: SectionStrumPattern[]
+    bpm?: number
+    strumNotes?: string | null
+    tutorialUrl?: string | null
+    strumLoading?: boolean
     className?: string
     iconOnly?: boolean
+    onOpenTutorial?: () => void
 }
 
-export function ChordMapDialog({ chords, className, iconOnly = false }: ChordMapDialogProps) {
+export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, strumLoading, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
+    const [open, setOpen] = useState(false)
+
     // ChordMap itself will return null when there are no usable chords.
     // We still need a cheap guard so we don't show a dead trigger.
     const hasAny = chords.some((c) => (c || '').trim().length > 0)
     if (!hasAny) return null
 
+    const handleOpenTutorial = () => {
+        setOpen(false)
+        onOpenTutorial?.()
+    }
+
     return (
-        <Dialog.Root>
+        <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Trigger asChild>
                 <button
                     type="button"
@@ -86,8 +102,8 @@ export function ChordMapDialog({ chords, className, iconOnly = false }: ChordMap
                         </Dialog.Close>
                     </div>
 
-                    <div className="flex-1 min-h-0 p-4">
-                        <ChordMap chords={chords} showHeader={false} className="h-full" />
+                    <div className="flex-1 min-h-0 overflow-y-auto p-4">
+                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} strumLoading={strumLoading} showHeader={false} onOpenTutorial={handleOpenTutorial} />
                     </div>
                 </Dialog.Content>
             </Dialog.Portal>

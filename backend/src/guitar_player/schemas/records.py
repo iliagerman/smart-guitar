@@ -94,6 +94,7 @@ class UserRecord(BaseModel):
     cognito_sub: str
     email: str
     trial_ends_at: Optional[datetime] = None
+    has_seen_onboarding: bool = False
 
 
 class FavoriteRecord(BaseModel):

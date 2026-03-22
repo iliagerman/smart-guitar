@@ -114,6 +114,16 @@ class RhythmInfo(BaseModel):
     beat_times: list[float]
 
 
+class SongSection(BaseModel):
+    name: str
+    start_time: float
+    end_time: float
+    strum_pattern: list[str] = []  # e.g. ["down", "down", "up", "down", "up"]
+    songsterr_pattern: Optional[list[str]] = None
+    llm_pattern: Optional[list[str]] = None
+    llm_generated: bool = False
+
+
 class SongDetailResponse(BaseModel):
     song: SongResponse
     thumbnail_url: Optional[str] = None
@@ -134,9 +144,18 @@ class SongDetailResponse(BaseModel):
     ver2_lyrics_source: Optional[str] = None
     ver3_lyrics: list[LyricsSegment] = []
     ver3_lyrics_source: Optional[str] = None
+    ver4_lyrics: list[LyricsSegment] = []
+    ver4_lyrics_source: Optional[str] = None
     tabs: list[TabNote] = []
+    tabs_source: Optional[str] = None  # "songsterr" | "detected"
     strums: list[StrumEvent] = []
     rhythm: Optional[RhythmInfo] = None
+    sections: list[SongSection] = []
+    source_bpm: Optional[float] = None
+    time_signature: Optional[list[int]] = None  # e.g. [3, 4] for 3/4 time
+    strum_notes: Optional[str] = None  # Playing instructions from Tavily+LLM
+    tutorial_url: Optional[str] = None  # YouTube tutorial link
+    songsterr_status: Optional[str] = None  # null=pending, "ready", "failed", "unavailable"
     active_job: Optional[ActiveJobInfo] = None
     download_pending: bool = False
 

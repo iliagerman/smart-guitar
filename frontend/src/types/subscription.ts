@@ -10,6 +10,8 @@ export interface SubscriptionStatus {
   trial_ends_at: string | null
   trial_active: boolean
   subscription: SubscriptionDetail | null
+  has_seen_onboarding: boolean
+  is_admin: boolean
 }
 
 export interface PriceDetail {

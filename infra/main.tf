@@ -322,12 +322,6 @@ resource "aws_lambda_alias" "lyrics_generator_live" {
   }
 }
 
-resource "aws_lambda_provisioned_concurrency_config" "lyrics_generator" {
-  function_name                     = aws_lambda_function.lyrics_generator.function_name
-  qualifier                         = aws_lambda_alias.lyrics_generator_live.name
-  provisioned_concurrent_executions = 1
-}
-
 ################################################################################
 # Lyrics Generator — ALB Integration
 ################################################################################
@@ -420,12 +414,6 @@ resource "aws_lambda_alias" "chords_generator_live" {
   }
 }
 
-resource "aws_lambda_provisioned_concurrency_config" "chords_generator" {
-  function_name                     = aws_lambda_function.chords_generator.function_name
-  qualifier                         = aws_lambda_alias.chords_generator_live.name
-  provisioned_concurrent_executions = 1
-}
-
 ################################################################################
 # Chords Generator — ALB Integration
 ################################################################################
@@ -514,12 +502,6 @@ resource "aws_lambda_alias" "tabs_generator_live" {
   lifecycle {
     ignore_changes = [function_version, routing_config]
   }
-}
-
-resource "aws_lambda_provisioned_concurrency_config" "tabs_generator" {
-  function_name                     = aws_lambda_function.tabs_generator.function_name
-  qualifier                         = aws_lambda_alias.tabs_generator_live.name
-  provisioned_concurrent_executions = 1
 }
 
 ################################################################################
@@ -621,12 +603,6 @@ resource "aws_lambda_alias" "demucs_live" {
   }
 }
 
-resource "aws_lambda_provisioned_concurrency_config" "demucs" {
-  function_name                     = aws_lambda_function.demucs.function_name
-  qualifier                         = aws_lambda_alias.demucs_live.name
-  provisioned_concurrent_executions = 1
-}
-
 ################################################################################
 # Demucs — ALB Integration
 ################################################################################
@@ -725,12 +701,6 @@ resource "aws_lambda_alias" "job_orchestrator_live" {
   }
 }
 
-resource "aws_lambda_provisioned_concurrency_config" "job_orchestrator" {
-  function_name                     = aws_lambda_function.job_orchestrator.function_name
-  qualifier                         = aws_lambda_alias.job_orchestrator_live.name
-  provisioned_concurrent_executions = 1
-}
-
 ################################################################################
 # Vocals+Guitar Stitch Lambda (invoked by orchestrator)
 ################################################################################
@@ -780,12 +750,6 @@ resource "aws_lambda_alias" "vocals_guitar_stitch_live" {
   lifecycle {
     ignore_changes = [function_version, routing_config]
   }
-}
-
-resource "aws_lambda_provisioned_concurrency_config" "vocals_guitar_stitch" {
-  function_name                     = aws_lambda_function.vocals_guitar_stitch.function_name
-  qualifier                         = aws_lambda_alias.vocals_guitar_stitch_live.name
-  provisioned_concurrent_executions = 1
 }
 
 ################################################################################

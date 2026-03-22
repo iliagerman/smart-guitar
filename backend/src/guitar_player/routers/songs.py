@@ -5,12 +5,15 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from guitar_player.auth.admin import require_admin_user
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import require_active_subscription
+from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import (
     get_db,
@@ -32,6 +35,7 @@ from guitar_player.schemas.song import (
     SongDetailResponse,
     SongFeedbackRequest,
     SongResponse,
+    SongSection,
 )
 from guitar_player.services.job_service import JobService
 from guitar_player.services.analytics_helpers import (
@@ -220,6 +224,16 @@ async def record_play(
     return Response(status_code=204)
 
 
+@router.post("/{song_id}/strum-patterns/ai", response_model=list[SongSection])
+async def generate_ai_strum_patterns(
+    song_id: uuid.UUID,
+    user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+) -> list[SongSection]:
+    """Generate AI strum patterns on-demand for a song."""
+    return await song_service.generate_ai_strum_patterns(song_id)
+
+
 @router.post("/{song_id}/feedback", status_code=204)
 async def submit_feedback(
     song_id: uuid.UUID,
@@ -388,3 +402,175 @@ async def get_song_detail(
         logger.warning("Failed to fetch active job for %s: %s", song_id, e)
 
     return detail
+
+
+class RegenerateRequest(BaseModel):
+    targets: list[str]
+
+
+class RegenerateResponse(BaseModel):
+    enqueued: list[str] = []
+    skipped: list[str] = []
+    errors: list[str] = []
+
+
+def _safe_delete(storage: StorageBackend, key: str | None) -> None:
+    """Delete a file from storage if it exists, silently ignoring errors."""
+    if not key:
+        return
+    try:
+        if storage.file_exists(key):
+            storage.delete_file(key)
+    except Exception:
+        pass
+
+
+@router.post("/{song_id}/regenerate", response_model=RegenerateResponse)
+async def regenerate_song_components(
+    song_id: uuid.UUID,
+    body: RegenerateRequest,
+    admin: CurrentUser = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+    job_service: JobService = Depends(get_job_service),
+    processing: ProcessingService = Depends(get_processing_service),
+) -> RegenerateResponse:
+    """Admin-only: force-regenerate selected song components.
+
+    Targets: lyrics, stems, tabs, strums, full.
+    "full" wipes all derived data and re-runs the entire processing pipeline.
+    """
+    valid_targets = {"lyrics", "stems", "tabs", "strums", "full"}
+    targets = [t for t in body.targets if t in valid_targets]
+    if not targets:
+        raise HTTPException(status_code=400, detail=f"No valid targets. Choose from: {sorted(valid_targets)}")
+
+    dao = SongDAO(session)
+    song = await dao.get_by_id(song_id)
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    song_name = song.song_name
+    enqueued: list[str] = []
+    skipped: list[str] = []
+    errors: list[str] = []
+
+    # "full" = nuke all derived data and re-run the complete pipeline
+    if "full" in targets:
+        try:
+            # Delete all derived files (stems, chords, lyrics, tabs, strums)
+            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar"):
+                _safe_delete(storage, getattr(song, f"{stem}_key", None))
+                if song_name:
+                    _safe_delete(storage, f"{song_name}/{stem}.mp3")
+            _safe_delete(storage, song.chords_key)
+            _safe_delete(storage, song.lyrics_key)
+            _safe_delete(storage, song.tabs_key)
+            _safe_delete(storage, song.external_strums_key)
+            if song_name:
+                for fname in ("chords.json", "lyrics.json", "tabs.json", "external_strums.json"):
+                    _safe_delete(storage, f"{song_name}/{fname}")
+
+            # Clear all DB keys and failure flags
+            await dao.update_by_id(
+                song_id,
+                vocals_key=None, guitar_key=None, guitar_removed_key=None,
+                vocals_guitar_key=None, chords_key=None,
+                lyrics_key=None, lyrics_failed=False, lyrics_attempted_at=None,
+                tabs_key=None, tabs_failed=False, tabs_attempted_at=None,
+                external_strums_key=None, external_strums_failed=False, external_strums_attempted_at=None,
+                processing_job_id=None,
+            )
+
+            # Trigger full processing pipeline
+            job_resp = await job_service.create_and_process_job(
+                user_sub=admin.sub,
+                user_email=admin.email,
+                song_id=song_id,
+                descriptions=["admin-full-regenerate"],
+                processing=processing,
+            )
+            enqueued.append("full")
+            logger.info(
+                "Admin full regenerate song_id=%s user=%s job_id=%s",
+                song_id, admin.email, job_resp.id,
+            )
+        except Exception as e:
+            logger.warning("Admin full regenerate failed for %s: %s", song_id, e)
+            errors.append(f"full: {e}")
+
+        return RegenerateResponse(enqueued=enqueued, skipped=skipped, errors=errors)
+
+    if "lyrics" in targets:
+        try:
+            # Delete existing lyrics files so trigger doesn't skip
+            _safe_delete(storage, song.lyrics_key)
+            if song_name:
+                _safe_delete(storage, f"{song_name}/lyrics.json")
+            await dao.update_by_id(song_id, lyrics_key=None, lyrics_failed=False, lyrics_attempted_at=None)
+            triggered = await job_service.trigger_lyrics_transcription_if_missing(song_id)
+            (enqueued if triggered else skipped).append("lyrics")
+        except Exception as e:
+            logger.warning("Admin regenerate lyrics failed for %s: %s", song_id, e)
+            errors.append(f"lyrics: {e}")
+
+    if "stems" in targets:
+        try:
+            # Delete existing stem/chord files so trigger_reprocess re-runs
+            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar"):
+                _safe_delete(storage, getattr(song, f"{stem}_key", None))
+                if song_name:
+                    _safe_delete(storage, f"{song_name}/{stem}.mp3")
+            _safe_delete(storage, song.chords_key)
+            if song_name:
+                _safe_delete(storage, f"{song_name}/chords.json")
+            await dao.update_by_id(
+                song_id,
+                vocals_key=None, guitar_key=None, guitar_removed_key=None,
+                vocals_guitar_key=None, chords_key=None,
+            )
+            job_id = await job_service.trigger_reprocess(
+                user_sub=admin.sub,
+                user_email=admin.email,
+                song_id=song_id,
+                processing=processing,
+            )
+            (enqueued if job_id else skipped).append("stems")
+        except Exception as e:
+            logger.warning("Admin regenerate stems failed for %s: %s", song_id, e)
+            errors.append(f"stems: {e}")
+
+    if "tabs" in targets:
+        try:
+            _safe_delete(storage, song.tabs_key)
+            if song_name:
+                _safe_delete(storage, f"{song_name}/tabs.json")
+            await dao.update_by_id(song_id, tabs_key=None, tabs_failed=False, tabs_attempted_at=None)
+            triggered = await job_service.trigger_tabs_generation_if_missing(song_id, force=True)
+            (enqueued if triggered else skipped).append("tabs")
+        except Exception as e:
+            logger.warning("Admin regenerate tabs failed for %s: %s", song_id, e)
+            errors.append(f"tabs: {e}")
+
+    if "strums" in targets:
+        try:
+            _safe_delete(storage, song.external_strums_key)
+            if song_name:
+                _safe_delete(storage, f"{song_name}/external_strums.json")
+            await dao.update_by_id(
+                song_id,
+                external_strums_key=None,
+                external_strums_failed=False,
+                external_strums_attempted_at=None,
+            )
+            triggered = await job_service.trigger_external_strums_if_missing(song_id, force=True)
+            (enqueued if triggered else skipped).append("strums")
+        except Exception as e:
+            logger.warning("Admin regenerate strums failed for %s: %s", song_id, e)
+            errors.append(f"strums: {e}")
+
+    logger.info(
+        "Admin regenerate song_id=%s user=%s enqueued=%s skipped=%s errors=%s",
+        song_id, admin.email, enqueued, skipped, errors,
+    )
+    return RegenerateResponse(enqueued=enqueued, skipped=skipped, errors=errors)

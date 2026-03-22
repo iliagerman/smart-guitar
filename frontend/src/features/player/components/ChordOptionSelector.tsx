@@ -46,10 +46,23 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOpti
     })),
   ]
 
+  // Add tabs option when tabs are available
+  if (hasTabs) {
+    entries.push({
+      key: 'tabs',
+      label: 'Tabs',
+      capo: 0,
+      apply: () => {
+        setSheetMode('tabs')
+        setSelectedChordOptionIndex(null)
+      },
+    })
+  }
+
   // Find current index
   const currentKey =
     sheetMode === 'tabs'
-      ? 'standard'
+      ? 'tabs'
       : selectedChordOptionIndex !== null
         ? String(selectedChordOptionIndex)
         : 'standard'

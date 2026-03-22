@@ -1187,12 +1187,12 @@ start-app:
         pids=$(lsof -ti :"$port" 2>/dev/null || true)
         if [ -n "$pids" ]; then
             echo "  Killing PIDs on port $port: $pids"
-            echo "$pids" | xargs kill 2>/dev/null || true
+            echo "$pids" | xargs kill -9 2>/dev/null || true
         fi
     done
-    # Wait until all ports are actually free (up to 10s)
+    # Wait until all ports are actually free (up to 5s)
     for port in 8000 8001 8002 8003 8004 5173; do
-        for i in $(seq 1 20); do
+        for i in $(seq 1 10); do
             if ! lsof -ti :"$port" > /dev/null 2>&1; then break; fi
             sleep 0.5
         done

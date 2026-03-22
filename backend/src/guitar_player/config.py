@@ -82,6 +82,7 @@ class PresignedUrlConfig(BaseModel):
 class LlmModelsConfig(BaseModel):
     name_parsing: str = "us.amazon.nova-2-lite-v1:0"
     lyrics_merging: str | None = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    strum_patterns: str | None = "us.amazon.nova-2-lite-v1:0"
 
 
 class ServicesConfig(BaseModel):
@@ -173,6 +174,10 @@ class TelegramConfig(BaseModel):
     enabled: bool = False
 
 
+class TavilyConfig(BaseModel):
+    api_key: Optional[str] = None
+
+
 class ExternalStrumsConfig(BaseModel):
     enabled: bool = True
     fetch_timeout_seconds: float = 15.0
@@ -203,7 +208,9 @@ class Settings(BaseModel):
     telegram: TelegramConfig = TelegramConfig()
     analytics: AnalyticsConfig = AnalyticsConfig()
     external_strums: ExternalStrumsConfig = ExternalStrumsConfig()
+    tavily: TavilyConfig = TavilyConfig()
     subscription_bypass_emails: list[str] = []
+    admin_users: list[str] = []
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -529,6 +536,13 @@ def _resolve_secrets(merged: dict, config_dir: Path, app_env: str = "local") -> 
         merged["telegram"] = {}
     if not merged["telegram"].get("bot_token"):
         merged["telegram"]["bot_token"] = telegram_secrets.get("bot-token")
+
+    # Tavily (optional) — also check common typo "tavili"
+    tavily_secrets = secrets.get("tavily", {}) or secrets.get("tavili", {})
+    if "tavily" not in merged:
+        merged["tavily"] = {}
+    if not merged["tavily"].get("api_key"):
+        merged["tavily"]["api_key"] = tavily_secrets.get("api_key") or tavily_secrets.get("api-key")
 
     # YouTube proxy (optional)
     youtube_secrets = secrets.get("youtube", {})

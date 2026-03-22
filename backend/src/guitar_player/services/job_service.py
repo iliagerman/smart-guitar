@@ -29,6 +29,141 @@ from guitar_player.storage import StorageBackend
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Tutorial-link scoring: prefer actual guitar tutorials over music videos
+# ---------------------------------------------------------------------------
+_TUTORIAL_POSITIVE = [
+    # English
+    "tutorial", "lesson", "how to play", "guitar lesson", "guitar tutorial",
+    "strum", "strumming", "strumming pattern", "chords", "chord lesson",
+    "beginner", "easy", "play along", "fingerstyle", "acoustic",
+    "tab", "tabs", "tablature", "cover lesson", "guitar cover tutorial",
+    "learn to play", "teaching", "walkthrough", "breakdown",
+    "campfire version", "simplified", "chord chart",
+    # Hebrew
+    "שיעור", "שיעור גיטרה", "לימוד", "לימוד גיטרה", "איך לנגן",
+    "איך מנגנים", "גיטרה", "אקורדים", "פריטה", "טאבים", "לנגן",
+    "קאבר שיעור", "הדרכה", "אקורד",
+    # Spanish
+    "tutorial de guitarra", "cómo tocar", "acordes", "rasgueo",
+    "lección", "clase de guitarra",
+    # Portuguese
+    "aula de violão", "como tocar", "acordes", "cifra",
+    # French
+    "tutoriel guitare", "comment jouer", "accords", "leçon",
+    "cours de guitare",
+    # German
+    "gitarre lernen", "gitarren tutorial", "wie spielt man", "akkorde",
+    # Russian
+    "урок гитары", "как играть", "аккорды", "разбор", "на гитаре",
+    "табулатура", "перебор",
+    # Arabic
+    "تعليم جيتار", "درس جيتار", "كوردات", "كيف تعزف",
+    # Turkish
+    "gitar dersi", "nasıl çalınır", "akorlar",
+    # Japanese
+    "ギターレッスン", "弾き方", "コード",
+    # Korean
+    "기타 레슨", "기타 강좌", "코드",
+]
+
+_TUTORIAL_NEGATIVE = [
+    # English
+    "official video", "official music video", "music video",
+    "lyrics video", "lyric video", "live", "concert", "vevo",
+    "live performance", "live session", "full album", "album",
+    "karaoke", "instrumental", "remix", "reaction", "review",
+    "interview", "behind the scenes", "making of", "visualizer",
+    # Hebrew
+    "קליפ", "קליפ רשמי", "הופעה", "הופעה חיה", "אלבום",
+    "שיר רשמי", "וידאו קליפ",
+    # Spanish
+    "video oficial", "video musical", "en vivo", "concierto",
+    # Portuguese
+    "vídeo oficial", "clipe oficial", "ao vivo",
+    # French
+    "clip officiel", "vidéo officielle", "en concert",
+    # German
+    "offizielles video", "musikvideo", "live auftritt",
+    # Russian
+    "официальный клип", "клип", "живое выступление", "концерт",
+    # Arabic
+    "فيديو كليب", "حفلة",
+    # Turkish
+    "resmi video", "müzik videosu", "konser",
+]
+
+_TUTORIAL_DOMAIN_BONUS = [
+    "justinguitar.com", "guitartricks.com", "ultimate-guitar.com",
+    "guitarlessons.com", "martymusic.com", "andyguitar.co.uk",
+]
+
+
+def _score_tutorial_link(title: str, url: str) -> int:
+    """Score a link: positive = likely tutorial, negative = likely music video."""
+    score = 0
+    t = title.lower()
+    for kw in _TUTORIAL_POSITIVE:
+        if kw in t:
+            score += 10
+    for kw in _TUTORIAL_NEGATIVE:
+        if kw in t:
+            score -= 15
+    for domain in _TUTORIAL_DOMAIN_BONUS:
+        if domain in url:
+            score += 20
+    return score
+
+
+async def _search_youtube_tutorial(title: str, artist: str) -> str:
+    """Fallback: search YouTube directly for a guitar tutorial when Tavily has none."""
+    import yt_dlp
+    from guitar_player.services.llm_service import _tutorial_search_suffix
+
+    query = f"{title} {artist} {_tutorial_search_suffix(title, artist)}"
+
+    def _search() -> str:
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "skip_download": True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                result = ydl.extract_info(f"ytsearch5:{query}", download=False)
+                entries = result.get("entries", []) if result else []
+        except Exception as e:
+            logger.warning("YouTube tutorial fallback search failed: %s", e)
+            return ""
+
+        if not entries:
+            return ""
+
+        # Score each result and pick the best tutorial
+        candidates = []
+        for entry in entries:
+            if not entry:
+                continue
+            vid_title = entry.get("title") or ""
+            vid_id = entry.get("id") or ""
+            url = f"https://www.youtube.com/watch?v={vid_id}"
+            score = _score_tutorial_link(vid_title, url)
+            candidates.append((url, vid_title, score))
+
+        if not candidates:
+            return ""
+
+        candidates.sort(key=lambda x: x[2], reverse=True)
+        best_url, best_title, best_score = candidates[0]
+        logger.info(
+            "YouTube fallback tutorial selected: %r (%r, score=%d) from %d candidates for %r by %r",
+            best_url, best_title, best_score, len(candidates), title, artist,
+        )
+        return best_url
+
+    return await asyncio.to_thread(_search)
+
 _STEM_EXT = ".mp3"
 _PROCESS_STARTED_AT = datetime.now(timezone.utc)
 
@@ -1760,8 +1895,45 @@ async def _generate_tabs_only(song_id: uuid.UUID) -> None:
             await song_dao.commit()
 
 
+def _extract_measure_pattern(
+    strums: list,
+    section_start: float,
+    section_end: float,
+    measure_duration: float,
+    max_symbols: int = 8,
+) -> list[str]:
+    """Find the most common strum direction pattern per measure.
+
+    Returns a list of directions like ["down", "down", "up", "down", "up", "down", "up", "down"].
+    """
+    from collections import Counter
+
+    buckets: Counter[str] = Counter()
+    patterns: dict[str, list[str]] = {}
+
+    t = section_start
+    while t < section_end:
+        t_end = t + measure_duration
+        measure_strums = [
+            s for s in strums if t <= s.time_seconds < t_end
+        ]
+        if len(measure_strums) >= 2:
+            dirs = [s.direction for s in measure_strums[:max_symbols]]
+            key = "".join(d[0] for d in dirs)
+            buckets[key] += 1
+            if key not in patterns:
+                patterns[key] = dirs
+        t = t_end
+
+    if not buckets:
+        return []
+
+    best_key = buckets.most_common(1)[0][0]
+    return patterns[best_key]
+
+
 async def _fetch_external_strums(song_id: uuid.UUID) -> None:
-    """Fetch strum patterns from Songsterr, align to audio, and store."""
+    """Fetch tab data from Songsterr, align to audio, and store."""
     try:
         storage = get_storage()
     except Exception:
@@ -1783,87 +1955,257 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
         artist = song.artist
         title = song.title
         song_name = song.song_name
+        audio_duration = float(song.duration_seconds or 300)
 
     t0 = time.monotonic()
     try:
-        from guitar_player.services.external_strum_fetcher import fetch_songsterr_strums
+        from guitar_player.services.external_strum_fetcher import fetch_songsterr_data
 
-        # Step 1: Fetch and parse strums from Songsterr
-        result = await fetch_songsterr_strums(
+        # Step 1: Fetch and parse full tab data from Songsterr
+        result = await fetch_songsterr_data(
             artist=artist,
             title=title,
             timeout_seconds=ext_cfg.fetch_timeout_seconds,
         )
-        if not result or not result.strums:
-            raise ValueError(f"No strums found on Songsterr for {artist} - {title}")
+        if not result or (not result.strums and not result.notes):
+            logger.info(
+                "No Songsterr data for %r by %r — will still attempt strum/tutorial lookup",
+                title, artist,
+            )
+            result = None
 
-        # Step 2: Read rhythm data from tabs.json for alignment
-        tabs_key = f"{song_name}/tabs.json"
-        if not storage.file_exists(tabs_key):
-            raise ValueError("No tabs.json found — need rhythm data for alignment")
+        # Steps 2-4 require Songsterr data; skip if unavailable
+        tabs_data_out: list[dict] = []
+        source_bpm = 120.0
+        if result:
+            # Step 2: Get beat grid for alignment.
+            # Prefer tabs.json rhythm if available; otherwise generate from Songsterr BPM.
+            beat_times: list[float] = []
+            detected_bpm = result.source_bpm
 
-        tabs_data = storage.read_json(tabs_key)
-        if not isinstance(tabs_data, dict) or not isinstance(tabs_data.get("rhythm"), dict):
-            raise ValueError("No rhythm data in tabs.json")
+            tabs_key = f"{song_name}/tabs.json"
+            if storage.file_exists(tabs_key):
+                try:
+                    tabs_data = storage.read_json(tabs_key)
+                    if isinstance(tabs_data, dict):
+                        rhythm = tabs_data.get("rhythm")
+                        if isinstance(rhythm, dict) and rhythm.get("beat_times"):
+                            beat_times = rhythm["beat_times"]
+                            detected_bpm = rhythm.get("bpm", detected_bpm)
+                except Exception:
+                    pass
 
-        rhythm = tabs_data["rhythm"]
-        beat_times = rhythm.get("beat_times", [])
-        detected_bpm = rhythm.get("bpm", 120.0)
-
-        if not beat_times:
-            raise ValueError("No beat_times in rhythm data")
-
-        # Step 3: Align strums to detected beat grid
-        from guitar_player.services.strum_aligner import (
-            align_strums,
-            ExternalStrumPattern,
-            ExternalStrum,
-        )
-
-        pattern = ExternalStrumPattern(
-            source="songsterr",
-            source_bpm=result.source_bpm,
-            strums=[
-                ExternalStrum(
-                    beat_position=s.beat_position,
-                    time_seconds=s.time_seconds,
-                    direction=s.direction,
-                    num_strings=s.num_strings,
+            if not beat_times:
+                # Generate synthetic beat grid from Songsterr BPM + audio duration
+                beat_interval = 60.0 / result.source_bpm
+                beat_times = [
+                    round(i * beat_interval, 6)
+                    for i in range(int(audio_duration / beat_interval) + 1)
+                ]
+                logger.info(
+                    "External strums: using synthetic beat grid (bpm=%.1f, %d beats)",
+                    result.source_bpm,
+                    len(beat_times),
                 )
-                for s in result.strums
-            ],
-        )
 
-        aligned = align_strums(
-            pattern=pattern,
-            beat_times=beat_times,
-            detected_bpm=detected_bpm,
-            min_confidence=ext_cfg.min_alignment_confidence,
-        )
-        if not aligned:
-            raise ValueError("Strum alignment failed — quality too low")
+            # Step 3: Compute alignment transform for notes (tabs need audio sync)
+            from guitar_player.services.strum_aligner import (
+                _compute_cross_correlation_offset,
+            )
 
-        # Step 4: Write external_strums.json to storage
-        strums_data = [
-            {
-                "id": s.id,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "direction": s.direction,
-                "confidence": s.confidence,
-                "num_strings": s.num_strings,
-                "onset_spread_ms": s.onset_spread_ms,
-            }
-            for s in aligned
-        ]
+            source_bpm = result.source_bpm or 120.0
+            tempo_ratio = detected_bpm / source_bpm
+            best_ratio = tempo_ratio
+            for candidate in [tempo_ratio, tempo_ratio * 2, tempo_ratio / 2]:
+                if abs(candidate - 1.0) < abs(best_ratio - 1.0):
+                    best_ratio = candidate
 
-        strums_key = f"{song_name}/external_strums.json"
-        storage.write_json(strums_key, strums_data)
+            # Find time offset via cross-correlation
+            note_times = [n.time_seconds * best_ratio for n in result.notes[:200]]
+            align_offset, _ = (
+                _compute_cross_correlation_offset(note_times, beat_times)
+                if note_times
+                else (0.0, 0.0)
+            )
+
+            # Step 4: Build enriched output
+
+            # Tab notes (need alignment for audio sync)
+            for n in result.notes:
+                aligned_time = round(n.time_seconds * best_ratio + align_offset, 4)
+                aligned_end = round(aligned_time + n.duration_seconds * best_ratio, 4)
+                if aligned_time < -0.5:
+                    continue
+                midi_pitch = 0
+                if n.string < len(result.tuning):
+                    midi_pitch = result.tuning[n.string] + n.fret
+                tabs_data_out.append({
+                    "start_time": aligned_time,
+                    "end_time": aligned_end,
+                    "string": n.string,
+                    "fret": n.fret,
+                    "midi_pitch": midi_pitch,
+                    "confidence": 0.95,
+                })
+
+        # Fetch strumming patterns via Tavily web search + LLM parsing.
+        # Songsterr tab data is used for notes/tabs only, not strum patterns.
+        sections_data: list[dict] = []
+        strum_notes: str = ""
+        tutorial_url: str = ""
+        try:
+            from guitar_player.services.llm_service import LlmService
+
+            tavily_api_key = settings.tavily.api_key
+            llm = LlmService(settings)
+            llm_result = await llm.lookup_strum_patterns(
+                artist, title, tavily_api_key=tavily_api_key,
+            )
+            if llm_result and llm_result.sections:
+                for llm_sec in llm_result.sections:
+                    sections_data.append({
+                        "name": llm_sec.section,
+                        "start_time": 0.0,
+                        "end_time": round(audio_duration, 4),
+                        "strum_pattern": llm_sec.pattern,
+                        "llm_pattern": llm_sec.pattern,
+                    })
+                # Use LLM BPM if available (often more accurate than Songsterr)
+                if llm_result.bpm and llm_result.bpm > 0:
+                    source_bpm = float(llm_result.bpm)
+                if llm_result.notes:
+                    strum_notes = llm_result.notes
+                # Pick the best YouTube tutorial link by score
+                youtube_links = [
+                    link for link in llm_result.tutorial_links
+                    if "youtube.com" in link.url or "youtu.be" in link.url
+                ]
+                if youtube_links:
+                    scored = [(l, _score_tutorial_link(l.title, l.url)) for l in youtube_links]
+                    scored.sort(key=lambda x: x[1], reverse=True)
+                    best_link, best_score = scored[0]
+                    tutorial_url = best_link.url
+                    logger.info(
+                        "Tutorial link selected: %r (score=%d) from %d candidates for %r by %r",
+                        best_link.url, best_score, len(youtube_links), title, artist,
+                    )
+
+            # Fallback: if Tavily didn't return any YouTube links, search YouTube directly
+            if not tutorial_url:
+                tutorial_url = await _search_youtube_tutorial(title, artist)
+            if llm_result and llm_result.sections:
+                logger.info(
+                    "Tavily+LLM: %d sections, bpm=%d for %r by %r",
+                    len(llm_result.sections),
+                    llm_result.bpm or 0,
+                    title, artist,
+                )
+        except Exception as e:
+            logger.warning("Tavily+LLM strum pattern lookup failed: %s", e)
+
+        # Write songsterr_data.json
+        songsterr_output: dict = {
+            "tabs": tabs_data_out,
+            "sections": sections_data,
+            "source_bpm": source_bpm,
+            "matched_artist": result.matched_artist if result else artist,
+            "matched_title": result.matched_title if result else title,
+            "time_signature": list(result.time_signature) if result else [4, 4],
+        }
+        if strum_notes:
+            songsterr_output["strum_notes"] = strum_notes
+        if tutorial_url:
+            songsterr_output["tutorial_url"] = tutorial_url
+        if result and result.lyrics_text:
+            songsterr_output["lyrics_text"] = result.lyrics_text
+
+        songsterr_key = f"{song_name}/songsterr_data.json"
+        storage.write_json(songsterr_key, songsterr_output)
+
+        # Write Songsterr lyrics as a standalone lyrics file (same format as other versions)
+        if result and result.lyrics_text:
+            lyrics_lines = [
+                line.strip()
+                for line in result.lyrics_text.split("\n")
+                if line.strip()
+            ]
+            if lyrics_lines and sections_data:
+                # Distribute lyrics lines evenly across non-instrumental sections
+                vocal_sections = [
+                    s for s in sections_data
+                    if s["name"].lower() not in ("intro", "outro", "instrumental", "solo", "breakdown")
+                ]
+                if not vocal_sections:
+                    vocal_sections = sections_data
+
+                # Distribute lines across vocal sections
+                segments = []
+                lines_per_section = max(1, len(lyrics_lines) // len(vocal_sections))
+                line_idx = 0
+                for sec in vocal_sections:
+                    sec_lines = lyrics_lines[line_idx:line_idx + lines_per_section]
+                    if not sec_lines:
+                        break
+                    sec_duration = sec["end_time"] - sec["start_time"]
+                    line_duration = sec_duration / len(sec_lines)
+
+                    for j, line_text in enumerate(sec_lines):
+                        seg_start = sec["start_time"] + j * line_duration
+                        seg_end = seg_start + line_duration
+                        # Create word-level timing by distributing evenly
+                        raw_words = line_text.replace("-", " ").split()
+                        if raw_words:
+                            word_dur = (seg_end - seg_start) / len(raw_words)
+                            words = [
+                                {
+                                    "word": w,
+                                    "start": round(seg_start + k * word_dur, 3),
+                                    "end": round(seg_start + (k + 1) * word_dur, 3),
+                                }
+                                for k, w in enumerate(raw_words)
+                            ]
+                        else:
+                            words = []
+                        # Clean up Guitar Pro syllable markers
+                        clean_text = line_text.replace("-", "").replace("(", "").replace(")", "")
+                        segments.append({
+                            "start": round(seg_start, 3),
+                            "end": round(seg_end, 3),
+                            "text": clean_text,
+                            "words": words,
+                        })
+                    line_idx += lines_per_section
+
+                # Handle remaining lines
+                if line_idx < len(lyrics_lines) and vocal_sections:
+                    last_sec = vocal_sections[-1]
+                    remaining = lyrics_lines[line_idx:]
+                    dur = (last_sec["end_time"] - last_sec["start_time"]) / max(1, len(remaining))
+                    for j, line_text in enumerate(remaining):
+                        seg_start = last_sec["end_time"] + j * dur
+                        seg_end = seg_start + dur
+                        clean_text = line_text.replace("-", "").replace("(", "").replace(")", "")
+                        segments.append({
+                            "start": round(seg_start, 3),
+                            "end": round(seg_end, 3),
+                            "text": clean_text,
+                            "words": [],
+                        })
+
+                if segments:
+                    lyrics_songsterr = {
+                        "segments": segments,
+                        "source": "songsterr",
+                    }
+                    storage.write_json(
+                        f"{song_name}/lyrics_songsterr.json", lyrics_songsterr,
+                    )
 
         elapsed_s = time.monotonic() - t0
         logger.info(
-            "External strums: wrote %d strums (%.1fs) song_id=%s",
-            len(aligned),
+            "Songsterr: wrote %d notes, %d sections (%.1fs) song_id=%s",
+            len(tabs_data_out),
+            len(sections_data),
             elapsed_s,
             song_id,
             extra={
@@ -1871,7 +2213,8 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
                 "task": "external_strums",
                 "song_id": str(song_id),
                 "elapsed_s": round(elapsed_s, 1),
-                "strum_count": len(aligned),
+                "note_count": len(tabs_data_out),
+                "section_count": len(sections_data),
             },
         )
 
@@ -1880,7 +2223,7 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
             song_dao = SongDAO(session)
             await song_dao.update_by_id(
                 song_id,
-                external_strums_key=strums_key,
+                external_strums_key=songsterr_key,
                 external_strums_failed=False,
                 external_strums_attempted_at=None,
             )

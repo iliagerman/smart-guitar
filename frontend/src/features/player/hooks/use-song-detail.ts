@@ -38,8 +38,12 @@ function contentFingerprint(d: SongDetail): string {
     getVer1Lyrics(d).length,
     getVer2Lyrics(d).length,
     getVer3Lyrics(d).length,
+    d.ver4_lyrics?.length ?? 0,
     d.tabs.length,
     d.strums.length,
+    d.sections?.length ?? 0,
+    d.sections?.some(s => s.llm_pattern?.length) ? 'llm' : '',
+    d.songsterr_status ?? '',
     d.chord_options.length,
     Object.values(d.stems).filter(Boolean).length,
     d.active_job?.id ?? '',
@@ -77,6 +81,8 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       const missingVer3Lyrics =
         ver1Lyrics.length > 0 && ver2Lyrics.length > 0 && ver3Lyrics.length === 0
       const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
+      // Songsterr data is fetched async — poll until backend reports a result
+      const songsterrPending = !detail.songsterr_status  // null = still fetching
 
       // Keep polling while data is still missing (background retries may fill it in).
       // But only poll up to a reasonable interval — lyrics/tabs may have failed.
@@ -84,6 +90,9 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
 
       // Tabs are interactive UI in 'tabs' mode; keep this snappy.
       if (missingTabs) return 5000
+
+      // Songsterr data (strumming patterns, tabs, sections) fetched async — poll until done.
+      if (songsterrPending) return 5000
 
       // Ver 1 lyrics are meant to appear ASAP.
       if (missingVer1Lyrics) return 5000

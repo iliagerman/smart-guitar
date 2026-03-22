@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 
 import { cn } from '@/lib/cn'
 import { formatChordName } from '@/lib/chord-colors'
-import type { StrumSymbol } from '../lib/strum-pattern'
+import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
+import { StrumPatternCard } from './StrumPatternCard'
 
 type Fret = number | 'x'
 
@@ -269,13 +270,25 @@ export function ChordDiagram({ chord }: { chord: string }) {
 export function ChordMap({
     chords,
     representativePattern,
+    sectionPatterns,
+    bpm,
+    strumNotes,
+    tutorialUrl,
+    strumLoading,
     showHeader = true,
     className,
+    onOpenTutorial,
 }: {
     chords: string[]
     representativePattern?: StrumSymbol[]
+    sectionPatterns?: SectionStrumPattern[]
+    bpm?: number
+    strumNotes?: string | null
+    tutorialUrl?: string | null
+    strumLoading?: boolean
     showHeader?: boolean
     className?: string
+    onOpenTutorial?: () => void
 }) {
     const unique = useMemo(() => {
         const seen = new Set<string>()
@@ -303,28 +316,16 @@ export function ChordMap({
                 </div>
             )}
 
-            {representativePattern && representativePattern.length > 0 ? (
-                <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-smoke-100">Strumming Pattern</div>
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-smoke-500">song groove</div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                        {representativePattern.map((step, index) => (
-                            <span
-                                key={`${step.direction}-${index}`}
-                                className={cn(
-                                    step.className,
-                                    'inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-charcoal-950/60 px-1.5 text-sm font-bold'
-                                )}
-                                title={step.title}
-                            >
-                                {step.symbol}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            ) : null}
+            <div className="shrink min-h-0 overflow-y-auto max-h-[50%]">
+                <StrumPatternCard
+                    sectionPatterns={sectionPatterns ?? []}
+                    bpm={bpm ?? 120}
+                    strumNotes={strumNotes}
+                    tutorialUrl={tutorialUrl}
+                    loading={strumLoading}
+                    onOpenTutorial={onOpenTutorial}
+                />
+            </div>
 
             <div className="grid grid-cols-2 auto-rows-max content-start items-start gap-2 overflow-y-auto flex-1 min-h-0 pr-1">
                 {unique.map((ch) => (

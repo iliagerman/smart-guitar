@@ -1,33 +1,35 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Heart, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import { Heart, Pause, Play, Shield, SkipBack, SkipForward, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
 import { useWakeLock } from '../hooks/use-wake-lock'
 import { useLyricsSync } from '../hooks/use-lyrics-sync'
 import { normalizeWords } from '../lib/normalize-words'
-import { getRepresentativeSongStrumPattern } from '../lib/strum-pattern'
+import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../lib/strum-pattern'
 import { TransportControls } from '../components/TransportControls'
 import { TrackSelector } from '../components/TrackSelector'
 import { ChordSheet } from '../components/ChordSheet'
 import { ChordOptionSelector } from '../components/ChordOptionSelector'
-// Tabs disabled.
-// import { TabsSheet } from '../components/TabsSheet'
+import { TabsSheet } from '../components/TabsSheet'
 import { ProcessButton } from '../components/ProcessButton'
 import { BackgroundProcessingCard } from '../components/BackgroundProcessingCard'
 import { ChordMap, ChordDiagram } from '../components/ChordMap'
 import { ChordMapDialog } from '../components/ChordMapDialog'
 import { PlaybackSpeedSelector } from '../components/PlaybackSpeedSelector'
 import { ChordDisplayControls } from '../components/ChordDisplayControls'
-import { StrumDisplayControl } from '../components/StrumDisplayControl'
+
 import { LyricsSyncControl } from '../components/LyricsSyncControl'
 import { LyricsVersionToggle } from '../components/LyricsVersionToggle'
 import { ScrollModeControl } from '../components/ScrollModeControl'
+import { OnboardingTour } from '../components/OnboardingTour'
 import { LyricsSyncDebug } from '../components/LyricsSyncDebug'
 import { SongFeedback } from '../components/SongFeedback'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
 import { usePlaybackStore, type StemName } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { useSubscriptionStore } from '@/stores/subscription.store'
 import { useSongMediaCacheStore } from '@/stores/song-media-cache.store'
 import { useToggleFavorite } from '@/features/library/hooks/use-toggle-favorite'
 import { useFavorites } from '@/features/library/hooks/use-favorites'
@@ -80,6 +82,83 @@ function CurrentChordPanel({ chords }: { chords: { chord: string; start_time: nu
   )
 }
 
+function AdminMenu({ songId }: { songId: string }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const handleRegenerate = async (targets: string[], label: string) => {
+    setLoading(label)
+    setOpen(false)
+    try {
+      const result = await songsApi.regenerate(songId, targets)
+      if (result.enqueued.length > 0) {
+        toast.success(`Regenerating: ${result.enqueued.join(', ')}`)
+      } else if (result.errors.length > 0) {
+        toast.error(`Failed: ${result.errors.join(', ')}`)
+      } else {
+        toast.info(`Skipped (already up to date): ${result.skipped.join(', ')}`)
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? 'Regeneration failed')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const items = [
+    { label: 'Regenerate Lyrics', targets: ['lyrics'] },
+    { label: 'Regenerate Stems & Chords', targets: ['stems'] },
+    { label: 'Regenerate Tabs', targets: ['tabs'] },
+    { label: 'Regenerate Strum Patterns', targets: ['strums'] },
+    { label: 'Regenerate All', targets: ['lyrics', 'stems', 'tabs', 'strums'] },
+    { label: 'Full Reprocess', targets: ['full'] },
+  ]
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'p-2 rounded-lg text-smoke-400 hover:text-flame-400 hover:bg-charcoal-700/50 transition-colors',
+          open && 'text-flame-400 bg-charcoal-700/50',
+        )}
+        aria-label="Admin actions"
+        title="Admin actions"
+      >
+        {loading ? (
+          <div className="h-5 w-5 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+        ) : (
+          <Shield size={20} />
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-56 rounded-lg bg-charcoal-800 border border-charcoal-600 shadow-xl z-50 py-1">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => handleRegenerate(item.targets, item.label)}
+              disabled={!!loading}
+              className="w-full text-left px-3 py-2 text-sm text-smoke-200 hover:bg-charcoal-700 hover:text-flame-400 transition-colors disabled:opacity-50"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getAudioUrl(songId: string, stem: StemName, detail: { audio_url: string | null; stems: { [key: string]: string | null } }) {
   if (env.isLocal) {
     const stemName = stem === 'full_mix' ? 'audio' : stem
@@ -106,7 +185,8 @@ export function SongDetailPage() {
   const transposeSemitones = usePlayerPrefsStore((s) => s.transposeSemitones)
   const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
   const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
-  const showStrums = usePlayerPrefsStore((s) => s.showStrums)
+  const [showTutorial, setShowTutorial] = useState(false)
+  const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
   const loadingLabel = useRotatingText(
@@ -199,12 +279,17 @@ export function SongDetailPage() {
 
   const chordNamesForMap = useMemo(() => displayChords.map((c) => c.chord).filter(Boolean), [displayChords])
   const representativeStrumPattern = useMemo(() => {
-    if (!detail || !showStrums) return []
+    if (!detail) return []
     return getRepresentativeSongStrumPattern(displayChords, detail.strums, {
       rhythm: detail.rhythm,
       maxSymbols: 8,
     })
-  }, [detail, displayChords, showStrums])
+  }, [detail, displayChords])
+
+  const sectionStrumPatterns = useMemo(() => {
+    if (!detail || !detail.sections?.length) return []
+    return getSectionStrumPatterns(detail.sections)
+  }, [detail])
 
   // --- Lyrics sync debug overlay (Ctrl+Shift+D) ---
   const [showLyricsDebug, setShowLyricsDebug] = useState(
@@ -248,12 +333,19 @@ export function SongDetailPage() {
   const ver3LyricsSource = detail
     ? pickLyricsSource(detail.ver3_lyrics_source, detail.corrected_lyrics_source)
     : null
+  const ver4Lyrics = useMemo(
+    () => (detail?.ver4_lyrics?.length ? detail.ver4_lyrics : []),
+    [detail],
+  )
+  const ver4LyricsSource = detail?.ver4_lyrics_source ?? null
 
   const activeLyrics = useMemo(() => {
     if (!detail) return []
     const hasVer1 = ver1Lyrics.length > 0
     const hasVer2 = ver2Lyrics.length > 0
     const hasVer3 = ver3Lyrics.length > 0
+    const hasVer4 = ver4Lyrics.length > 0
+    if (lyricsMode === 'ver4' && hasVer4) return ver4Lyrics
     if (lyricsMode === 'ver3' && hasVer3) return ver3Lyrics
     if (lyricsMode === 'ver2' && hasVer2) return ver2Lyrics
     if (lyricsMode === 'ver1' && hasVer1) return ver1Lyrics
@@ -261,13 +353,15 @@ export function SongDetailPage() {
     if (hasVer3) return ver3Lyrics
     if (hasVer2) return ver2Lyrics
     return ver1Lyrics
-  }, [detail, lyricsMode, ver1Lyrics, ver2Lyrics, ver3Lyrics])
+  }, [detail, lyricsMode, ver1Lyrics, ver2Lyrics, ver3Lyrics, ver4Lyrics])
 
   const activeLyricsSource = useMemo(() => {
     if (!detail) return null
     const hasVer1 = ver1Lyrics.length > 0
     const hasVer2 = ver2Lyrics.length > 0
     const hasVer3 = ver3Lyrics.length > 0
+    const hasVer4 = ver4Lyrics.length > 0
+    if (lyricsMode === 'ver4' && hasVer4) return ver4LyricsSource
     if (lyricsMode === 'ver3' && hasVer3) return ver3LyricsSource
     if (lyricsMode === 'ver2' && hasVer2) return ver2LyricsSource
     if (lyricsMode === 'ver1' && hasVer1) return ver1LyricsSource
@@ -283,6 +377,8 @@ export function SongDetailPage() {
     ver2LyricsSource,
     ver3Lyrics.length,
     ver3LyricsSource,
+    ver4Lyrics.length,
+    ver4LyricsSource,
   ])
 
   // Normalize lyrics for the debug overlay (same transform the display components use)
@@ -314,7 +410,8 @@ export function SongDetailPage() {
   const hasVer1Lyrics = ver1Lyrics.length > 0
   const hasVer2Lyrics = ver2Lyrics.length > 0
   const hasVer3Lyrics = ver3Lyrics.length > 0
-  const hasAnyLyrics = hasVer1Lyrics || hasVer2Lyrics || hasVer3Lyrics
+  const hasVer4Lyrics = ver4Lyrics.length > 0
+  const hasAnyLyrics = hasVer1Lyrics || hasVer2Lyrics || hasVer3Lyrics || hasVer4Lyrics
   const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
 
   const isJobProcessing =
@@ -325,19 +422,31 @@ export function SongDetailPage() {
   const isVer3LyricsGenerating =
     !!detail && !hasVer3Lyrics && hasVer1Lyrics && hasVer2Lyrics && (isJobProcessing || !detail.active_job)
 
-  // When a song loads, pick the best available lyrics mode:
-  // ver3 > ver2 > ver1 > none. This also corrects stale persisted values.
+  // When a song loads, pick the best available lyrics mode.
+  // Non-English songs prefer ver1 (fast transcription handles non-Latin better).
+  // English songs prefer ver2 (full Whisper transcription, more accurate).
   useEffect(() => {
     if (!detail) return
 
-    if (hasVer3Lyrics) {
-      setLyricsMode('ver3')
-    } else if (hasVer2Lyrics) {
-      setLyricsMode('ver2')
-    } else if (hasVer1Lyrics) {
-      setLyricsMode('ver1')
+    // Detect non-English: check if lyrics text has significant non-ASCII content
+    const sampleText = (ver1Lyrics[0]?.text ?? ver2Lyrics[0]?.text ?? '').slice(0, 200)
+    const nonAsciiRatio = sampleText.length > 0
+      ? [...sampleText].filter((c) => c.charCodeAt(0) > 127).length / sampleText.length
+      : 0
+    const isNonEnglish = nonAsciiRatio > 0.3
+
+    if (isNonEnglish) {
+      // Non-English: ver1 > ver2 > ver3
+      if (hasVer1Lyrics) setLyricsMode('ver1')
+      else if (hasVer2Lyrics) setLyricsMode('ver2')
+      else if (hasVer3Lyrics) setLyricsMode('ver3')
+      else setLyricsMode('none')
     } else {
-      setLyricsMode('none')
+      // English: ver2 > ver3 > ver1
+      if (hasVer2Lyrics) setLyricsMode('ver2')
+      else if (hasVer3Lyrics) setLyricsMode('ver3')
+      else if (hasVer1Lyrics) setLyricsMode('ver1')
+      else setLyricsMode('none')
     }
   }, [detail, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, setLyricsMode])
 
@@ -389,11 +498,12 @@ export function SongDetailPage() {
             </div>
 
             <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold leading-tight truncate">{headerTitle}</h1>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold leading-tight truncate">{headerTitle}</h1>
+                <p className="text-smoke-400 text-sm sm:text-base truncate">{headerArtist}</p>
                 <SongFeedback songId={songId!} />
+                {isAdmin && <AdminMenu songId={songId!} />}
               </div>
-              <p className="text-smoke-400 text-sm sm:text-base truncate">{headerArtist}</p>
             </div>
 
             {/* Mobile-only: transport buttons live in the header row to save vertical space */}
@@ -453,6 +563,7 @@ export function SongDetailPage() {
                       'hover:border-flame-400/30 transition-colors',
                       'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
                     )}
+                    data-tour="favorite"
                     data-testid={`favorite-toggle-${songId}`}
                     aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
                   >
@@ -464,26 +575,33 @@ export function SongDetailPage() {
                       )}
                     />
                   </button>
-                  <TrackSelector
-                    activeStem={currentStem}
-                    onStemChange={handleStemChange}
-                    availableStems={detail.stems}
-                    stemTypes={detail.stem_types}
-                  />
-                  <LyricsVersionToggle
-                    hasVer1Lyrics={hasVer1Lyrics}
-                    hasVer2Lyrics={hasVer2Lyrics}
-                    hasVer3Lyrics={hasVer3Lyrics}
-                    isVer3Generating={isVer3LyricsGenerating}
-                  />
-                  <ChordMapDialog chords={chordNamesForMap} iconOnly />
+                  <div className="contents" data-tour="stem-selector">
+                    <TrackSelector
+                      activeStem={currentStem}
+                      onStemChange={handleStemChange}
+                      availableStems={detail.stems}
+                      stemTypes={detail.stem_types}
+                    />
+                  </div>
+                  <div className="contents" data-tour="lyrics-toggle">
+                    <LyricsVersionToggle
+                      hasVer1Lyrics={hasVer1Lyrics}
+                      hasVer2Lyrics={hasVer2Lyrics}
+                      hasVer3Lyrics={hasVer3Lyrics}
+                      hasVer4Lyrics={hasVer4Lyrics}
+                      isVer3Generating={isVer3LyricsGenerating}
+                    />
+                  </div>
+                  <div className="contents" data-tour="chord-map">
+                    <ChordMapDialog chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} strumLoading={!detail.songsterr_status} iconOnly onOpenTutorial={() => setShowTutorial(true)} />
+                  </div>
                 </>
               }
               secondaryControls={
                 <>
                   <ChordOptionSelector chordOptions={detail.chord_options ?? []} hasTabs={hasTabs} />
                   <ChordDisplayControls />
-                  <StrumDisplayControl />
+
                   <PlaybackSpeedSelector />
                   <LyricsSyncControl />
                   <ScrollModeControl />
@@ -536,14 +654,24 @@ export function SongDetailPage() {
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
                   <CurrentChordPanel chords={displayChords} />
                   <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-                    <ChordSheet
-                      chords={displayChords}
-                      lyrics={activeLyrics}
-                      onSeek={seek}
-                    />
+                    {sheetMode === 'tabs' && hasTabs ? (
+                      <TabsSheet
+                        tabs={detail.tabs}
+                        lyrics={activeLyrics}
+                        strums={detail.strums}
+                        rhythm={detail.rhythm}
+                        onSeek={seek}
+                      />
+                    ) : (
+                      <ChordSheet
+                        chords={displayChords}
+                        lyrics={activeLyrics}
+                        onSeek={seek}
+                      />
+                    )}
                   </div>
                   <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
-                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} />
+                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} strumLoading={!detail.songsterr_status} onOpenTutorial={() => setShowTutorial(true)} />
                   </div>
                 </div>
               ) : null}
@@ -552,7 +680,37 @@ export function SongDetailPage() {
         </div>
       </div>
 
-      {/* Lyrics sync debug overlay — toggle with Ctrl+Shift+D */}
+      {/* Floating YouTube tutorial window */}
+      {showTutorial && detail?.tutorial_url && (() => {
+        const match = detail.tutorial_url!.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([\w-]+)/)
+        const embedUrl = match ? `https://www.youtube.com/embed/${match[1]}` : null
+        if (!embedUrl) return null
+        return (
+          <div className="fixed bottom-4 left-4 right-4 z-60 max-w-100 ml-auto rounded-lg overflow-hidden shadow-2xl border border-charcoal-600 bg-charcoal-900">
+            <div className="flex items-center justify-between px-3 py-2 bg-charcoal-800">
+              <span className="text-xs text-smoke-300 font-medium">Tutorial</span>
+              <button
+                type="button"
+                onClick={() => setShowTutorial(false)}
+                className="text-smoke-500 hover:text-smoke-200 transition-colors"
+                aria-label="Close tutorial"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <iframe
+              src={embedUrl}
+              className="w-full aspect-video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title="Guitar tutorial"
+            />
+          </div>
+        )
+      })()}
+
+      <OnboardingTour />
+
       {showLyricsDebug && hasAnyLyrics && (
         <LyricsSyncDebug
           segments={debugNormalizedSegments}

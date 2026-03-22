@@ -50,6 +50,10 @@ async def get_subscription_status(
     if not status.has_access and _is_bypass_user(user.email, settings):
         status.has_access = True
 
+    db_user = await user_dao.get_or_create(user.sub, user.email)
+    status.has_seen_onboarding = db_user.has_seen_onboarding
+    status.is_admin = user.email in settings.admin_users
+
     if is_new:
         method = "Google OAuth" if user.username.startswith("Google_") else "email/password"
         track_event(
@@ -91,6 +95,18 @@ async def create_checkout(
             status_code=400, detail="plan_type must be monthly or yearly"
         )
     return await provider.create_checkout(user.sub, user.email, body.plan_type)
+
+
+@router.post("/onboarding-seen")
+async def mark_onboarding_seen(
+    user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    user_dao = UserDAO(session)
+    db_user = await user_dao.get_or_create(user.sub, user.email)
+    await user_dao.update_by_id(db_user.id, has_seen_onboarding=True)
+    await session.commit()
+    return {"ok": True}
 
 
 @router.post("/cancel", response_model=CancelSubscriptionResponse)

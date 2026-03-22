@@ -48,6 +48,7 @@ api.interceptors.response.use(
         trial_ends_at: null,
         trial_active: false,
         subscription: null,
+        has_seen_onboarding: false,
       })
       return Promise.reject(error)
     }

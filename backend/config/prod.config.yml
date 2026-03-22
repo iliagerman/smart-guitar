@@ -28,6 +28,9 @@ telegram:
   errors_chat_id: "-1003706403829"
   feedback_chat_id: "-1003510144145"
 
+admin_users:
+  - "iliagerman@gmail.com"
+
 subscription_bypass_emails:
   - "iliagerman@gmail.com"
   - "Shmulik.segal@gmail.com"

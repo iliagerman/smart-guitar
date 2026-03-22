@@ -1,13 +1,12 @@
-"""Dedicated auth for admin service endpoints.
+"""Admin authentication helpers.
 
-These endpoints are *not* user-facing and do not use Cognito JWTs.
-They are protected by a shared secret loaded from secrets.yml:
+Two auth mechanisms:
 
-admin:
-  api-key: "..."
+1. ``require_admin_token`` — shared-secret auth for service-to-service
+   endpoints (``/admin/*``). Does NOT use Cognito JWTs.
 
-Requests must include:
-  Authorization: Bearer <api-key>
+2. ``require_admin_user`` — Cognito-authenticated user whose email is
+   listed in ``admin_users`` config. Used for user-facing admin actions.
 """
 
 import hmac
@@ -16,6 +15,8 @@ import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from guitar_player.auth.dependencies import get_current_user
+from guitar_player.auth.schemas import CurrentUser
 from guitar_player.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -57,3 +58,16 @@ async def require_admin_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid admin token",
         )
+
+
+async def require_admin_user(
+    user: CurrentUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> CurrentUser:
+    """Authorize Cognito-authenticated users listed in ``admin_users`` config."""
+    if user.email not in settings.admin_users:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user

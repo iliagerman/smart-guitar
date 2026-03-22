@@ -37,6 +37,7 @@ from guitar_player.schemas.song import (
     PaginatedSongsResponse,
     SongDetailResponse,
     SongResponse,
+    SongSection,
     StemType,
     StemUrls,
     StrumEvent,
@@ -762,6 +763,7 @@ class SongService:
                     for f in files
                     if f.rsplit("/", 1)[-1].startswith(CHORD_VARIANT_PREFIX)
                     and f.endswith(CHORD_VARIANT_SUFFIX)
+                    and "intermediate" not in f.rsplit("/", 1)[-1].lower()
                 )
                 for key in variant_keys:
                     try:
@@ -879,6 +881,7 @@ class SongService:
 
         # Read tabs and rhythm from storage.
         tabs: list[TabNote] = []
+        tabs_source: str | None = None
         rhythm: RhythmInfo | None = None
         tabs_key = song.tabs_key
         if not tabs_key and song.song_name:
@@ -893,23 +896,75 @@ class SongService:
                 if isinstance(raw, dict):
                     if isinstance(raw.get("notes"), list):
                         tabs = [TabNote(**n) for n in raw["notes"]]
+                        tabs_source = "detected"
                     if isinstance(raw.get("rhythm"), dict):
                         rhythm = RhythmInfo(**raw["rhythm"])
             except Exception as e:
                 logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
 
-        # Read external strums from dedicated file (fetched async from Songsterr).
+        # Read Songsterr data (enriched format with tabs, strums, sections).
         strums: list[StrumEvent] = []
+        sections: list[SongSection] = []
+        source_bpm: float | None = None
+        time_signature: list[int] | None = None
+        strum_notes: str | None = None
+        tutorial_url: str | None = None
+        songsterr_status: str | None = None
+
+        # Determine songsterr status from DB fields
+        if song.external_strums_failed:
+            songsterr_status = "failed"
+        elif not song.artist or not song.song_name:
+            songsterr_status = "unavailable"
+
         external_strums_key = song.external_strums_key
         if external_strums_key and self._storage.file_exists(external_strums_key):
+            songsterr_status = "ready"
             try:
-                raw_strums = self._storage.read_json(external_strums_key)
-                if isinstance(raw_strums, list):
-                    strums = [StrumEvent(**s) for s in raw_strums]
+                raw_songsterr = self._storage.read_json(external_strums_key)
+
+                if isinstance(raw_songsterr, dict):
+                    # New enriched format (songsterr_data.json)
+                    if isinstance(raw_songsterr.get("strums"), list):
+                        strums = [StrumEvent(**s) for s in raw_songsterr["strums"]]
+                    if isinstance(raw_songsterr.get("tabs"), list) and raw_songsterr["tabs"]:
+                        # Songsterr tabs take priority over basic-pitch
+                        tabs = [TabNote(**n) for n in raw_songsterr["tabs"]]
+                        tabs_source = "songsterr"
+                    if isinstance(raw_songsterr.get("sections"), list):
+                        sections = [SongSection(**s) for s in raw_songsterr["sections"]]
+                    if raw_songsterr.get("source_bpm"):
+                        source_bpm = float(raw_songsterr["source_bpm"])
+                    if isinstance(raw_songsterr.get("time_signature"), list):
+                        time_signature = raw_songsterr["time_signature"]
+                    if raw_songsterr.get("strum_notes"):
+                        strum_notes = raw_songsterr["strum_notes"]
+                    if raw_songsterr.get("tutorial_url"):
+                        tutorial_url = raw_songsterr["tutorial_url"]
+
+                elif isinstance(raw_songsterr, list):
+                    # Legacy flat array format (external_strums.json)
+                    strums = [StrumEvent(**s) for s in raw_songsterr]
+
             except Exception as e:
                 logger.warning(
-                    "Failed to read external strums for %s: %s", song.song_name, e
+                    "Failed to read Songsterr data for %s: %s", song.song_name, e
                 )
+
+        # Read Songsterr lyrics (ver4)
+        ver4_lyrics: list[LyricsSegment] = []
+        ver4_lyrics_source: str | None = None
+        if song.song_name:
+            songsterr_lyrics_key = f"{song.song_name}/lyrics_songsterr.json"
+            if self._storage.file_exists(songsterr_lyrics_key):
+                try:
+                    raw_sl = self._storage.read_json(songsterr_lyrics_key)
+                    ver4_lyrics, ver4_lyrics_source, _ = _parse_lyrics_payload(raw_sl)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to read Songsterr lyrics for %s: %s",
+                        song.song_name, e,
+                    )
 
         return SongDetailResponse(
             song=song_resp,
@@ -931,9 +986,18 @@ class SongService:
             ver2_lyrics_source=lyrics_source,
             ver3_lyrics=corrected_lyrics,
             ver3_lyrics_source=corrected_lyrics_source,
+            ver4_lyrics=ver4_lyrics,
+            ver4_lyrics_source=ver4_lyrics_source,
             tabs=tabs,
+            tabs_source=tabs_source,
             strums=strums,
             rhythm=rhythm,
+            sections=sections,
+            source_bpm=source_bpm,
+            time_signature=time_signature,
+            strum_notes=strum_notes,
+            tutorial_url=tutorial_url,
+            songsterr_status=songsterr_status,
             download_pending=song.download_requested_at is not None,
         )
 
@@ -1060,3 +1124,60 @@ class SongService:
 
         song_resp = await self.download_song(youtube_id, user_sub, user_email)
         return await self.get_song_detail(song_resp.id)
+
+    async def generate_ai_strum_patterns(
+        self, song_id: uuid.UUID,
+    ) -> list[SongSection]:
+        """Generate AI strum patterns on-demand and persist to songsterr_data.json."""
+        from guitar_player.config import get_settings
+        from guitar_player.services.llm_service import LlmService
+
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song", str(song_id))
+
+        external_strums_key = song.external_strums_key
+        if not external_strums_key or not self._storage.file_exists(external_strums_key):
+            raise BadRequestError("No Songsterr data available for this song")
+
+        raw_songsterr = self._storage.read_json(external_strums_key)
+        if not isinstance(raw_songsterr, dict):
+            raise BadRequestError("Invalid Songsterr data format")
+
+        sections_data = raw_songsterr.get("sections", [])
+        if not sections_data:
+            raise BadRequestError("No sections available")
+
+        # Check if LLM patterns already exist
+        if any(s.get("llm_pattern") for s in sections_data):
+            return [SongSection(**s) for s in sections_data]
+
+        time_signature: tuple[int, int] | None = None
+        raw_ts = raw_songsterr.get("time_signature")
+        if isinstance(raw_ts, list) and len(raw_ts) == 2:
+            time_signature = (raw_ts[0], raw_ts[1])
+
+        settings = get_settings()
+        llm = LlmService(settings)
+        artist = song.artist or ""
+        title = song.title or ""
+        tavily_api_key = settings.tavily.api_key
+        llm_result = await llm.lookup_strum_patterns(
+            artist, title, time_signature, tavily_api_key,
+        )
+
+        if llm_result and llm_result.sections:
+            llm_map = {s.section.lower(): s.pattern for s in llm_result.sections}
+
+            for sec in sections_data:
+                canonical = sec["name"].lower().rstrip("0123456789 ")
+                if canonical in llm_map:
+                    sec["llm_pattern"] = llm_map[canonical]
+                elif len(llm_result.sections) == 1:
+                    sec["llm_pattern"] = llm_result.sections[0].pattern
+
+            # Persist updated sections back to storage
+            raw_songsterr["sections"] = sections_data
+            self._storage.write_json(external_strums_key, raw_songsterr)
+
+        return [SongSection(**s) for s in sections_data]

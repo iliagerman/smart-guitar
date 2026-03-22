@@ -1,5 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useLyricsSync } from '../hooks/use-lyrics-sync'
+import { scrollToCenter } from '../lib/scroll-to-center'
 import { normalizeWords } from '../lib/normalize-words'
 import type { LyricsSegment } from '@/types/song'
 
@@ -22,10 +23,7 @@ export function LyricsTimeline({ segments, onSeek }: LyricsTimelineProps) {
 
   useEffect(() => {
     if (activeRef.current && scrollRef.current) {
-      activeRef.current.scrollIntoView({
-        behavior: 'auto',
-        block: 'center',
-      })
+      scrollToCenter(scrollRef.current, activeRef.current)
     }
   }, [activeSegmentIndex])
 

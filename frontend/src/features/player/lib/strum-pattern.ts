@@ -1,4 +1,13 @@
-import type { ChordEntry, RhythmInfo, StrumEvent } from '@/types/song'
+import type { ChordEntry, RhythmInfo, SongSection, StrumEvent } from '@/types/song'
+
+function directionToSymbol(direction: 'down' | 'up'): StrumSymbol {
+  return {
+    symbol: direction === 'down' ? '↓' : '↑',
+    className: direction === 'down' ? 'text-emerald-400' : 'text-amber-300',
+    title: `${direction} strum`,
+    direction,
+  }
+}
 import { buildGridSlots, chooseSubdivision, quantizeStrumsToSlots, type GridSlot, type QuantizedStrum } from './strum-grid'
 
 export interface StrumSymbol {
@@ -199,4 +208,87 @@ export function getRepresentativeSongStrumPattern(
       title: getDirectionTitle(s.direction, s.confidence),
       direction: s.direction,
     }))
+}
+
+export interface SectionStrumPattern {
+  name: string
+  pattern: StrumSymbol[]
+  llm_generated?: boolean
+}
+
+/**
+ * Normalize a section name to a canonical form for grouping.
+ * "Verse 1", "Verse 2" → "Verse"; "Chorus" stays "Chorus".
+ */
+function canonicalSectionName(name: string): string {
+  return name.replace(/\s*\d+$/, '').trim()
+}
+
+/**
+ * Get the effective strum pattern for a section.
+ * Prefers llm_pattern (from Tavily+LLM), falls back to strum_pattern.
+ */
+function getEffectivePattern(section: SongSection): ('down' | 'up')[] | null {
+  return section.llm_pattern ?? section.strum_pattern ?? null
+}
+
+/**
+ * Build section strum patterns from pre-computed strum_pattern on each section.
+ * Groups by canonical section name (e.g. "Verse 1" + "Verse 2" → "Verse"),
+ * picks the most common pattern per group, and skips non-playable sections.
+ */
+export function getSectionStrumPatterns(
+  sections: SongSection[],
+): SectionStrumPattern[] {
+  if (sections.length === 0) return []
+
+  // Skip sections that aren't useful for strumming guidance
+  const skipSections = new Set(['intro', 'outro', 'instrumental', 'solo', 'breakdown', 'post-chorus', 'interlude'])
+
+  // Group sections by canonical name, pick most common pattern
+  const groups = new Map<string, Map<string, { pattern: ('down' | 'up')[]; count: number }>>()
+
+  for (const section of sections) {
+    const pattern = getEffectivePattern(section)
+    if (!pattern || pattern.length < 2) continue
+
+    const canonical = canonicalSectionName(section.name)
+    if (skipSections.has(canonical.toLowerCase())) continue
+
+    const key = pattern.join('')
+    if (!groups.has(canonical)) groups.set(canonical, new Map())
+    const bucket = groups.get(canonical)!
+    const existing = bucket.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      bucket.set(key, { pattern, count: 1 })
+    }
+  }
+
+  const result: SectionStrumPattern[] = []
+  const seenPatterns = new Set<string>()
+
+  for (const [name, bucket] of groups) {
+    // Pick most common pattern for this section type
+    const best = [...bucket.values()].sort((a, b) => b.count - a.count)[0]
+    if (!best) continue
+
+    const patternKey = best.pattern.join('')
+    // Skip if we've already shown an identical pattern under a different name
+    if (seenPatterns.has(patternKey)) continue
+    seenPatterns.add(patternKey)
+
+    const isLlm = sections.some(
+      (s) => canonicalSectionName(s.name) === name && s.llm_pattern?.length,
+    )
+
+    result.push({
+      name,
+      pattern: best.pattern.map(directionToSymbol),
+      llm_generated: isLlm || undefined,
+    })
+  }
+
+  return result
 }

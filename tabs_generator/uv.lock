@@ -673,7 +673,6 @@ dependencies = [
     { name = "mangum" },
     { name = "numpy" },
     { name = "pydantic" },
-    { name = "pyguitarpro" },
     { name = "python-json-logger" },
     { name = "pyyaml" },
     { name = "scipy" },
@@ -699,7 +698,6 @@ requires-dist = [
     { name = "mangum", specifier = ">=0.19.0" },
     { name = "numpy", specifier = ">=1.24.0,<2" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pyguitarpro", specifier = ">=0.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "python-json-logger", specifier = ">=3.0.0" },
@@ -1592,18 +1590,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217 },
-]
-
-[[package]]
-name = "pyguitarpro"
-version = "0.10.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "attrs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/33/06ef041e7af290eb113187f7dd92edbe5dd3fe3b48c7d36044d633230ce6/pyguitarpro-0.10.1.tar.gz", hash = "sha256:1b99da453395f09d4924195b568a336eeba3f083d9398626af23c869cfad5f33", size = 95068 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/7e/854329b775d09c3b7ad4fcebb4467522409e2e109c04b66f1cbee998fe71/pyguitarpro-0.10.1-py3-none-any.whl", hash = "sha256:c6d1c0cb525dee2da8161da4c0d4493f7b6e058ac8ca6d8dc9404f374a0f9799", size = 45429 },
 ]
 
 [[package]]
