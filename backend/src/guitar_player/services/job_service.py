@@ -115,14 +115,18 @@ def _score_tutorial_link(title: str, url: str) -> int:
     return score
 
 
-async def _search_youtube_tutorial(title: str, artist: str) -> str:
-    """Fallback: search YouTube directly for a guitar tutorial when Tavily has none."""
+async def _search_youtube_tutorial(title: str, artist: str) -> tuple[str, list[dict]]:
+    """Fallback: search YouTube directly for guitar tutorials when Tavily has none.
+
+    Returns (best_url, all_links) where all_links is a list of {"url", "title"} dicts
+    sorted by score descending.
+    """
     import yt_dlp
     from guitar_player.services.llm_service import _tutorial_search_suffix
 
     query = f"{title} {artist} {_tutorial_search_suffix(title, artist)}"
 
-    def _search() -> str:
+    def _search() -> tuple[str, list[dict]]:
         opts = {
             "quiet": True,
             "no_warnings": True,
@@ -135,10 +139,10 @@ async def _search_youtube_tutorial(title: str, artist: str) -> str:
                 entries = result.get("entries", []) if result else []
         except Exception as e:
             logger.warning("YouTube tutorial fallback search failed: %s", e)
-            return ""
+            return "", []
 
         if not entries:
-            return ""
+            return "", []
 
         # Score each result and pick the best tutorial
         candidates = []
@@ -152,7 +156,7 @@ async def _search_youtube_tutorial(title: str, artist: str) -> str:
             candidates.append((url, vid_title, score))
 
         if not candidates:
-            return ""
+            return "", []
 
         candidates.sort(key=lambda x: x[2], reverse=True)
         best_url, best_title, best_score = candidates[0]
@@ -160,7 +164,8 @@ async def _search_youtube_tutorial(title: str, artist: str) -> str:
             "YouTube fallback tutorial selected: %r (%r, score=%d) from %d candidates for %r by %r",
             best_url, best_title, best_score, len(candidates), title, artist,
         )
-        return best_url
+        all_links = [{"url": u, "title": t} for u, t, _s in candidates]
+        return best_url, all_links
 
     return await asyncio.to_thread(_search)
 
@@ -2053,6 +2058,7 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
         sections_data: list[dict] = []
         strum_notes: str = ""
         tutorial_url: str = ""
+        tutorial_links: list[dict] = []  # all scored tutorial links
         try:
             from guitar_player.services.llm_service import LlmService
 
@@ -2075,7 +2081,7 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
                     source_bpm = float(llm_result.bpm)
                 if llm_result.notes:
                     strum_notes = llm_result.notes
-                # Pick the best YouTube tutorial link by score
+                # Collect all YouTube tutorial links, sorted by score
                 youtube_links = [
                     link for link in llm_result.tutorial_links
                     if "youtube.com" in link.url or "youtu.be" in link.url
@@ -2083,16 +2089,20 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
                 if youtube_links:
                     scored = [(l, _score_tutorial_link(l.title, l.url)) for l in youtube_links]
                     scored.sort(key=lambda x: x[1], reverse=True)
-                    best_link, best_score = scored[0]
-                    tutorial_url = best_link.url
+                    tutorial_url = scored[0][0].url
+                    tutorial_links = [
+                        {"url": l.url, "title": l.title} for l, _s in scored
+                    ]
                     logger.info(
-                        "Tutorial link selected: %r (score=%d) from %d candidates for %r by %r",
-                        best_link.url, best_score, len(youtube_links), title, artist,
+                        "Tutorial links: %d candidates for %r by %r, best=%r (score=%d)",
+                        len(youtube_links), title, artist, tutorial_url, scored[0][1],
                     )
 
             # Fallback: if Tavily didn't return any YouTube links, search YouTube directly
             if not tutorial_url:
-                tutorial_url = await _search_youtube_tutorial(title, artist)
+                tutorial_url, fallback_links = await _search_youtube_tutorial(title, artist)
+                if fallback_links and not tutorial_links:
+                    tutorial_links = fallback_links
             if llm_result and llm_result.sections:
                 logger.info(
                     "Tavily+LLM: %d sections, bpm=%d for %r by %r",
@@ -2116,6 +2126,8 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
             songsterr_output["strum_notes"] = strum_notes
         if tutorial_url:
             songsterr_output["tutorial_url"] = tutorial_url
+        if tutorial_links:
+            songsterr_output["tutorial_links"] = tutorial_links
         if result and result.lyrics_text:
             songsterr_output["lyrics_text"] = result.lyrics_text
 

@@ -39,13 +39,14 @@ interface ChordMapDialogProps {
     bpm?: number
     strumNotes?: string | null
     tutorialUrl?: string | null
+    tutorialLinks?: { url: string; title: string }[]
     strumLoading?: boolean
     className?: string
     iconOnly?: boolean
     onOpenTutorial?: () => void
 }
 
-export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, strumLoading, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
+export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, strumLoading, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
     const [open, setOpen] = useState(false)
 
     // ChordMap itself will return null when there are no usable chords.
@@ -103,7 +104,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                     </div>
 
                     <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} strumLoading={strumLoading} showHeader={false} onOpenTutorial={handleOpenTutorial} />
+                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} tutorialLinks={tutorialLinks} strumLoading={strumLoading} showHeader={false} onOpenTutorial={handleOpenTutorial} />
                     </div>
                 </Dialog.Content>
             </Dialog.Portal>

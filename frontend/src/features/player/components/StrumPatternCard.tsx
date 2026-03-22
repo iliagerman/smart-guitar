@@ -35,11 +35,13 @@ interface StrumPatternCardProps {
   bpm: number
   strumNotes?: string | null
   tutorialUrl?: string | null
+  tutorialLinks?: { url: string; title: string }[]
   loading?: boolean
   onOpenTutorial?: () => void
 }
 
-export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, loading, onOpenTutorial }: StrumPatternCardProps) {
+export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading, onOpenTutorial }: StrumPatternCardProps) {
+  const hasTutorials = (tutorialLinks && tutorialLinks.length > 0) || !!tutorialUrl
   const [playingSection, setPlayingSection] = useState<string | null>(null)
 
   if (sectionPatterns.length === 0 && !loading) return null
@@ -50,7 +52,7 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-smoke-100">Strumming Pattern</div>
           <div className="flex items-center gap-3">
-            {tutorialUrl && onOpenTutorial && (
+            {hasTutorials && onOpenTutorial && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onOpenTutorial() }}

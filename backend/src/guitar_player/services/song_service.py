@@ -909,6 +909,7 @@ class SongService:
         time_signature: list[int] | None = None
         strum_notes: str | None = None
         tutorial_url: str | None = None
+        tutorial_links: list[dict] = []
         songsterr_status: str | None = None
 
         # Determine songsterr status from DB fields
@@ -941,6 +942,8 @@ class SongService:
                         strum_notes = raw_songsterr["strum_notes"]
                     if raw_songsterr.get("tutorial_url"):
                         tutorial_url = raw_songsterr["tutorial_url"]
+                    if isinstance(raw_songsterr.get("tutorial_links"), list):
+                        tutorial_links = raw_songsterr["tutorial_links"]
 
                 elif isinstance(raw_songsterr, list):
                     # Legacy flat array format (external_strums.json)
@@ -997,6 +1000,7 @@ class SongService:
             time_signature=time_signature,
             strum_notes=strum_notes,
             tutorial_url=tutorial_url,
+            tutorial_links=tutorial_links,
             songsterr_status=songsterr_status,
             download_pending=song.download_requested_at is not None,
         )

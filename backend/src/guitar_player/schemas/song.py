@@ -154,7 +154,8 @@ class SongDetailResponse(BaseModel):
     source_bpm: Optional[float] = None
     time_signature: Optional[list[int]] = None  # e.g. [3, 4] for 3/4 time
     strum_notes: Optional[str] = None  # Playing instructions from Tavily+LLM
-    tutorial_url: Optional[str] = None  # YouTube tutorial link
+    tutorial_url: Optional[str] = None  # YouTube tutorial link (best match)
+    tutorial_links: list[dict] = []  # All tutorial links [{"url": str, "title": str}]
     songsterr_status: Optional[str] = None  # null=pending, "ready", "failed", "unavailable"
     active_job: Optional[ActiveJobInfo] = None
     download_pending: bool = False

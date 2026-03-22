@@ -117,6 +117,7 @@ export interface SongDetail {
   time_signature?: [number, number] | null
   strum_notes?: string | null
   tutorial_url?: string | null
+  tutorial_links?: { url: string; title: string }[]
   songsterr_status?: string | null  // null=pending, "ready", "failed", "unavailable"
   active_job: ActiveJobInfo | null
   download_pending: boolean

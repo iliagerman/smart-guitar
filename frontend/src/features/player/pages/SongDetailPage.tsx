@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Heart, Pause, Play, Shield, SkipBack, SkipForward, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Heart, Pause, Play, Shield, SkipBack, SkipForward, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
@@ -186,6 +186,7 @@ export function SongDetailPage() {
   const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
   const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
   const [showTutorial, setShowTutorial] = useState(false)
+  const [tutorialIndex, setTutorialIndex] = useState(0)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
@@ -480,11 +481,15 @@ export function SongDetailPage() {
       />
 
       {/* Fixed top section: song header + player controls */}
-      <div className="relative z-30 shrink-0 bg-black overflow-hidden border-b border-charcoal-800/50">
+      <div className="relative z-30 shrink-0 bg-black border-b border-charcoal-800/50">
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 blur-md scale-110 pointer-events-none"
-          style={{ backgroundImage: `url("${thumbnailSrc}")` }}
-        />
+          className="absolute inset-0 overflow-hidden pointer-events-none"
+        >
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 blur-md scale-110"
+            style={{ backgroundImage: `url("${thumbnailSrc}")` }}
+          />
+        </div>
         <div className="relative max-w-7xl mx-auto p-3 pb-2 sm:p-4 sm:pb-3 flex flex-col gap-3 sm:gap-4">
           {/* Song header */}
           <div className="relative flex items-center gap-3 sm:gap-4">
@@ -593,7 +598,7 @@ export function SongDetailPage() {
                     />
                   </div>
                   <div className="contents" data-tour="chord-map">
-                    <ChordMapDialog chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} strumLoading={!detail.songsterr_status} iconOnly onOpenTutorial={() => setShowTutorial(true)} />
+                    <ChordMapDialog chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} tutorialLinks={detail.tutorial_links} strumLoading={!detail.songsterr_status} iconOnly onOpenTutorial={() => setShowTutorial(true)} />
                   </div>
                 </>
               }
@@ -671,7 +676,7 @@ export function SongDetailPage() {
                     )}
                   </div>
                   <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
-                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} strumLoading={!detail.songsterr_status} onOpenTutorial={() => setShowTutorial(true)} />
+                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} tutorialLinks={detail.tutorial_links} strumLoading={!detail.songsterr_status} onOpenTutorial={() => setShowTutorial(true)} />
                   </div>
                 </div>
               ) : null}
@@ -681,29 +686,72 @@ export function SongDetailPage() {
       </div>
 
       {/* Floating YouTube tutorial window */}
-      {showTutorial && detail?.tutorial_url && (() => {
-        const match = detail.tutorial_url!.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([\w-]+)/)
-        const embedUrl = match ? `https://www.youtube.com/embed/${match[1]}` : null
-        if (!embedUrl) return null
+      {showTutorial && detail && (() => {
+        // Build list of embeddable tutorials
+        const allLinks = detail.tutorial_links?.length
+          ? detail.tutorial_links
+          : detail.tutorial_url
+            ? [{ url: detail.tutorial_url, title: '' }]
+            : []
+        const embedItems = allLinks
+          .map((link) => {
+            const match = link.url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([\w-]+)/)
+            return match ? { embedUrl: `https://www.youtube.com/embed/${match[1]}`, title: link.title } : null
+          })
+          .filter((x): x is { embedUrl: string; title: string } => x !== null)
+
+        if (embedItems.length === 0) return null
+        const safeIndex = Math.min(tutorialIndex, embedItems.length - 1)
+        const current = embedItems[safeIndex]
+
         return (
           <div className="fixed bottom-4 left-4 right-4 z-60 max-w-100 ml-auto rounded-lg overflow-hidden shadow-2xl border border-charcoal-600 bg-charcoal-900">
             <div className="flex items-center justify-between px-3 py-2 bg-charcoal-800">
-              <span className="text-xs text-smoke-300 font-medium">Tutorial</span>
-              <button
-                type="button"
-                onClick={() => setShowTutorial(false)}
-                className="text-smoke-500 hover:text-smoke-200 transition-colors"
-                aria-label="Close tutorial"
-              >
-                <X size={14} />
-              </button>
+              <span className="text-xs text-smoke-300 font-medium truncate flex-1 mr-2">
+                {current.title || 'Tutorial'}
+              </span>
+              <div className="flex items-center gap-1">
+                {embedItems.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setTutorialIndex((i) => Math.max(0, i - 1))}
+                      disabled={safeIndex === 0}
+                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-0.5"
+                      aria-label="Previous tutorial"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-[10px] text-smoke-500 tabular-nums">
+                      {safeIndex + 1}/{embedItems.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTutorialIndex((i) => Math.min(embedItems.length - 1, i + 1))}
+                      disabled={safeIndex === embedItems.length - 1}
+                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-0.5"
+                      aria-label="Next tutorial"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setShowTutorial(false); setTutorialIndex(0) }}
+                  className="text-smoke-500 hover:text-smoke-200 transition-colors ml-1"
+                  aria-label="Close tutorial"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
             <iframe
-              src={embedUrl}
+              src={current.embedUrl}
               className="w-full aspect-video"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
-              title="Guitar tutorial"
+              title={current.title || 'Guitar tutorial'}
             />
           </div>
         )

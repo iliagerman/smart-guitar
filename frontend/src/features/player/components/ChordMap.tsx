@@ -274,6 +274,7 @@ export function ChordMap({
     bpm,
     strumNotes,
     tutorialUrl,
+    tutorialLinks,
     strumLoading,
     showHeader = true,
     className,
@@ -285,6 +286,7 @@ export function ChordMap({
     bpm?: number
     strumNotes?: string | null
     tutorialUrl?: string | null
+    tutorialLinks?: { url: string; title: string }[]
     strumLoading?: boolean
     showHeader?: boolean
     className?: string
@@ -322,6 +324,7 @@ export function ChordMap({
                     bpm={bpm ?? 120}
                     strumNotes={strumNotes}
                     tutorialUrl={tutorialUrl}
+                    tutorialLinks={tutorialLinks}
                     loading={strumLoading}
                     onOpenTutorial={onOpenTutorial}
                 />
