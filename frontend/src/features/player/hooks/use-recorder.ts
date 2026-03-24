@@ -5,8 +5,11 @@ interface RecorderState {
   isRecording: boolean
   recordingDuration: number
   permissionDenied: boolean
+  recordedBlob: Blob | null
   startRecording: (filename: string) => Promise<void>
-  stopRecording: () => void
+  stopRecording: (autoDownload?: boolean) => void
+  downloadRecording: () => void
+  clearRecording: () => void
 }
 
 const GAIN_VALUE = 3.0
@@ -65,6 +68,7 @@ export function useRecorder(): RecorderState {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
   const [permissionDenied, setPermissionDenied] = useState(false)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -110,6 +114,7 @@ export function useRecorder(): RecorderState {
       pcmChunksRef.current = []
       filenameRef.current = filename
       setPermissionDenied(false)
+      setRecordedBlob(null)
 
       const audioCtx = new AudioContext()
       await audioCtx.resume()
@@ -147,7 +152,7 @@ export function useRecorder(): RecorderState {
     }
   }, [cleanup])
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback((autoDownload = true) => {
     const sampleRate = audioContextRef.current?.sampleRate ?? 44100
     const chunks = [...pcmChunksRef.current]
     const filename = filenameRef.current
@@ -187,14 +192,31 @@ export function useRecorder(): RecorderState {
     }
 
     const blob = new Blob(mp3Chunks, { type: 'audio/mpeg' })
-    downloadBlob(blob, `${filename}.mp3`)
+    setRecordedBlob(blob)
+
+    if (autoDownload) {
+      downloadBlob(blob, `${filename}.mp3`)
+    }
   }, [cleanup])
+
+  const downloadRecording = useCallback(() => {
+    if (!recordedBlob) return
+    downloadBlob(recordedBlob, `${filenameRef.current}.mp3`)
+    setRecordedBlob(null)
+  }, [recordedBlob])
+
+  const clearRecording = useCallback(() => {
+    setRecordedBlob(null)
+  }, [])
 
   return {
     isRecording,
     recordingDuration,
     permissionDenied,
+    recordedBlob,
     startRecording,
     stopRecording,
+    downloadRecording,
+    clearRecording,
   }
 }

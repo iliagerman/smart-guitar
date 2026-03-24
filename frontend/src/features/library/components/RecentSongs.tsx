@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useRecentSongs } from '../hooks/use-recent-songs'
 import { Link } from 'react-router-dom'
 import { songDetailPath } from '@/router/routes'
-import { Flame } from 'lucide-react'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import type { Song } from '@/types/song'
@@ -16,13 +15,11 @@ function RecentSongCard({ song }: { song: Song }) {
       to={songDetailPath(song.id)}
       className="shrink-0 w-28 group"
     >
-      <div className="w-28 h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-all">
+      <div className="relative w-28 h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-all">
         {thumbnailUrl && !imgFailed ? (
-          <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" onError={() => setImgFailed(true)} />
+          <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Flame size={24} className="text-flame-400" />
-          </div>
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
         )}
       </div>
       <p className="text-smoke-100 text-xs font-medium truncate">{displaySongTitle(song)}</p>

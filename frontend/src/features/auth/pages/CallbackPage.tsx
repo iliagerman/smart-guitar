@@ -79,7 +79,7 @@ export function CallbackPage() {
           </button>
         </div>
       ) : (
-        <LoadingSpinner />
+        <LoadingSpinner size="lg" className="flex-1 min-h-screen" />
       )}
     </div>
   )

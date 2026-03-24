@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { LogOut, User } from 'lucide-react'
 import { SubscriptionSection } from '@/features/subscription/components/SubscriptionSection'
+import { RecordingSettingsSection } from '../components/RecordingSettingsSection'
 
 export function ProfilePage() {
   const { email, logout } = useAuthStore()
@@ -33,6 +34,11 @@ export function ProfilePage() {
       {/* Subscription */}
       <div className="mb-4">
         <SubscriptionSection />
+      </div>
+
+      {/* Recording settings */}
+      <div className="mb-4">
+        <RecordingSettingsSection />
       </div>
 
       {/* Sign out */}

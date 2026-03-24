@@ -6,6 +6,7 @@ import { subscriptionApi } from '@/api/subscription.api'
 import { queryKeys } from '@/api/query-keys'
 import { PaywallDialog } from './PaywallDialog'
 import { cn } from '@/lib/cn'
+import { Skeleton } from '@/components/shared/Skeleton'
 
 export function SubscriptionSection() {
   const { data: status, isLoading } = useSubscription()
@@ -23,9 +24,9 @@ export function SubscriptionSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600 animate-pulse">
-        <div className="h-6 w-32 bg-charcoal-700 rounded mb-4" />
-        <div className="h-4 w-48 bg-charcoal-700 rounded" />
+      <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600 space-y-4">
+        <Skeleton className="h-6 w-32 rounded" />
+        <Skeleton className="h-4 w-48 rounded" />
       </div>
     )
   }

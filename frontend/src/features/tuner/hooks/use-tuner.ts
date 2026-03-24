@@ -10,12 +10,15 @@ import {
   shiftTuning,
 } from '../lib/tuning'
 
-const CLARITY_THRESHOLD = 0.8
+const CLARITY_THRESHOLD = 0.85
 const FFT_SIZE = 8192
 const HOLD_MS = 600 // keep last note visible for this long after signal drops
-const SMOOTHING_WINDOW_SIZE = 5
+const SMOOTHING_WINDOW_SIZE = 9
 const MIN_DETECTABLE_FREQUENCY = 70
 const MAX_DETECTABLE_FREQUENCY = 400
+const MIN_RMS_THRESHOLD = 0.008 // ignore signal below this RMS level
+const OUTLIER_CENTS_THRESHOLD = 80 // reject readings that jump more than this from the median
+const MIN_CONSECUTIVE_GOOD = 2 // require N consecutive good reads before updating display
 
 function roundToTenth(value: number) {
   return Math.round(value * 10) / 10
@@ -48,7 +51,25 @@ function normalizePitchForGuitar(pitch: number, targetFrequency?: number | null)
   }, pitch)
 }
 
+function computeRms(buffer: Float32Array): number {
+  let sum = 0
+  for (let i = 0; i < buffer.length; i++) {
+    sum += buffer[i] * buffer[i]
+  }
+  return Math.sqrt(sum / buffer.length)
+}
+
 function smoothPitch(history: number[], nextPitch: number) {
+  // Reject outlier: if we have history, check the new reading isn't wildly different
+  if (history.length >= 3) {
+    const currentMedian = median(history)
+    const deviation = Math.abs(1200 * Math.log2(nextPitch / currentMedian))
+    if (deviation > OUTLIER_CENTS_THRESHOLD) {
+      // Don't add this reading — it's likely noise
+      return currentMedian
+    }
+  }
+
   history.push(nextPitch)
   if (history.length > SMOOTHING_WINDOW_SIZE) {
     history.shift()
@@ -153,13 +174,13 @@ export function useTuner(): TunerState {
       const source = audioContext.createMediaStreamSource(stream)
       const highpass = audioContext.createBiquadFilter()
       highpass.type = 'highpass'
-      highpass.frequency.value = 60
-      highpass.Q.value = 0.7
+      highpass.frequency.value = 75
+      highpass.Q.value = 1.0
 
       const lowpass = audioContext.createBiquadFilter()
       lowpass.type = 'lowpass'
-      lowpass.frequency.value = 1200
-      lowpass.Q.value = 0.7
+      lowpass.frequency.value = 900
+      lowpass.Q.value = 1.0
 
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = FFT_SIZE
@@ -183,14 +204,36 @@ export function useTuner(): TunerState {
       // Start detection loop — all resources captured directly, not via refs
       const buffer = new Float32Array(analyser.fftSize)
       const detector = PitchDetector.forFloat32Array(analyser.fftSize)
-      detector.minVolumeDecibels = -30
+      detector.minVolumeDecibels = -25
 
       let lastGoodTime = 0
+      let consecutiveGood = 0
+      let pendingNote: DetectedNote | null = null
+      let pendingFrequency = 0
+      let pendingNearest: GuitarString | null = null
 
       const loop = () => {
         if (!isRunningRef.current) return
 
         analyser.getFloatTimeDomainData(buffer)
+
+        // Volume gate: ignore signal below minimum RMS threshold
+        const rms = computeRms(buffer)
+        if (rms < MIN_RMS_THRESHOLD) {
+          const now = performance.now()
+          if (now - lastGoodTime > HOLD_MS) {
+            pitchHistoryRef.current = []
+            consecutiveGood = 0
+            setDetectedNote(null)
+            setDetectedFrequency(null)
+            setNearestString(null)
+            setCents(0)
+          }
+          setClarity(0)
+          rafRef.current = requestAnimationFrame(loop)
+          return
+        }
+
         const [pitch, clar] = detector.findPitch(buffer, audioContext.sampleRate)
 
         setClarity(clar)
@@ -209,17 +252,27 @@ export function useTuner(): TunerState {
           const note = findNearestNote(stablePitch)
           const nearest = findNearestString(stablePitch, activeTuningRef.current)
 
-          setDetectedNote(note)
-          setDetectedFrequency(roundToTenth(stablePitch))
-          setNearestString(nearest)
-          setCents(note.cents)
-        } else if (now - lastGoodTime > HOLD_MS) {
-          // Only clear after hold period — prevents flickering
-          pitchHistoryRef.current = []
-          setDetectedNote(null)
-          setDetectedFrequency(null)
-          setNearestString(null)
-          setCents(0)
+          pendingNote = note
+          pendingFrequency = roundToTenth(stablePitch)
+          pendingNearest = nearest
+          consecutiveGood++
+
+          // Only update display after N consecutive good readings
+          if (consecutiveGood >= MIN_CONSECUTIVE_GOOD) {
+            setDetectedNote(pendingNote)
+            setDetectedFrequency(pendingFrequency)
+            setNearestString(pendingNearest)
+            setCents(note.cents)
+          }
+        } else {
+          consecutiveGood = 0
+          if (now - lastGoodTime > HOLD_MS) {
+            pitchHistoryRef.current = []
+            setDetectedNote(null)
+            setDetectedFrequency(null)
+            setNearestString(null)
+            setCents(0)
+          }
         }
 
         rafRef.current = requestAnimationFrame(loop)

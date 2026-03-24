@@ -28,6 +28,11 @@ export interface PlayerPrefsState {
   lyricsMode: LyricsMode
   /** Strum pattern source: 'songsterr' (tab data) or 'ai' (LLM-generated). */
   strumSource: StrumSource
+  /** Automatically start recording when a song starts playing. */
+  autoRecord: boolean
+  /** Automatically download recordings when recording stops.
+   *  When false, a download button is shown instead. */
+  autoDownloadRecordings: boolean
   setTransposeSemitones: (semitones: number) => void
   transposeUp: () => void
   transposeDown: () => void
@@ -39,6 +44,8 @@ export interface PlayerPrefsState {
   setLyricsMode: (mode: LyricsMode) => void
   setStrumSource: (source: StrumSource) => void
   cycleStrumSource: () => void
+  setAutoRecord: (enabled: boolean) => void
+  setAutoDownloadRecordings: (enabled: boolean) => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -50,6 +57,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       autoScrollSpeed: 60,
       lyricsMode: 'ver1' as LyricsMode,
       strumSource: 'songsterr' as StrumSource,
+      autoRecord: false,
+      autoDownloadRecordings: true,
       setTransposeSemitones: (semitones) =>
         set({ transposeSemitones: clampInt(semitones, -12, 12) }),
       transposeUp: () => {
@@ -71,6 +80,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setStrumSource: (source) => set({ strumSource: source }),
       cycleStrumSource: () =>
         set({ strumSource: get().strumSource === 'songsterr' ? 'ai' : 'songsterr' }),
+      setAutoRecord: (enabled) => set({ autoRecord: !!enabled }),
+      setAutoDownloadRecordings: (enabled) => set({ autoDownloadRecordings: !!enabled }),
     }),
     {
       name: 'player-prefs',
@@ -104,9 +115,17 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.strumSource = 'songsterr'
         }
 
+        // Default recording settings if not present (v3 → v4)
+        if (state && state.autoRecord === undefined) {
+          state.autoRecord = false
+        }
+        if (state && state.autoDownloadRecordings === undefined) {
+          state.autoDownloadRecordings = true
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 3,
+      version: 4,
     }
   )
 )
