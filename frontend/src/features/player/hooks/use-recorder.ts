@@ -26,6 +26,7 @@ function floatTo16Bit(float32: Float32Array): Int16Array {
 }
 
 function downloadBlob(blob: Blob, filename: string) {
+  if (blob.size === 0) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -53,15 +54,15 @@ class RecorderProcessor extends AudioWorkletProcessor {
 registerProcessor('recorder-processor', RecorderProcessor);
 `
 
-let workletRegistered = false
+const registeredContexts = new WeakSet<AudioContext>()
 
 async function ensureWorklet(audioCtx: AudioContext) {
-  if (workletRegistered) return
+  if (registeredContexts.has(audioCtx)) return
   const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' })
   const url = URL.createObjectURL(blob)
   await audioCtx.audioWorklet.addModule(url)
   URL.revokeObjectURL(url)
-  workletRegistered = true
+  registeredContexts.add(audioCtx)
 }
 
 export function useRecorder(): RecorderState {
@@ -99,6 +100,18 @@ export function useRecorder(): RecorderState {
   }, [])
 
   useEffect(() => cleanup, [cleanup])
+
+  // Proactively detect denied microphone permission
+  useEffect(() => {
+    navigator.permissions?.query({ name: 'microphone' as PermissionName })
+      .then((status) => {
+        if (status.state === 'denied') setPermissionDenied(true)
+        status.onchange = () => {
+          setPermissionDenied(status.state === 'denied')
+        }
+      })
+      .catch(() => { /* permissions API not supported */ })
+  }, [])
 
   const startRecording = useCallback(async (filename: string) => {
     try {
@@ -191,11 +204,11 @@ export function useRecorder(): RecorderState {
       mp3Chunks.push(flushed)
     }
 
-    const blob = new Blob(mp3Chunks as BlobPart[], { type: 'audio/mpeg' })
+    const blob = new Blob(mp3Chunks, { type: 'audio/mpeg' })
     setRecordedBlob(blob)
 
     if (autoDownload) {
-      downloadBlob(blob, `${filename}.mp3`)
+      setTimeout(() => downloadBlob(blob, `${filename}.mp3`), 0)
     }
   }, [cleanup])
 

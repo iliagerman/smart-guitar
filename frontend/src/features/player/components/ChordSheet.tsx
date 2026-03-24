@@ -2,7 +2,7 @@ import { useRef, useEffect, useMemo, useCallback } from 'react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
-import { scrollToCenter } from '../lib/scroll-to-center'
+import { isElementVisible, scrollIntoContainerView } from '../lib/scroll-to-center'
 import { getChordColor, formatChordName } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -61,14 +61,20 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
     [chords, lyrics]
   )
   const { activeLineIndex, activeWordIndex, activeChordIndex } = useChordSheetSync(lines)
+  const LOOK_AHEAD_WORDS = 20
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
+  const lookAheadWordRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (showHighlight && activeLineRef.current && scrollRef.current) {
-      scrollToCenter(scrollRef.current, activeLineRef.current)
+    if (!showHighlight || !scrollRef.current) return
+    const target = lookAheadWordRef.current ?? activeLineRef.current
+    if (!target) return
+    if (!isElementVisible(scrollRef.current, target)) {
+      scrollIntoContainerView(scrollRef.current, target)
     }
-  }, [activeLineIndex, showHighlight])
+  }, [activeLineIndex, activeWordIndex, showHighlight])
 
   useAutoScroll(scrollRef, !showHighlight)
 
@@ -85,6 +91,31 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
     },
     [onSeek]
   )
+
+  // Compute the word position ~20 words ahead of the active word (across lines)
+  // so we can scroll proactively and keep upcoming content visible.
+  const lookAheadWord = useMemo(() => {
+    if (activeLineIndex < 0 || activeWordIndex < 0) return null
+    let remaining = LOOK_AHEAD_WORDS
+    // Count remaining words in the active line after the active word
+    const activeLine = lines[activeLineIndex]
+    if (!activeLine) return null
+    const wordsLeftInLine = activeLine.words.length - activeWordIndex - 1
+    if (remaining <= wordsLeftInLine) {
+      return { lineIndex: activeLineIndex, wordIndex: activeWordIndex + remaining }
+    }
+    remaining -= wordsLeftInLine
+    // Walk subsequent lines
+    for (let li = activeLineIndex + 1; li < lines.length; li++) {
+      const lineWords = lines[li].words.length
+      if (lineWords === 0) continue
+      if (remaining <= lineWords) {
+        return { lineIndex: li, wordIndex: remaining - 1 }
+      }
+      remaining -= lineWords
+    }
+    return null
+  }, [lines, activeLineIndex, activeWordIndex])
 
   if (lines.length === 0) return null
 
@@ -136,6 +167,7 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
                     let currentOffset = 0
                     return line.words.map((word, wi) => {
                       const isActiveWord = isActive && showHighlight && wi === activeWordIndex
+                      const isLookAheadWord = lookAheadWord?.lineIndex === li && lookAheadWord?.wordIndex === wi
                       const nextOffset = currentOffset + word.word.length + 1
                       const isLastWord = wi === line.words.length - 1
                       const wordChords = line.chords.filter((chord) =>
@@ -151,6 +183,7 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
                       return (
                         <div
                           key={wi}
+                          ref={isLookAheadWord ? lookAheadWordRef : undefined}
                           className="inline-flex flex-col align-top gap-1 px-1 pb-1"
                           style={{ minWidth: `${reservedWidthCh}ch` }}
                         >

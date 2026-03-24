@@ -1,6 +1,7 @@
 import type { SearchResult } from '@/types/song'
 import { SearchResultCard } from './SearchResultCard'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { Search } from 'lucide-react'
 
 interface SearchResultsProps {
@@ -30,11 +31,9 @@ export function SearchResults({
     return (
       <EmptyState
         icon={<Search size={48} />}
-        title={query ? `“${query}”` : 'Searching…'}
+        title={query ? `”${query}”` : 'Searching…'}
         description={query ? 'Searching…' : undefined}
-        action={
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-label="Searching" className="h-5 w-5 rounded-full object-cover" />
-        }
+        action={<LoadingSpinner size="md" />}
       />
     )
   }

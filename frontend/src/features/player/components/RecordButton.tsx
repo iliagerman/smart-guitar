@@ -56,8 +56,12 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
     if (!wasPlaying && isPlaying) {
       // Playback started → auto-start recording
       const filename = buildFilename(artist, songTitle)
-      startRecording(filename).catch(() => {
-        toast.error('Microphone access denied. Auto-record requires microphone permissions.')
+      startRecording(filename).catch((err) => {
+        if (err instanceof DOMException && err.name === 'NotAllowedError') {
+          toast.error('Microphone access denied. Auto-record requires microphone permissions.')
+        } else {
+          toast.error('Auto-record failed to start. Please try again.')
+        }
       })
     } else if (wasPlaying && !isPlaying && isRecordingRef.current) {
       // Playback stopped → auto-stop recording
@@ -75,8 +79,12 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
 
     try {
       await startRecording(buildFilename(artist, songTitle))
-    } catch {
-      toast.error('Microphone access denied. Please allow microphone permissions and try again.')
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        toast.error('Microphone access denied. Please allow microphone permissions and try again.')
+      } else {
+        toast.error('Recording failed to start. Please try again.')
+      }
     }
   }
 

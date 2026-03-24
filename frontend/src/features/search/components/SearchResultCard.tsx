@@ -47,7 +47,6 @@ export function SearchResultCard({ result, onSelect, isSelecting, isActive, down
             {formatDuration(result.duration_seconds)}
           </span>
         )}
-        <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
       </div>
     </button>
   )
