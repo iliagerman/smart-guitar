@@ -269,7 +269,6 @@ export function ChordDiagram({ chord }: { chord: string }) {
 
 export function ChordMap({
     chords,
-    representativePattern,
     sectionPatterns,
     bpm,
     strumNotes,

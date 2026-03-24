@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useCallback } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
@@ -16,6 +16,33 @@ interface ChordSheetProps {
 
 function estimateChordLabelWidth(chordName: string) {
   return formatChordName(chordName).length + 1
+}
+
+const LOOK_AHEAD_WORDS = 20
+
+function computeLookAheadWord(
+  lines: ReturnType<typeof mergeChordLyrics>,
+  activeLineIndex: number,
+  activeWordIndex: number,
+) {
+  if (activeLineIndex < 0 || activeWordIndex < 0) return null
+  let remaining = LOOK_AHEAD_WORDS
+  const activeLine = lines[activeLineIndex]
+  if (!activeLine) return null
+  const wordsLeftInLine = activeLine.words.length - activeWordIndex - 1
+  if (remaining <= wordsLeftInLine) {
+    return { lineIndex: activeLineIndex, wordIndex: activeWordIndex + remaining }
+  }
+  remaining -= wordsLeftInLine
+  for (let li = activeLineIndex + 1; li < lines.length; li++) {
+    const lineWords = lines[li].words.length
+    if (lineWords === 0) continue
+    if (remaining <= lineWords) {
+      return { lineIndex: li, wordIndex: remaining - 1 }
+    }
+    remaining -= lineWords
+  }
+  return null
 }
 
 
@@ -56,13 +83,8 @@ function ChordLabel({
 
 export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
-  const lines = useMemo(
-    () => mergeChordLyrics(chords, lyrics),
-    [chords, lyrics]
-  )
+  const lines = mergeChordLyrics(chords, lyrics)
   const { activeLineIndex, activeWordIndex, activeChordIndex } = useChordSheetSync(lines)
-  const LOOK_AHEAD_WORDS = 20
-
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
   const lookAheadWordRef = useRef<HTMLDivElement>(null)
@@ -92,30 +114,7 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
     [onSeek]
   )
 
-  // Compute the word position ~20 words ahead of the active word (across lines)
-  // so we can scroll proactively and keep upcoming content visible.
-  const lookAheadWord = useMemo(() => {
-    if (activeLineIndex < 0 || activeWordIndex < 0) return null
-    let remaining = LOOK_AHEAD_WORDS
-    // Count remaining words in the active line after the active word
-    const activeLine = lines[activeLineIndex]
-    if (!activeLine) return null
-    const wordsLeftInLine = activeLine.words.length - activeWordIndex - 1
-    if (remaining <= wordsLeftInLine) {
-      return { lineIndex: activeLineIndex, wordIndex: activeWordIndex + remaining }
-    }
-    remaining -= wordsLeftInLine
-    // Walk subsequent lines
-    for (let li = activeLineIndex + 1; li < lines.length; li++) {
-      const lineWords = lines[li].words.length
-      if (lineWords === 0) continue
-      if (remaining <= lineWords) {
-        return { lineIndex: li, wordIndex: remaining - 1 }
-      }
-      remaining -= lineWords
-    }
-    return null
-  }, [lines, activeLineIndex, activeWordIndex])
+  const lookAheadWord = computeLookAheadWord(lines, activeLineIndex, activeWordIndex)
 
   if (lines.length === 0) return null
 

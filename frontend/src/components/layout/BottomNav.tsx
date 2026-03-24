@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { Search, Library, Heart, User, BarChart3, Mic } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
-import { useIsAdmin } from '@/features/analytics/components/AdminGuard'
+import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
 
 export function BottomNav() {
   const canUseAnalytics = useIsAdmin()

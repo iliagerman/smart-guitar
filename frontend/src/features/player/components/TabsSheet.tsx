@@ -2,7 +2,6 @@ import { useRef, useEffect, useMemo, useCallback } from 'react'
 
 import { mergeTabsLyrics, type PositionedTabNote } from '../lib/merge-tabs-lyrics'
 import { getStrumGridDisplay, getSuggestedStrums } from '../lib/strum-pattern'
-import type { GridMode } from '../lib/strum-grid'
 import { useTabsSheetSync } from '../hooks/use-tabs-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { scrollToCenter } from '../lib/scroll-to-center'
@@ -118,9 +117,8 @@ function computeGridRows(opts: {
   showStrums: boolean
   rhythm: RhythmInfo | null
   strums: StrumEvent[]
-  gridMode?: GridMode
 }): { countRow: string; strumRow: string } {
-  const { startTime, endTime, staffWidth, showStrums, rhythm, strums, gridMode = 'auto' } = opts
+  const { startTime, endTime, staffWidth, showStrums, rhythm, strums } = opts
   const empty = { countRow: ' '.repeat(staffWidth), strumRow: ' '.repeat(staffWidth) }
   if (!showStrums || !rhythm) return empty
 
@@ -224,7 +222,6 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
           showStrums: true,
           rhythm,
           strums,
-          gridMode: 'auto',
         })
 
         const isRtl = line.direction === 'rtl'

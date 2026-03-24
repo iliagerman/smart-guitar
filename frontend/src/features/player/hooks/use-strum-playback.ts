@@ -80,8 +80,12 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
   const bpmRef = useRef(bpm)
 
   // Keep refs in sync
-  patternRef.current = pattern
-  bpmRef.current = bpm
+  useEffect(() => {
+    patternRef.current = pattern
+  }, [pattern])
+  useEffect(() => {
+    bpmRef.current = bpm
+  }, [bpm])
 
   const stop = useCallback(() => {
     setIsPlaying(false)
@@ -144,9 +148,10 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
     }
   }, [])
 
-  // Stop if pattern or bpm changes
+  // Stop playback when pattern or bpm changes so the user hears the updated values.
+  // Intentionally setting state in effect — this is a valid sync response to prop changes.
   useEffect(() => {
-    if (isPlaying) stop()
+    if (isPlaying) stop() // eslint-disable-line react-hooks/set-state-in-effect
   }, [pattern, bpm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { isPlaying, currentBeatIndex, toggle }

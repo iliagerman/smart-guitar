@@ -110,8 +110,9 @@ function AdminMenu({ songId }: { songId: string }) {
       } else {
         toast.info(`Skipped (already up to date): ${result.skipped.join(', ')}`)
       }
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail ?? 'Regeneration failed')
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail ?? 'Regeneration failed')
     } finally {
       setLoading(null)
     }
@@ -451,7 +452,7 @@ export function SongDetailPage() {
       else if (hasVer1Lyrics) setLyricsMode('ver1')
       else setLyricsMode('none')
     }
-  }, [detail, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, setLyricsMode])
+  }, [detail, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, ver1Lyrics, ver2Lyrics, setLyricsMode])
 
   if (isLoading || !detail) {
     return (

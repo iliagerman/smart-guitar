@@ -3,11 +3,6 @@ import { ROUTES } from '@/router/routes'
 import { useAnalyticsAccess } from '../hooks/use-analytics-access'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
-export function useIsAdmin(): boolean {
-    const { isAllowed } = useAnalyticsAccess()
-    return isAllowed
-}
-
 export function AdminGuard({ children }: { children: React.ReactNode }) {
     const { isAllowed, isLoading } = useAnalyticsAccess()
 

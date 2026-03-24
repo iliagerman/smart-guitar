@@ -57,9 +57,10 @@ export function getRenderableStrums(strums: StrumEvent[]) {
   return strums.filter(isDirectionalStrum)
 }
 
-export function getSuggestedStrums(_start: number, _end: number, _strums: StrumEvent[]) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getSuggestedStrums(start: number, end: number, strums: StrumEvent[]): DirectionalStrum[] {
   // No suggested strums — all external strums are real
-  return [] as DirectionalStrum[]
+  return []
 }
 
 export function getStrumGridDisplay(

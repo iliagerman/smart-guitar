@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { EventTrend } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -9,20 +8,22 @@ function formatBucketLabel(value: string) {
     return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
 }
 
+function buildTrendData(trends: EventTrend[]) {
+    const map = new Map<string, Record<string, number | string>>()
+    trends.forEach((trend) => {
+        trend.buckets.forEach((bucket) => {
+            const key = bucket.bucket_start
+            const row = map.get(key) ?? { label: formatBucketLabel(bucket.bucket_start), bucket_start: key }
+            row[trend.event_type] = bucket.count
+            map.set(key, row)
+        })
+    })
+    return Array.from(map.values()).sort((a, b) => String(a.bucket_start).localeCompare(String(b.bucket_start)))
+}
+
 export function EventTrendsChart({ trends }: { trends: EventTrend[] }) {
     const eventTypes = trends.map((trend) => trend.event_type)
-    const data = useMemo(() => {
-        const map = new Map<string, Record<string, number | string>>()
-        trends.forEach((trend) => {
-            trend.buckets.forEach((bucket) => {
-                const key = bucket.bucket_start
-                const row = map.get(key) ?? { label: formatBucketLabel(bucket.bucket_start), bucket_start: key }
-                row[trend.event_type] = bucket.count
-                map.set(key, row)
-            })
-        })
-        return Array.from(map.values()).sort((a, b) => String(a.bucket_start).localeCompare(String(b.bucket_start)))
-    }, [trends])
+    const data = buildTrendData(trends)
 
     return (
         <section className="rounded-2xl border border-charcoal-800 bg-charcoal-900/70 p-4">

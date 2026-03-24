@@ -44,7 +44,10 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
 
   const prevIsPlayingRef = useRef(isPlaying)
   const isRecordingRef = useRef(isRecording)
-  isRecordingRef.current = isRecording
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording
+  }, [isRecording])
 
   // Auto-record: start/stop recording based on playback state
   useEffect(() => {
