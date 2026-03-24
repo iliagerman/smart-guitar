@@ -24,7 +24,15 @@ export function SidebarNav() {
         >
             <div className="h-16 px-4 flex items-center border-b border-charcoal-800">
                 <NavLink to={ROUTES.LIBRARY} className="flex items-center gap-3 min-w-0">
-                    <img src="/art/logo.png" alt="Smart Guitar" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    <video
+                        src="/guitar.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        aria-hidden="true"
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                    />
                     <span className="text-2xl font-display tracking-wide text-smoke-100 truncate">
                         SMART GUITAR
                     </span>

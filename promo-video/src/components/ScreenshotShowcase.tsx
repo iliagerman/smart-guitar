@@ -11,10 +11,14 @@ import { spring } from "remotion";
 type ScreenshotShowcaseProps = {
   src: string;
   label?: string;
+  imgMaxWidth?: number;
+  imgMaxHeight?: number;
 };
 
 export const ScreenshotShowcase: React.FC<ScreenshotShowcaseProps> = ({
   src,
+  imgMaxWidth = 1500,
+  imgMaxHeight = 850,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -113,8 +117,8 @@ export const ScreenshotShowcase: React.FC<ScreenshotShowcaseProps> = ({
           <Img
             src={staticFile(src)}
             style={{
-              maxWidth: 1500,
-              maxHeight: 850,
+              maxWidth: imgMaxWidth,
+              maxHeight: imgMaxHeight,
               objectFit: "contain",
             }}
           />

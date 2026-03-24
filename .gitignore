@@ -21,3 +21,5 @@ youtube-cookies.txt
 .claude/
 local_bucket copy
 *.db
+video-project-**
+*.docx

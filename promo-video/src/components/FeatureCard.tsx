@@ -11,6 +11,11 @@ type FeatureCardProps = {
   title: string;
   description: string;
   delay?: number;
+  cardWidth?: number;
+  cardPadding?: string;
+  iconContainerSize?: number;
+  titleFontSize?: number;
+  descFontSize?: number;
 };
 
 export const FeatureCard: React.FC<FeatureCardProps> = ({
@@ -18,6 +23,11 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   title,
   description,
   delay = 0,
+  cardWidth = 350,
+  cardPadding = "40px 36px",
+  iconContainerSize = 80,
+  titleFontSize = 28,
+  descFontSize = 18,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -40,8 +50,8 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
         background: "rgba(26, 26, 26, 0.9)",
         border: "1px solid rgba(245, 158, 11, 0.2)",
         borderRadius: 20,
-        padding: "40px 36px",
-        width: 350,
+        padding: cardPadding,
+        width: cardWidth,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -51,9 +61,9 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
     >
       <div
         style={{
-          width: 80,
-          height: 80,
-          borderRadius: 40,
+          width: iconContainerSize,
+          height: iconContainerSize,
+          borderRadius: iconContainerSize / 2,
           background: "rgba(245, 158, 11, 0.1)",
           border: "1.5px solid rgba(245, 158, 11, 0.3)",
           display: "flex",
@@ -67,7 +77,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
       <div
         style={{
           fontFamily: theme.fonts.heading,
-          fontSize: 28,
+          fontSize: titleFontSize,
           fontWeight: "bold",
           color: theme.colors.text,
           textAlign: "center",
@@ -78,7 +88,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
       <div
         style={{
           fontFamily: theme.fonts.body,
-          fontSize: 18,
+          fontSize: descFontSize,
           color: theme.colors.textMuted,
           textAlign: "center",
           lineHeight: 1.5,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Heart, Music, Type, LayoutGrid } from 'lucide-react'
+import { Heart, Music, Type, LayoutGrid, Circle } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { useSubscriptionStore } from '@/stores/subscription.store'
@@ -18,6 +18,12 @@ const STEPS: TourStep[] = [
     title: 'Add to Favorites',
     description: 'Tap the heart to save songs you love for quick access later.',
     icon: <Heart size={20} />,
+  },
+  {
+    tourAttr: 'record',
+    title: 'Record Yourself',
+    description: 'Record your practice session and download it when you\'re done. Recordings stay on your device.',
+    icon: <Circle size={20} />,
   },
   {
     tourAttr: 'stem-selector',

@@ -14,7 +14,15 @@ export function Header() {
     <header className="sticky top-0 z-40 bg-charcoal-900/80 backdrop-blur-md border-b border-charcoal-700 lg:hidden">
       <div className="flex items-center justify-between px-4 h-16">
         <Link to={ROUTES.LIBRARY} className="flex items-center gap-3">
-          <img src="/art/logo.png" alt="Smart Guitar" className="w-8 h-8 rounded-full object-cover shrink-0" />
+          <video
+            src="/guitar.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-hidden="true"
+            className="w-8 h-8 rounded-full object-cover shrink-0"
+          />
           <span className="text-2xl font-display tracking-wide text-smoke-100">
             SMART GUITAR
           </span>

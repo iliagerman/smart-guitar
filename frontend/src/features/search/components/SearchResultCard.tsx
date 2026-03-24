@@ -37,7 +37,7 @@ export function SearchResultCard({ result, onSelect, isSelecting, isActive, down
       <div className="flex items-center gap-2 shrink-0">
         {showSpinner && (
           <span className="inline-flex items-center gap-2 text-xs text-smoke-300" aria-live="polite">
-            <span className="h-3.5 w-3.5 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+            <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-3.5 w-3.5 rounded-full object-cover" />
             <span className="hidden sm:inline">{downloadLabel ?? 'Downloading…'}</span>
           </span>
         )}

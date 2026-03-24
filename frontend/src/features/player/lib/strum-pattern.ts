@@ -1,6 +1,14 @@
 import type { ChordEntry, RhythmInfo, SongSection, StrumEvent } from '@/types/song'
 
-function directionToSymbol(direction: 'down' | 'up'): StrumSymbol {
+function directionToSymbol(direction: 'down' | 'up' | 'miss'): StrumSymbol {
+  if (direction === 'miss') {
+    return {
+      symbol: '·',
+      className: 'text-smoke-600',
+      title: 'miss (skip)',
+      direction: 'miss',
+    }
+  }
   return {
     symbol: direction === 'down' ? '↓' : '↑',
     className: direction === 'down' ? 'text-emerald-400' : 'text-amber-300',
@@ -14,7 +22,7 @@ export interface StrumSymbol {
   symbol: string
   className: string
   title: string
-  direction: 'down' | 'up'
+  direction: 'down' | 'up' | 'miss'
 }
 
 export interface StrumGridCell {
@@ -228,7 +236,7 @@ function canonicalSectionName(name: string): string {
  * Get the effective strum pattern for a section.
  * Prefers llm_pattern (from Tavily+LLM), falls back to strum_pattern.
  */
-function getEffectivePattern(section: SongSection): ('down' | 'up')[] | null {
+function getEffectivePattern(section: SongSection): ('down' | 'up' | 'miss')[] | null {
   return section.llm_pattern ?? section.strum_pattern ?? null
 }
 
@@ -246,7 +254,7 @@ export function getSectionStrumPatterns(
   const skipSections = new Set(['intro', 'outro', 'instrumental', 'solo', 'breakdown', 'post-chorus', 'interlude'])
 
   // Group sections by canonical name, pick most common pattern
-  const groups = new Map<string, Map<string, { pattern: ('down' | 'up')[]; count: number }>>()
+  const groups = new Map<string, Map<string, { pattern: ('down' | 'up' | 'miss')[]; count: number }>>()
 
   for (const section of sections) {
     const pattern = getEffectivePattern(section)

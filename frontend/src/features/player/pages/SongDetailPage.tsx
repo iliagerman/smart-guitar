@@ -26,7 +26,9 @@ import { ScrollModeControl } from '../components/ScrollModeControl'
 import { OnboardingTour } from '../components/OnboardingTour'
 import { LyricsSyncDebug } from '../components/LyricsSyncDebug'
 import { SongFeedback } from '../components/SongFeedback'
+import { RecordButton } from '../components/RecordButton'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { usePlaybackStore, type StemName } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useSubscriptionStore } from '@/stores/subscription.store'
@@ -136,7 +138,7 @@ function AdminMenu({ songId }: { songId: string }) {
         title="Admin actions"
       >
         {loading ? (
-          <div className="h-5 w-5 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-5 w-5 rounded-full object-cover" />
         ) : (
           <Shield size={20} />
         )}
@@ -453,10 +455,7 @@ export function SongDetailPage() {
 
   if (isLoading || !detail) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 min-h-[60vh]">
-        <div className="h-8 w-8 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
-        <span className="text-sm text-smoke-300">{loadingLabel}</span>
-      </div>
+      <LoadingSpinner size="lg" label={loadingLabel} className="flex-1 min-h-screen" />
     )
   }
 
@@ -475,25 +474,27 @@ export function SongDetailPage() {
   return (
     <div className="relative h-full flex flex-col" data-testid="song-detail-page">
       {/* Background Image */}
-      <div
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat opacity-20 blur-lg pointer-events-none"
-        style={{ backgroundImage: `url("${thumbnailSrc}")` }}
-      />
+      <div className="fixed inset-0 pointer-events-none">
+        <div
+          className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-3xl scale-125"
+          style={{ backgroundImage: `url("${thumbnailSrc}")` }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_18%,rgba(10,10,10,0.22)_58%,rgba(10,10,10,0.72)_100%)]" />
+      </div>
 
       {/* Fixed top section: song header + player controls */}
       <div className="relative z-30 shrink-0 bg-black border-b border-charcoal-800/50">
-        <div
-          className="absolute inset-0 overflow-hidden pointer-events-none"
-        >
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 blur-md scale-110"
+            className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-2xl scale-125"
             style={{ backgroundImage: `url("${thumbnailSrc}")` }}
           />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,10,10,0.2)_0%,rgba(10,10,10,0.45)_55%,rgba(10,10,10,0.7)_100%)]" />
         </div>
         <div className="relative max-w-7xl mx-auto p-3 pb-2 sm:p-4 sm:pb-3 flex flex-col gap-3 sm:gap-4">
           {/* Song header */}
           <div className="relative flex items-center gap-3 sm:gap-4">
-            <div className="relative size-12 sm:size-16 lg:size-20 shrink-0 rounded-lg overflow-hidden bg-charcoal-800">
+            <div className="relative size-12 sm:size-16 lg:size-20 shrink-0 rounded-xl overflow-hidden bg-charcoal-800 ring-1 ring-white/8 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
               <img
                 src={thumbnailSrc}
                 alt=""
@@ -547,7 +548,7 @@ export function SongDetailPage() {
                 className="flex items-center justify-center gap-2 rounded-lg border border-charcoal-700 bg-charcoal-900/40 px-3 py-2 text-sm text-smoke-300"
                 aria-live="polite"
               >
-                <div className="h-4 w-4 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+                <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
                 <span>
                   {currentStem === 'full_mix'
                     ? 'Downloading audio…'
@@ -580,6 +581,7 @@ export function SongDetailPage() {
                       )}
                     />
                   </button>
+                  <RecordButton songTitle={headerTitle} artist={headerArtist} />
                   <div className="contents" data-tour="stem-selector">
                     <TrackSelector
                       activeStem={currentStem}
@@ -620,7 +622,7 @@ export function SongDetailPage() {
       {/* Ver 3 lyrics generating banner */}
       {isVer3LyricsGenerating && (
         <div className="relative z-20 bg-flame-400/10 border-b border-flame-400/20 px-4 py-2 flex items-center justify-center gap-2 text-sm text-flame-300">
-          <div className="h-3 w-3 rounded-full border-2 border-flame-400/40 border-t-flame-400 animate-spin" />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-3 w-3 rounded-full object-cover" />
           <span>Generating Ver 3 lyrics — using Ver 2 in the meantime</span>
         </div>
       )}

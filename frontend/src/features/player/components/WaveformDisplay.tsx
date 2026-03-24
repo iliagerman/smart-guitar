@@ -71,7 +71,7 @@ export function WaveformDisplay({ audioUrl, onSeek }: WaveformDisplayProps) {
           className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-smoke-400"
           aria-live="polite"
         >
-          <div className="h-4 w-4 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
           <span>Loading audio…</span>
         </div>
       )}

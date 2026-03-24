@@ -33,10 +33,7 @@ export function SearchResults({
         title={query ? `“${query}”` : 'Searching…'}
         description={query ? 'Searching…' : undefined}
         action={
-          <div
-            className="h-5 w-5 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin"
-            aria-label="Searching"
-          />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-label="Searching" className="h-5 w-5 rounded-full object-cover" />
         }
       />
     )

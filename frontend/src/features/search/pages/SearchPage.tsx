@@ -65,7 +65,15 @@ export function SearchPage() {
             className="mb-3 flex items-center gap-2 rounded-lg border border-charcoal-700/50 bg-charcoal-900/40 backdrop-blur-sm px-3 py-2 text-sm text-smoke-300"
             aria-live="polite"
           >
-            <div className="h-4 w-4 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+            <video
+              src="/guitar.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              aria-hidden="true"
+              className="h-4 w-4 rounded-full object-cover"
+            />
             <span>{downloadLabel}</span>
           </div>
         )}

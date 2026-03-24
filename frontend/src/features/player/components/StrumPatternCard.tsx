@@ -101,7 +101,9 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: {
   onPlayingChange?: (playing: boolean) => void
 }) {
   const rawPattern = section.pattern.map((s) => s.direction)
-  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(rawPattern, bpm)
+  // Filter out 'miss' entries for audio playback — only play actual strokes
+  const playablePattern = rawPattern.filter((d): d is 'down' | 'up' => d !== 'miss')
+  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(playablePattern, bpm)
   const labels = beatLabels(rawPattern.length)
 
   // Notify parent when playing state changes
@@ -141,8 +143,11 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: {
       {/* Strum arrows with beat labels — wraps on overflow */}
       <div className="flex flex-wrap gap-0.5 items-end">
         {section.pattern.map((step, index) => {
+          const isMiss = step.direction === 'miss'
           const isDown = step.direction === 'down'
-          const isActive = isPlaying && currentBeatIndex === index
+          // Map display index to playable index for highlight sync
+          const playableIndex = rawPattern.slice(0, index + 1).filter(d => d !== 'miss').length - 1
+          const isActive = isPlaying && !isMiss && currentBeatIndex === playableIndex
           const label = labels[index] ?? ''
           const isBeat = /^\d$/.test(label)
 
@@ -159,10 +164,14 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: {
               <div
                 className={cn(
                   'flex flex-col items-center transition-opacity duration-100',
-                  isActive ? 'opacity-100' : 'opacity-60',
+                  isMiss ? 'opacity-25' : isActive ? 'opacity-100' : 'opacity-60',
                 )}
               >
-                {isDown ? (
+                {isMiss ? (
+                  <div className="flex flex-col items-center h-7.5 justify-center">
+                    <span className="text-sm text-smoke-600 leading-none">·</span>
+                  </div>
+                ) : isDown ? (
                   <div className="flex flex-col items-center">
                     <div className={cn(
                       'w-0.5 h-3 rounded-full',

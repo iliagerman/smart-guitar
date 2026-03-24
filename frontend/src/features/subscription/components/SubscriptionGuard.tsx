@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSubscription } from '../hooks/use-subscription'
 import { PaywallDialog } from './PaywallDialog'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
   const { data: status, isLoading } = useSubscription()
@@ -10,9 +11,7 @@ export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
-      </div>
+      <LoadingSpinner size="lg" className="flex-1 min-h-screen" />
     )
   }
 

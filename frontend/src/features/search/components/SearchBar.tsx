@@ -31,7 +31,7 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
       />
       {isLoading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          <div className="h-4 w-4 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
         </div>
       )}
     </form>

@@ -5,6 +5,7 @@ import { CheckCircle } from 'lucide-react'
 import { queryKeys } from '@/api/query-keys'
 import { subscriptionApi } from '@/api/subscription.api'
 import { ROUTES } from '@/router/routes'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 export function SubscriptionSuccessPage() {
   const navigate = useNavigate()
@@ -49,9 +50,7 @@ export function SubscriptionSuccessPage() {
           ? 'Activating your subscription...'
           : 'Your subscription is active. Redirecting...'}
       </p>
-      {checking && (
-        <div className="h-8 w-8 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
-      )}
+      {checking && <LoadingSpinner size="lg" />}
     </div>
   )
 }

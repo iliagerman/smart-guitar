@@ -116,6 +116,21 @@ body {
   animation: favorite-ignite 0.3s ease-out;
 }
 
+.artwork-backdrop-feather {
+  -webkit-mask-image: radial-gradient(circle at center,
+      rgba(0, 0, 0, 1) 24%,
+      rgba(0, 0, 0, 0.98) 46%,
+      rgba(0, 0, 0, 0.82) 66%,
+      rgba(0, 0, 0, 0.45) 78%,
+      transparent 92%);
+  mask-image: radial-gradient(circle at center,
+      rgba(0, 0, 0, 1) 24%,
+      rgba(0, 0, 0, 0.98) 46%,
+      rgba(0, 0, 0, 0.82) 66%,
+      rgba(0, 0, 0, 0.45) 78%,
+      transparent 92%);
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   .animate-flame-pulse,

@@ -4,6 +4,7 @@ import { Heart, X } from 'lucide-react'
 import { queryKeys } from '@/api/query-keys'
 import { subscriptionApi } from '@/api/subscription.api'
 import { cn } from '@/lib/cn'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 interface PaywallDialogProps {
   open: boolean
@@ -83,9 +84,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
 
             {/* Pricing cards */}
             {pricesLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="h-8 w-8 rounded-full border-2 border-charcoal-600 border-t-flame-400 animate-spin" />
-              </div>
+              <LoadingSpinner size="md" className="py-8" />
             ) : (
               <div className={cn('grid gap-3 mb-5', hasYearly ? 'grid-cols-2' : 'grid-cols-1')}>
                 <button

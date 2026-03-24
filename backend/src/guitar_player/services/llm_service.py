@@ -610,10 +610,10 @@ class LlmService:
                                             },
                                             "pattern": {
                                                 "type": "array",
-                                                "description": "Strum directions for one measure. Use only 'down' and 'up'.",
+                                                "description": "Strum directions for one measure. Use 'down', 'up', or 'miss' (hand moves but doesn't hit strings). Always include ALL beats in the time signature (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &).",
                                                 "items": {
                                                     "type": "string",
-                                                    "enum": ["down", "up"],
+                                                    "enum": ["down", "up", "miss"],
                                                 },
                                             },
                                         },
@@ -739,7 +739,8 @@ class LlmService:
                 f'extract the strumming pattern for "{title}" by {artist}.\n\n'
                 "Rules:\n"
                 "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
-                "- Use only 'down' and 'up' for each strum stroke.\n"
+                "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
+                "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
                 f"{time_sig_line}"
                 "- IMPORTANT: Extract ALL distinct patterns from the search results.\n"
                 "  If there is a basic/simple pattern AND an expanded/full pattern, list BOTH as separate sections.\n"
@@ -758,7 +759,8 @@ class LlmService:
                 "Return the beginner/standard pattern as commonly taught on guitar tutorial sites.\n\n"
                 "Rules:\n"
                 "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
-                "- Use only 'down' and 'up' for each strum stroke.\n"
+                "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
+                "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
                 f"{time_sig_line}"
                 "- If different parts use different patterns (verse vs chorus, or different chord groups), "
                 "list EACH as a separate section with descriptive names.\n"
