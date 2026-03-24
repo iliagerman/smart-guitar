@@ -176,7 +176,7 @@ export function useRecorder(): RecorderState {
 
     // Encode to MP3
     const encoder = new Mp3Encoder(1, sampleRate, MP3_KBPS)
-    const mp3Chunks: Int8Array[] = []
+    const mp3Chunks: Uint8Array[] = []
 
     for (let i = 0; i < int16.length; i += SAMPLES_PER_FRAME) {
       const frame = int16.subarray(i, i + SAMPLES_PER_FRAME)
@@ -191,7 +191,7 @@ export function useRecorder(): RecorderState {
       mp3Chunks.push(flushed)
     }
 
-    const blob = new Blob(mp3Chunks, { type: 'audio/mpeg' })
+    const blob = new Blob(mp3Chunks as BlobPart[], { type: 'audio/mpeg' })
     setRecordedBlob(blob)
 
     if (autoDownload) {
