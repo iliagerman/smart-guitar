@@ -52,7 +52,7 @@ export function TransportControls({
       </div>
       {/* Primary controls row */}
       {primaryControls && (
-        <div className="flex items-center gap-2 justify-center pt-1">
+        <div className="flex items-center gap-2 justify-start pt-1 overflow-x-auto scrollbar-hide">
           {primaryControls}
         </div>
       )}

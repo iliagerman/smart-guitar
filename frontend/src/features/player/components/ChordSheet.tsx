@@ -87,14 +87,46 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
   const { activeLineIndex, activeWordIndex, activeChordIndex } = useChordSheetSync(lines)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
+  const activeWordRef = useRef<HTMLDivElement>(null)
   const lookAheadWordRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!showHighlight || !scrollRef.current) return
-    const target = lookAheadWordRef.current ?? activeLineRef.current
-    if (!target) return
-    if (!isElementVisible(scrollRef.current, target)) {
-      scrollIntoContainerView(scrollRef.current, target)
+    const container = scrollRef.current
+    const activeEl = activeWordRef.current ?? activeLineRef.current
+    const lookAheadEl = lookAheadWordRef.current
+
+    if (!activeEl) return
+
+    // If the active word is already off-screen, prioritize bringing it back
+    if (!isElementVisible(container, activeEl)) {
+      scrollIntoContainerView(container, activeEl)
+      return
+    }
+
+    // Otherwise scroll toward the look-ahead word to keep upcoming content visible,
+    // but only if it wouldn't push the active word out of view
+    if (lookAheadEl && !isElementVisible(container, lookAheadEl)) {
+      const cRect = container.getBoundingClientRect()
+      const activeRect = activeEl.getBoundingClientRect()
+      const lookAheadRect = lookAheadEl.getBoundingClientRect()
+
+      // How far we'd need to scroll to bring the look-ahead word into view
+      const padding = 60
+      const desiredDelta = lookAheadRect.bottom - (cRect.bottom - padding)
+
+      if (desiredDelta > 0) {
+        // Clamp so the active word doesn't scroll above the top of the container
+        const maxDelta = activeRect.top - (cRect.top + padding)
+        const clampedDelta = Math.max(0, Math.min(desiredDelta, maxDelta))
+
+        if (clampedDelta > 0) {
+          container.scrollTo({
+            top: container.scrollTop + clampedDelta,
+            behavior: 'smooth',
+          })
+        }
+      }
     }
   }, [activeLineIndex, activeWordIndex, showHighlight])
 
@@ -182,7 +214,7 @@ export function ChordSheet({ chords, lyrics, onSeek }: ChordSheetProps) {
                       return (
                         <div
                           key={wi}
-                          ref={isLookAheadWord ? lookAheadWordRef : undefined}
+                          ref={isActiveWord ? activeWordRef : isLookAheadWord ? lookAheadWordRef : undefined}
                           className="inline-flex flex-col align-top gap-1 px-1 pb-1"
                           style={{ minWidth: `${reservedWidthCh}ch` }}
                         >

@@ -35,10 +35,12 @@ export function TunerPage() {
   }
 
   return (
-    <div className="relative min-h-full flex flex-col" data-testid="tuner-page">
+    <div className="relative h-full flex flex-col overflow-hidden" data-testid="tuner-page">
       <PageBackground />
-      <PageHeader title="Tuner" icon={<Mic size={24} />} />
-      <PageContainer className="flex flex-col items-center gap-6 py-6">
+      <div className="shrink-0">
+        <PageHeader title="Tuner" icon={<Mic size={24} />} />
+      </div>
+      <PageContainer className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center gap-6 py-6 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-6">
         <TunerGauge cents={cents} active={isListening && !!detectedNote} />
 
         <NoteDisplay

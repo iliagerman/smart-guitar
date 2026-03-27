@@ -379,7 +379,7 @@ resource "aws_lambda_function" "chords_generator" {
   package_type  = "Image"
   image_uri     = "${module.ecr.chords_generator_repo_url}:latest"
   timeout       = 600
-  memory_size   = 6144
+  memory_size   = 3072
   publish       = true
 
   logging_config {
@@ -471,7 +471,7 @@ resource "aws_lambda_function" "tabs_generator" {
   package_type  = "Image"
   image_uri     = "${module.ecr.tabs_generator_repo_url}:latest"
   timeout       = 600
-  memory_size   = 4096
+  memory_size   = 2048
   publish       = true
 
   logging_config {
@@ -660,7 +660,7 @@ resource "aws_lambda_function" "job_orchestrator" {
   package_type  = "Image"
   image_uri     = "${module.ecr.job_orchestrator_repo_url}:latest"
   timeout       = 900
-  memory_size   = 4096
+  memory_size   = 2048
   publish       = true
 
   logging_config {
@@ -668,7 +668,7 @@ resource "aws_lambda_function" "job_orchestrator" {
   }
 
   ephemeral_storage {
-    size = 4096
+    size = 512
   }
 
   environment {
@@ -717,7 +717,7 @@ resource "aws_lambda_function" "vocals_guitar_stitch" {
   package_type  = "Image"
   image_uri     = "${module.ecr.vocals_guitar_stitch_repo_url}:latest"
   timeout       = 300
-  memory_size   = 2048
+  memory_size   = 1024
   publish       = true
 
   logging_config {
@@ -768,7 +768,7 @@ resource "aws_lambda_function" "stale_job_sweeper" {
   package_type  = "Image"
   image_uri     = "${module.ecr.stale_job_sweeper_repo_url}:latest"
   timeout       = 300
-  memory_size   = 512
+  memory_size   = 256
   publish       = true
 
   logging_config {
@@ -841,7 +841,7 @@ resource "aws_lambda_function" "unconfirmed_user_cleanup" {
   package_type  = "Image"
   image_uri     = "${module.ecr.unconfirmed_user_cleanup_repo_url}:latest"
   timeout       = 120
-  memory_size   = 512
+  memory_size   = 256
   publish       = true
 
   logging_config {

@@ -39,6 +39,7 @@ import { useJobWatcherStore } from '@/stores/job-watcher.store'
 import { env } from '@/config/env'
 import { songsApi } from '@/api/songs.api'
 import { cn } from '@/lib/cn'
+import { trackCustomEvent } from '@/lib/meta-pixel'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { transposeChordLabel } from '@/lib/chord-utils'
 import type { LyricsSegment } from '@/types/song'
@@ -139,7 +140,7 @@ function AdminMenu({ songId }: { songId: string }) {
         title="Admin actions"
       >
         {loading ? (
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-5 w-5 rounded-full object-cover" />
+          <LoadingSpinner size="xs" inline className="h-5 w-5" />
         ) : (
           <Shield size={20} />
         )}
@@ -173,10 +174,13 @@ function getAudioUrl(songId: string, stem: StemName, detail: { audio_url: string
 
 export function SongDetailPage() {
   const { songId } = useParams<{ songId: string }>()
-  const { loadTrack, togglePlay, seek } = useAudioPlayer()
+  const { loadStems, loadFullSong, togglePlay, seek } = useAudioPlayer()
   const hasRecordedPlayRef = useRef(false)
-  const currentStem = usePlaybackStore((s) => s.currentStem)
-  const setStem = usePlaybackStore((s) => s.setStem)
+  const activeStems = usePlaybackStore((s) => s.activeStems)
+  const isFullSong = usePlaybackStore((s) => s.isFullSong)
+  const toggleStem = usePlaybackStore((s) => s.toggleStem)
+  const setActiveStems = usePlaybackStore((s) => s.setActiveStems)
+  const selectFullSong = usePlaybackStore((s) => s.selectFullSong)
   const setCurrentSong = usePlaybackStore((s) => s.setCurrentSong)
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
@@ -206,10 +210,12 @@ export function SongDetailPage() {
     if (!songId) return
     hasRecordedPlayRef.current = false
     setCurrentSong(songId)
-    // Default the track selector to vocals when entering a song detail page.
-    // This runs on song changes only and won't interfere with subsequent user selections.
-    setStem('vocals')
-  }, [songId, setCurrentSong, setStem])
+    // Initialize stems from user's default preferences.
+    const defaults = usePlayerPrefsStore.getState().defaultStems
+    if (defaults.length > 0) {
+      setActiveStems(defaults)
+    }
+  }, [songId, setCurrentSong, setActiveStems])
 
   // Track which song the user is currently viewing so the global JobWatcher
   // can suppress in-app toasts when the user is already on the song page.
@@ -219,35 +225,40 @@ export function SongDetailPage() {
     return () => removeViewingSong(songId)
   }, [songId, addViewingSong, removeViewingSong])
 
+  // Load audio when stems or full-song mode changes.
   useEffect(() => {
     if (!detail || !songId) return
-    const url = getAudioUrl(songId, currentStem, detail)
-    if (url) loadTrack(url)
-  }, [detail, songId, currentStem, loadTrack])
+    if (isFullSong) {
+      const url = getAudioUrl(songId, 'full_mix', detail)
+      if (url) loadFullSong(url)
+    } else if (activeStems.length > 0) {
+      const urls = new Map<string, string>()
+      for (const stem of activeStems) {
+        const url = getAudioUrl(songId, stem, detail)
+        if (url) urls.set(stem, url)
+      }
+      if (urls.size > 0) loadStems(urls)
+    }
+  }, [detail, songId, isFullSong, activeStems, loadStems, loadFullSong])
 
-  // If the backend no longer offers the currently selected stem (e.g. legacy
-  // localStorage value like 'drums'), fall back to a valid option.
+  // If the backend no longer offers a selected stem, remove it from activeStems.
   useEffect(() => {
-    if (!detail) return
-
+    if (!detail || isFullSong) return
     const offered = new Set(detail.stem_types.map((s) => s.name))
-    const isValid = currentStem === 'full_mix' || offered.has(currentStem)
-    if (isValid) return
-
-    // Prefer vocals if it's offered; otherwise default to full mix.
-    setStem(offered.has('vocals') ? 'vocals' : 'full_mix')
-  }, [detail, currentStem, setStem])
-
-  const handleStemChange = useCallback(
-    (stem: StemName) => {
-      setStem(stem)
-    },
-    [setStem]
-  )
+    const valid = activeStems.filter((s) => offered.has(s))
+    if (valid.length !== activeStems.length) {
+      if (valid.length === 0) {
+        selectFullSong()
+      } else {
+        setActiveStems(valid)
+      }
+    }
+  }, [detail, isFullSong, activeStems, setActiveStems, selectFullSong])
 
   const handleTogglePlay = useCallback(() => {
     if (songId && !isPlaying && !hasRecordedPlayRef.current) {
       hasRecordedPlayRef.current = true
+      trackCustomEvent('PlaySong', { song_id: songId })
       void songsApi.recordPlay(songId).catch(() => {
         hasRecordedPlayRef.current = false
       })
@@ -460,7 +471,11 @@ export function SongDetailPage() {
     )
   }
 
-  const audioUrl = getAudioUrl(songId!, currentStem, detail)
+  const audioUrl = isFullSong
+    ? getAudioUrl(songId!, 'full_mix', detail)
+    : activeStems.length > 0
+      ? getAudioUrl(songId!, activeStems[0], detail)
+      : null
   const hasChords = activeChords.length > 0
   const hasChordSheet = hasChords || hasAnyLyrics
 
@@ -473,7 +488,7 @@ export function SongDetailPage() {
   const headerArtist = displayArtistName(detail.song)
 
   return (
-    <div className="relative h-full flex flex-col" data-testid="song-detail-page">
+    <div className="relative h-full flex flex-col overflow-hidden" data-testid="song-detail-page">
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div
@@ -549,11 +564,11 @@ export function SongDetailPage() {
                 className="flex items-center justify-center gap-2 rounded-lg border border-charcoal-700 bg-charcoal-900/40 px-3 py-2 text-sm text-smoke-300"
                 aria-live="polite"
               >
-                <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
+                <LoadingSpinner size="xs" inline />
                 <span>
-                  {currentStem === 'full_mix'
+                  {isFullSong
                     ? 'Downloading audio…'
-                    : `Preparing ${currentStem.replaceAll('_', ' ')}…`}
+                    : `Preparing ${activeStems.map((s) => s.replaceAll('_', ' ')).join(', ')}…`}
                 </span>
               </div>
             )}
@@ -585,8 +600,10 @@ export function SongDetailPage() {
                   <RecordButton songTitle={headerTitle} artist={headerArtist} />
                   <div className="contents" data-tour="stem-selector">
                     <TrackSelector
-                      activeStem={currentStem}
-                      onStemChange={handleStemChange}
+                      activeStems={activeStems}
+                      isFullSong={isFullSong}
+                      onToggleStem={toggleStem}
+                      onSelectFullSong={selectFullSong}
                       availableStems={detail.stems}
                       stemTypes={detail.stem_types}
                     />
@@ -623,7 +640,7 @@ export function SongDetailPage() {
       {/* Ver 3 lyrics generating banner */}
       {isVer3LyricsGenerating && (
         <div className="relative z-20 bg-flame-400/10 border-b border-flame-400/20 px-4 py-2 flex items-center justify-center gap-2 text-sm text-flame-300">
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-3 w-3 rounded-full object-cover" />
+          <LoadingSpinner size="xs" inline className="h-3 w-3" />
           <span>Generating Ver 3 lyrics — using Ver 2 in the meantime</span>
         </div>
       )}
@@ -713,39 +730,42 @@ export function SongDetailPage() {
               <span className="text-xs text-smoke-300 font-medium truncate flex-1 mr-2">
                 {current.title || 'Tutorial'}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 {embedItems.length > 1 && (
                   <>
                     <button
                       type="button"
                       onClick={() => setTutorialIndex((i) => Math.max(0, i - 1))}
                       disabled={safeIndex === 0}
-                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-0.5"
+                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-2 sm:p-0.5"
                       aria-label="Previous tutorial"
+                      data-testid="tutorial-prev-button"
                     >
-                      <ChevronLeft size={14} />
+                      <ChevronLeft size={18} className="sm:size-3.5" />
                     </button>
-                    <span className="text-[10px] text-smoke-500 tabular-nums">
+                    <span className="text-xs sm:text-[10px] text-smoke-500 tabular-nums">
                       {safeIndex + 1}/{embedItems.length}
                     </span>
                     <button
                       type="button"
                       onClick={() => setTutorialIndex((i) => Math.min(embedItems.length - 1, i + 1))}
                       disabled={safeIndex === embedItems.length - 1}
-                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-0.5"
+                      className="text-smoke-500 hover:text-smoke-200 disabled:opacity-30 transition-colors p-2 sm:p-0.5"
                       aria-label="Next tutorial"
+                      data-testid="tutorial-next-button"
                     >
-                      <ChevronRight size={14} />
+                      <ChevronRight size={18} className="sm:size-3.5" />
                     </button>
                   </>
                 )}
                 <button
                   type="button"
                   onClick={() => { setShowTutorial(false); setTutorialIndex(0) }}
-                  className="text-smoke-500 hover:text-smoke-200 transition-colors ml-1"
+                  className="text-smoke-500 hover:text-smoke-200 transition-colors ml-1 p-2 sm:p-0"
                   aria-label="Close tutorial"
+                  data-testid="tutorial-close-button"
                 >
-                  <X size={14} />
+                  <X size={18} className="sm:size-3.5" />
                 </button>
               </div>
             </div>

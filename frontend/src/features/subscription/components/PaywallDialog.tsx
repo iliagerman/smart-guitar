@@ -4,6 +4,7 @@ import { Heart, X } from 'lucide-react'
 import { queryKeys } from '@/api/query-keys'
 import { subscriptionApi } from '@/api/subscription.api'
 import { cn } from '@/lib/cn'
+import { trackEvent } from '@/lib/meta-pixel'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 interface PaywallDialogProps {
@@ -31,6 +32,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
   const checkout = useMutation({
     mutationFn: (planType: 'monthly' | 'yearly') => subscriptionApi.checkout(planType),
     onSuccess: (data) => {
+      trackEvent('Subscribe', { currency: 'USD', value: 6 })
       window.location.href = data.payment_url
     },
   })

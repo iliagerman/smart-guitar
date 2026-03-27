@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Guitar — Meta Ads Campaign Step-by-Step Guide</title>
+<style>
+  :root {
+    --charcoal: #1a1a2e;
+    --dark: #16213e;
+    --accent: #e94560;
+    --flame: #ff6b35;
+    --teal: #0f3460;
+    --green: #2ecc71;
+    --yellow: #f39c12;
+    --blue: #3498db;
+    --light: #f8f9fa;
+    --white: #ffffff;
+    --gray: #6c757d;
+    --border: #dee2e6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--light);
+    color: #2d3436;
+    line-height: 1.6;
+  }
+
+  /* ---- HEADER ---- */
+  .hero {
+    background: linear-gradient(135deg, var(--charcoal), var(--teal));
+    color: white;
+    padding: 60px 40px;
+    text-align: center;
+  }
+  .hero h1 { font-size: 2.6rem; margin-bottom: 12px; }
+  .hero p { font-size: 1.15rem; opacity: 0.85; max-width: 700px; margin: 0 auto; }
+  .hero .badge-row { margin-top: 24px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+  .hero .badge {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 8px 20px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  /* ---- LAYOUT ---- */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 48px 0; }
+
+  /* ---- PHASE BANNER ---- */
+  .phase-banner {
+    background: var(--charcoal);
+    color: white;
+    padding: 32px 40px;
+    border-radius: 16px;
+    margin: 40px auto;
+    max-width: 960px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .phase-banner .phase-icon {
+    font-size: 2.8rem;
+    min-width: 60px;
+    text-align: center;
+  }
+  .phase-banner h2 { font-size: 1.6rem; margin-bottom: 4px; }
+  .phase-banner p { opacity: 0.75; font-size: 0.95rem; }
+
+  /* ---- STEP CARDS ---- */
+  .step-card {
+    background: white;
+    border-radius: 14px;
+    padding: 32px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border-left: 5px solid var(--blue);
+    position: relative;
+  }
+  .step-card.creative { border-left-color: var(--flame); }
+  .step-card.tech { border-left-color: var(--teal); }
+  .step-card.decision { border-left-color: var(--green); }
+  .step-card.warning { border-left-color: var(--yellow); }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: white;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-right: 12px;
+    flex-shrink: 0;
+  }
+  .step-card.creative .step-num { background: var(--flame); }
+  .step-card.tech .step-num { background: var(--teal); }
+  .step-card.decision .step-num { background: var(--green); }
+  .step-card.warning .step-num { background: var(--yellow); }
+
+  .step-header { display: flex; align-items: center; margin-bottom: 16px; }
+  .step-header h3 { font-size: 1.25rem; }
+
+  .step-card p { margin-bottom: 12px; color: #444; }
+
+  /* ---- SUB-STEPS ---- */
+  .sub-steps {
+    background: #f4f6f9;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+  .sub-steps ol { padding-left: 20px; }
+  .sub-steps li { margin-bottom: 10px; color: #444; }
+  .sub-steps li strong { color: #222; }
+
+  /* ---- SPEC TABLE ---- */
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  .spec-table th {
+    background: var(--charcoal);
+    color: white;
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .spec-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .spec-table tr:nth-child(even) td { background: #f9fafb; }
+
+  /* ---- AD MOCKUP ---- */
+  .ad-mockup {
+    background: var(--charcoal);
+    border-radius: 16px;
+    overflow: hidden;
+    margin: 20px 0;
+    max-width: 380px;
+  }
+  .ad-mockup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    color: white;
+  }
+  .ad-mockup-header .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--flame);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem;
+  }
+  .ad-mockup-header .name { font-weight: 600; font-size: 0.9rem; }
+  .ad-mockup-header .sponsored { font-size: 0.75rem; opacity: 0.55; }
+
+  .ad-mockup-body {
+    background: #222;
+    color: #ccc;
+    padding: 40px 24px;
+    text-align: center;
+    font-size: 0.9rem;
+    min-height: 340px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    border: 2px dashed rgba(255,255,255,0.15);
+    margin: 0 8px;
+    border-radius: 10px;
+  }
+  .ad-mockup-body .placeholder-icon { font-size: 3rem; }
+  .ad-mockup-body .label { color: var(--flame); font-weight: 600; font-size: 1rem; }
+
+  .ad-mockup-footer {
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+  }
+  .ad-mockup-footer .headline { font-size: 0.85rem; font-weight: 600; }
+  .ad-mockup-footer .cta-btn {
+    background: var(--flame);
+    color: white;
+    border: none;
+    padding: 6px 18px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+
+  /* ---- TIMELINE ---- */
+  .timeline {
+    position: relative;
+    padding-left: 36px;
+    margin: 20px 0;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--border);
+    border-radius: 3px;
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -28px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px var(--blue);
+  }
+  .timeline-item h4 { font-size: 1rem; margin-bottom: 4px; }
+  .timeline-item p { font-size: 0.9rem; color: #555; }
+
+  /* ---- SCRIPT BLOCK ---- */
+  .script-block {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .script-block .timestamp { color: var(--flame); font-weight: 700; }
+  .script-block .direction { color: var(--green); }
+  .script-block .instruction { color: #89b4fa; }
+
+  /* ---- CALLOUT ---- */
+  .callout {
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin: 16px 0;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .callout-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+  .callout p { margin: 0; font-size: 0.92rem; }
+  .callout.tip { background: #e8f8f0; border: 1px solid #b8e6cc; }
+  .callout.warn { background: #fef5e7; border: 1px solid #f5d89a; }
+  .callout.danger { background: #fde8e8; border: 1px solid #f5a5a5; }
+  .callout.info { background: #e8f0fe; border: 1px solid #a5c4f5; }
+
+  /* ---- DO / DON'T ---- */
+  .do-dont {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .do-col, .dont-col {
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .do-col { background: #e8f8f0; border: 1px solid #b8e6cc; }
+  .dont-col { background: #fde8e8; border: 1px solid #f5a5a5; }
+  .do-col h4, .dont-col h4 { margin-bottom: 10px; font-size: 1rem; }
+  .do-col li, .dont-col li { font-size: 0.88rem; margin-bottom: 6px; color: #444; }
+
+  /* ---- BUDGET TABLE ---- */
+  .budget-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .budget-card {
+    background: white;
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  }
+  .budget-card .weeks { font-size: 0.8rem; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .budget-card .amount { font-size: 1.5rem; font-weight: 800; color: var(--charcoal); margin: 8px 0 4px; }
+  .budget-card .daily { font-size: 0.8rem; color: var(--gray); }
+
+  /* ---- CHECKLIST ---- */
+  .checklist { list-style: none; padding: 0; margin: 16px 0; }
+  .checklist li {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.92rem;
+  }
+  .checklist .check-box {
+    width: 20px; height: 20px;
+    border-radius: 4px;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  /* ---- DECISION TABLE ---- */
+  .decision-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.88rem;
+  }
+  .decision-table th {
+    background: var(--green);
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+  }
+  .decision-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .decision-table tr:nth-child(even) td { background: #f0faf4; }
+
+  /* ---- FOOTER ---- */
+  footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--gray);
+    font-size: 0.85rem;
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 700px) {
+    .hero h1 { font-size: 1.8rem; }
+    .phase-banner { flex-direction: column; text-align: center; margin: 20px 16px; padding: 24px; }
+    .do-dont { grid-template-columns: 1fr; }
+    .budget-grid { grid-template-columns: repeat(2, 1fr); }
+    .ad-mockup { max-width: 100%; }
+  }
+
+  /* ---- PRINT ---- */
+  @media print {
+    .hero { padding: 30px 20px; }
+    .step-card, .phase-banner { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<header class="hero">
+  <h1>Smart Guitar — Meta Ads Launch Guide</h1>
+  <p>Your complete, step-by-step playbook to launch and scale Meta ads for Smart Guitar. Follow each step in order — nothing skipped, nothing assumed.</p>
+  <div class="badge-row">
+    <span class="badge">Budget: $15/day</span>
+    <span class="badge">8 Weeks</span>
+    <span class="badge">~$950 Total</span>
+    <span class="badge">Canada → UK</span>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ==================== BEFORE YOU START ==================== -->
+<div class="phase-banner" style="margin-top:48px;">
+  <div class="phase-icon">&#9881;</div>
+  <div>
+    <h2>Before You Start — Technical Setup</h2>
+    <p>Complete these one-time setup steps before creating any ads. Skipping these means Meta can't track your results.</p>
+  </div>
+</div>
+
+<!-- STEP 1 -->
+<div class="step-card tech">
+  <div class="step-header">
+    <span class="step-num">1</span>
+    <h3>Verify Your Meta Pixel Is Installed</h3>
+  </div>
+  <p>Your Pixel ID is <strong>547626808918712</strong>. Before anything else, confirm it's firing correctly on your website.</p>
+  <div class="sub-steps">
+    <ol>
+      <li>Install the <strong>Meta Pixel Helper</strong> Chrome extension from the Chrome Web Store</li>
+      <li>Visit <strong>https://app.smart-guitar.com</strong> and <strong>https://smart-guitar.com</strong></li>
+      <li>Click the Pixel Helper icon — it should show a green checkmark and list <strong>PageView</strong> as firing</li>
+      <li>Go through the full signup flow yourself. You should see these events fire in order: <strong>PageView → Lead → CompleteRegistration</strong></li>
+    </ol>
+  </div>
+  <div class="callout warn">
+    <div class="callout-icon">&#9888;</div>
+    <p><strong>Critical:</strong> The <strong>CompleteRegistration</strong> event must fire when the user submits the signup form — NOT after they confirm their email. If someone signs up from an Instagram ad, they're in Instagram's in-app browser. When they switch to their email app, the session breaks and Meta loses the data.</p>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="step-card tech">
+  <div class="step-header">
+    <span class="step-num">2</span>
+    <h3>Configure Pixel Settings in Events Manager</h3>
+  </div>
+  <div class="sub-steps">
+    <ol>
+      <li>Go to <strong>Events Manager</strong> → select your Pixel → <strong>Settings</strong></li>
+      <li>Set <strong>"Track events automatically without code"</strong> → <strong>OFF</strong> (prevents ghost events that confuse the algorithm)</li>
+      <li>Set <strong>"Automatic advanced matching"</strong> → <strong>ON</strong> (improves how well Meta matches visitors to profiles)</li>
+      <li>Under <strong>Traffic permissions allow list</strong>, add: <code>smart-guitar.com</code> and <code>app.smart-guitar.com</code></li>
+    </ol>
+  </div>
+</div>
+
+<!-- STEP 3 -->
+<div class="step-card tech">
+  <div class="step-header">
+    <span class="step-num">3</span>
+    <h3>Deploy Conversions API (CAPI)</h3>
+  </div>
+  <p>Ad blockers destroy 20–30% of your pixel data. Server-side event tracking ensures Meta gets clean, complete data.</p>
+  <div class="sub-steps">
+    <ol>
+      <li>In Events Manager, go to <strong>Settings → Conversions API</strong></li>
+      <li>Follow Meta's setup guide to deploy a server-side container (AWS or your own server)</li>
+      <li>Send these events server-to-server: <strong>CompleteRegistration</strong>, <strong>Subscribe</strong>, <strong>PlaySong</strong></li>
+      <li>Use the same <strong>event_id</strong> in both browser pixel and server events so Meta can deduplicate them</li>
+    </ol>
+  </div>
+  <div class="callout info">
+    <div class="callout-icon">&#128161;</div>
+    <p>This is technical — if you're not comfortable, ask your developer to handle it. The key point: both your browser pixel AND your server should send the same events with matching <code>event_id</code> values.</p>
+  </div>
+</div>
+
+<!-- STEP 4 -->
+<div class="step-card tech">
+  <div class="step-header">
+    <span class="step-num">4</span>
+    <h3>Test Everything in Events Manager</h3>
+  </div>
+  <div class="sub-steps">
+    <ol>
+      <li>Go to <strong>Events Manager → Test Events</strong></li>
+      <li>Enter your website URL and click <strong>Open Website</strong></li>
+      <li>Walk through the signup flow on the opened page</li>
+      <li>Come back to Test Events — you should see events appearing in real time</li>
+      <li>Confirm: <strong>PageView</strong>, <strong>Lead</strong>, and <strong>CompleteRegistration</strong> all show up</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ==================== PHASE 1 ==================== -->
+<div class="phase-banner">
+  <div class="phase-icon">&#127937;</div>
+  <div>
+    <h2>Phase 1 — Foundation & Alpha Testing (Weeks 1–4)</h2>
+    <p>Canada only · $15/day · 2 ads · Optimize for CompleteRegistration</p>
+  </div>
+</div>
+
+<!-- STEP 5 -->
+<div class="step-card">
+  <div class="step-header">
+    <span class="step-num">5</span>
+    <h3>Create the Campaign in Ads Manager</h3>
+  </div>
+  <p>Open <strong>Meta Ads Manager</strong> (adsmanager.facebook.com) and follow these exact steps:</p>
+  <div class="sub-steps">
+    <ol>
+      <li>Click the green <strong>+ Create</strong> button</li>
+      <li>Select <strong>Leads</strong> as your campaign objective → click Continue</li>
+      <li>Choose <strong>Manual Leads Campaign</strong> (do NOT use the simplified/smart setup)</li>
+      <li>Name the campaign: <code>Smart Guitar - Leads - Broad - Canada</code></li>
+      <li>Turn <strong>Advantage Campaign Budget (CBO)</strong> → <strong>ON</strong></li>
+      <li>Set daily budget: <strong>$15.00</strong></li>
+      <li>Click <strong>Next</strong> to proceed to Ad Set</li>
+    </ol>
+  </div>
+  <div class="callout info">
+    <div class="callout-icon">&#128161;</div>
+    <p><strong>Why "Leads" and not "Sales"?</strong> At $6/month, you'll never generate enough purchases to feed Meta's algorithm. "Leads" with CompleteRegistration as the conversion event hits the sweet spot: high-intent signal that happens frequently enough for the algorithm to learn.</p>
+  </div>
+</div>
+
+<!-- STEP 6 -->
+<div class="step-card">
+  <div class="step-header">
+    <span class="step-num">6</span>
+    <h3>Configure the Ad Set</h3>
+  </div>
+  <div class="sub-steps">
+    <ol>
+      <li>Name: <code>Canada - Broad - 18-55</code></li>
+      <li>Conversion Location: <strong>Website</strong></li>
+      <li>Performance Goal: <strong>Maximize number of conversions</strong></li>
+      <li>Pixel: select your pixel → Conversion Event: <strong>Complete Registration</strong></li>
+      <li>Location: <strong>Canada</strong></li>
+      <li>Age: <strong>18–55</strong></li>
+      <li>Genders: <strong>All</strong></li>
+      <li>Detailed Targeting: <strong>LEAVE COMPLETELY BLANK</strong></li>
+      <li>Placements: <strong>Advantage+ Placements</strong> (let Meta decide)</li>
+    </ol>
+  </div>
+  <div class="callout warn">
+    <div class="callout-icon">&#9888;</div>
+    <p><strong>Do NOT add interest targeting</strong> (like "guitar", "music", etc.). This limits Meta's AI (Andromeda). Your video content IS your targeting — Andromeda will find guitarists based on who engages with your creative.</p>
+  </div>
+</div>
+
+<!-- STEP 7 -->
+<div class="step-card creative">
+  <div class="step-header">
+    <span class="step-num">7</span>
+    <h3>Create Ad A — Founder Demo Video</h3>
+  </div>
+  <p>This is your primary ad: a casual, selfie-style video of you showing the app. It should feel like a friend showing you something cool — NOT a polished commercial.</p>
+
+  <table class="spec-table">
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Video Type</td><td>Selfie / UGC style (you talking to camera + screen demo)</td></tr>
+    <tr><td>Length</td><td><strong>25–35 seconds</strong></td></tr>
+    <tr><td>Aspect Ratio</td><td><strong>9:16 (vertical / portrait)</strong></td></tr>
+    <tr><td>Resolution</td><td><strong>1080 × 1920 px</strong> minimum</td></tr>
+    <tr><td>Format</td><td>MP4, H.264 codec</td></tr>
+    <tr><td>Ad Format in Ads Manager</td><td>Single Image or Video → Manual Upload</td></tr>
+    <tr><td>Call to Action</td><td><strong>Sign Up</strong></td></tr>
+    <tr><td>Destination URL</td><td><code>https://app.smart-guitar.com/register</code></td></tr>
+  </table>
+
+  <h4 style="margin-top:20px; margin-bottom:10px;">Video Script — Second by Second:</h4>
+  <div class="script-block">
+<span class="timestamp">[0–3 sec]</span> <span class="direction">HOOK — Bold text on screen while you hold guitar:</span>
+<span class="instruction">"I built this because I was sick of guessing chords"</span>
+<em style="color:#888;">→ Text overlay large, centered. You're visible behind it holding your guitar.</em>
+
+<span class="timestamp">[3–10 sec]</span> <span class="direction">YOU TALKING TO CAMERA — Selfie angle, casual:</span>
+<span class="instruction">"I'm a guitarist and I could never figure out what the other
+instruments were playing. So I built an AI that separates every
+instrument from any song, automatically."</span>
+<em style="color:#888;">→ Natural light, window behind you. Look at the camera lens, not the screen.</em>
+
+<span class="timestamp">[10–25 sec]</span> <span class="direction">FLIP TO SCREEN — Show the app live:</span>
+<span class="instruction">• Search for a song (use a royalty-free song or blur the title)
+• Show stems separating in real time
+• Solo the guitar track — let the audio play
+• Show chords appearing synced to playback
+• Show strumming pattern visible on screen</span>
+<em style="color:#888;">→ Speed up any loading parts. No dead time. Fast cuts.</em>
+
+<span class="timestamp">[25–30 sec]</span> <span class="direction">BACK TO YOUR FACE:</span>
+<span class="instruction">"It's free to try. Link's right here."</span>
+
+<span class="timestamp">[30–35 sec]</span> <span class="direction">END CARD:</span>
+<span class="instruction">App logo + "Try it free" text</span>
+  </div>
+
+  <!-- Mockup -->
+  <h4 style="margin-top:20px; margin-bottom:10px;">How It Looks in the Feed:</h4>
+  <div class="ad-mockup">
+    <div class="ad-mockup-header">
+      <div class="avatar">SG</div>
+      <div>
+        <div class="name">Smart Guitar</div>
+        <div class="sponsored">Sponsored</div>
+      </div>
+    </div>
+    <div class="ad-mockup-body">
+      <div class="placeholder-icon">&#127909;</div>
+      <div class="label">YOUR VIDEO HERE</div>
+      <div>9:16 vertical · 1080×1920px</div>
+      <div style="font-size:0.8rem;">Selfie talking + app screen recording</div>
+    </div>
+    <div class="ad-mockup-footer">
+      <div>
+        <div class="headline">Hear Every Instrument. Play Any Song.</div>
+        <div style="font-size:0.72rem; opacity:0.6;">Free to try — no credit card required</div>
+      </div>
+      <button class="cta-btn">Sign Up</button>
+    </div>
+  </div>
+
+  <h4 style="margin-top:20px; margin-bottom:10px;">Filming Tips:</h4>
+  <div class="sub-steps">
+    <ol>
+      <li><strong>Lighting:</strong> Film near a window during daytime. Natural light looks best. No overhead fluorescent.</li>
+      <li><strong>Audio:</strong> A quiet room is enough. No external mic needed, but avoid echo-y spaces.</li>
+      <li><strong>Camera:</strong> Hold your phone vertically. Front-facing camera (selfie mode).</li>
+      <li><strong>Speaking:</strong> Don't memorize the script word-for-word. Know the 3 beats (hook → explain → demo) and talk naturally.</li>
+      <li><strong>Captions:</strong> Add captions to the entire video. Use CapCut (free) or Meta's auto-caption feature in Ads Manager.</li>
+      <li><strong>Hook text:</strong> Add bold white text in the first 3 seconds. This is what stops people from scrolling.</li>
+      <li><strong>Screen recording:</strong> On iPhone: Settings → Control Center → add Screen Recording. On Android: swipe down → Screen Record.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- STEP 8 -->
+<div class="step-card creative">
+  <div class="step-header">
+    <span class="step-num">8</span>
+    <h3>Create Ad B — Screen Recording Demo</h3>
+  </div>
+  <p>A fast, punchy screen recording of the app in action. No talking — just text overlays and background music. This contrasts with Ad A so you learn what style works best.</p>
+
+  <table class="spec-table">
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Video Type</td><td>Screen recording with text overlays</td></tr>
+    <tr><td>Length</td><td><strong>13–18 seconds</strong></td></tr>
+    <tr><td>Aspect Ratio</td><td><strong>9:16 (vertical / portrait)</strong></td></tr>
+    <tr><td>Resolution</td><td><strong>1080 × 1920 px</strong> minimum</td></tr>
+    <tr><td>Format</td><td>MP4, H.264 codec</td></tr>
+    <tr><td>Ad Format in Ads Manager</td><td>Single Image or Video → Manual Upload</td></tr>
+    <tr><td>Call to Action</td><td><strong>Sign Up</strong></td></tr>
+    <tr><td>Destination URL</td><td><code>https://app.smart-guitar.com/register</code></td></tr>
+  </table>
+
+  <h4 style="margin-top:20px; margin-bottom:10px;">Storyboard — Second by Second:</h4>
+  <div class="script-block">
+<span class="timestamp">[0–2 sec]</span> <span class="direction">TEXT ON DARK BACKGROUND:</span>
+<span class="instruction">"Hear the guitar part you could never figure out"</span>
+<em style="color:#888;">→ Bold white text, centered, dark charcoal background</em>
+
+<span class="timestamp">[2–5 sec]</span> <span class="direction">SCREEN RECORDING:</span>
+<span class="instruction">Search bar → type song name → results appear</span>
+<em style="color:#888;">→ Speed this up (2x or 3x) so it feels snappy</em>
+
+<span class="timestamp">[5–8 sec]</span> <span class="direction">SCREEN RECORDING:</span>
+<span class="instruction">Song loaded → stems separating → 5 tracks visible</span>
+<em style="color:#888;">→ Highlight the guitar track (add a glow or pulse effect in editing)</em>
+
+<span class="timestamp">[8–11 sec]</span> <span class="direction">SCREEN RECORDING:</span>
+<span class="instruction">Guitar stem soloed → chords appearing in sync → strumming pattern visible</span>
+<em style="color:#888;">→ Let the guitar audio play here — this is the "wow" moment</em>
+
+<span class="timestamp">[11–13 sec]</span> <span class="direction">SCREEN RECORDING:</span>
+<span class="instruction">Mute vocals → play-along view active</span>
+
+<span class="timestamp">[13–15 sec]</span> <span class="direction">END CARD:</span>
+<span class="instruction">"Any song. Every chord. Free to try." + App logo</span>
+<em style="color:#888;">→ Dark background, clean, simple</em>
+  </div>
+
+  <div class="ad-mockup">
+    <div class="ad-mockup-header">
+      <div class="avatar">SG</div>
+      <div>
+        <div class="name">Smart Guitar</div>
+        <div class="sponsored">Sponsored</div>
+      </div>
+    </div>
+    <div class="ad-mockup-body">
+      <div class="placeholder-icon">&#128241;</div>
+      <div class="label">SCREEN RECORDING HERE</div>
+      <div>9:16 vertical · 1080×1920px</div>
+      <div style="font-size:0.8rem;">App demo + text overlays + background music</div>
+    </div>
+    <div class="ad-mockup-footer">
+      <div>
+        <div class="headline">Stop Guessing Chords. Start Playing.</div>
+        <div style="font-size:0.72rem; opacity:0.6;">Works with any song, instantly</div>
+      </div>
+      <button class="cta-btn">Sign Up</button>
+    </div>
+  </div>
+
+  <h4 style="margin-top:20px; margin-bottom:10px;">Production Tips:</h4>
+  <div class="sub-steps">
+    <ol>
+      <li><strong>Recording:</strong> Record your phone screen (iOS: Settings → Control Center → Screen Recording) or record desktop browser and crop to vertical</li>
+      <li><strong>Pacing:</strong> Speed up all loading/processing parts. No transition longer than 0.5 seconds. Fast cuts.</li>
+      <li><strong>Text overlays:</strong> Bold white text with a slight drop shadow so it's readable on any background</li>
+      <li><strong>Music:</strong> Add upbeat acoustic background music — use royalty-free tracks from Epidemic Sound or Artlist</li>
+      <li><strong>Copyright:</strong> Make sure NO copyrighted song titles or artist names are visible in the screen recording</li>
+    </ol>
+  </div>
+</div>
+
+<!-- STEP 9 -->
+<div class="step-card">
+  <div class="step-header">
+    <span class="step-num">9</span>
+    <h3>Set Up Ad Copy &amp; UTM Tracking</h3>
+  </div>
+  <p>Use the same copy on both Ad A and Ad B. You're only testing the video creative — not the text (one variable at a time).</p>
+
+  <h4 style="margin-top:16px; margin-bottom:8px;">Primary Text (appears above the video):</h4>
+  <div class="script-block" style="color:#e0e0e0;">
+Every guitarist knows the frustration. You hear an incredible song
+and think "I need to learn that."
+
+Three hours of YouTube tutorials later, you still can't get
+the strumming right.
+
+Smart Guitar uses AI to separate every instrument, show you the
+exact chords, and let you play along. Any song. In seconds.
+
+Try it free →
+  </div>
+
+  <h4 style="margin-top:16px; margin-bottom:8px;">Headline (below the video):</h4>
+  <p><strong>"Hear Every Instrument. Play Any Song."</strong></p>
+
+  <h4 style="margin-top:16px; margin-bottom:8px;">Description (small text below headline):</h4>
+  <p><strong>"Free to try — no credit card required"</strong></p>
+
+  <h4 style="margin-top:20px; margin-bottom:8px;">UTM Parameters Setup:</h4>
+  <p>In the Ad setup, click <strong>"Build a URL Parameter"</strong> under the destination URL and fill in:</p>
+  <table class="spec-table">
+    <tr><th>Parameter</th><th>Value to Enter</th></tr>
+    <tr><td>Campaign Source</td><td><code>{{site_source_name}}</code></td></tr>
+    <tr><td>Campaign Medium</td><td><code>{{placement}}</code></td></tr>
+    <tr><td>Campaign Name</td><td><code>{{campaign.name}}</code></td></tr>
+    <tr><td>Campaign Content</td><td><code>{{ad.name}}</code></td></tr>
+  </table>
+  <div class="callout tip">
+    <div class="callout-icon">&#9989;</div>
+    <p>These tags let you trace every signup in your database back to the exact ad and placement. You'll use this to cross-check Meta's reported numbers against your real data.</p>
+  </div>
+</div>
+
+<!-- STEP 10 -->
+<div class="step-card warning">
+  <div class="step-header">
+    <span class="step-num">10</span>
+    <h3>Launch — Then Don't Touch Anything for 5 Days</h3>
+  </div>
+  <p>Click <strong>Publish</strong>. Your ads will go into Meta's review queue (usually approved in 1–24 hours). Once live:</p>
+  <div class="callout danger">
+    <div class="callout-icon">&#9940;</div>
+    <p><strong>DO NOT</strong> edit anything, pause anything, or change the budget for <strong>5 full days</strong>. Daily results will swing wildly. One day might show $2 per registration, the next $15. This is normal. Wait for the full picture.</p>
+  </div>
+  <div class="callout warn">
+    <div class="callout-icon">&#9888;</div>
+    <p><strong>You WILL see a "Learning Limited" warning.</strong> This is because $15/day won't hit 50 conversions/week. Ignore it completely. It does NOT mean your ads are broken. Judge by actual cost per registration and your own signup data.</p>
+  </div>
+</div>
+
+<!-- STEP 11 -->
+<div class="step-card decision">
+  <div class="step-header">
+    <span class="step-num">11</span>
+    <h3>Evaluate Results After 7–14 Days</h3>
+  </div>
+  <p>After at least 7 days, check your numbers. Look in both Ads Manager AND your own database (the UTM tags make this possible).</p>
+
+  <table class="decision-table">
+    <tr><th>What You See</th><th>What It Means</th><th>What to Do</th></tr>
+    <tr>
+      <td>Cost per Registration <strong>under $5</strong></td>
+      <td style="color:#27ae60; font-weight:600;">Winning</td>
+      <td>Keep it running. Don't change anything.</td>
+    </tr>
+    <tr>
+      <td>Cost per Registration <strong>$5–$10</strong></td>
+      <td style="color:#f39c12; font-weight:600;">Acceptable</td>
+      <td>Keep testing. Let it run 2 more weeks.</td>
+    </tr>
+    <tr>
+      <td>Cost per Registration <strong>over $10</strong></td>
+      <td style="color:#e74c3c; font-weight:600;">Needs work</td>
+      <td>Review your creative and landing page. Something isn't clicking.</td>
+    </tr>
+    <tr>
+      <td>Ad spent <strong>$20+</strong> with <strong>0 registrations</strong></td>
+      <td style="color:#e74c3c; font-weight:600;">Dead</td>
+      <td>Turn that ad off immediately.</td>
+    </tr>
+    <tr>
+      <td>CTR <strong>under 0.5%</strong> after 1,000+ impressions</td>
+      <td style="color:#e74c3c; font-weight:600;">No interest</td>
+      <td>Turn that ad off. The creative isn't grabbing attention.</td>
+    </tr>
+  </table>
+
+  <div class="callout tip">
+    <div class="callout-icon">&#9989;</div>
+    <p><strong>Where to find these numbers:</strong> In Ads Manager, customize your columns to show: Impressions, Link CTR, Cost per Result (this is your Cost per CompleteRegistration), Amount Spent, and Results.</p>
+  </div>
+</div>
+
+<!-- ==================== PHASE 2 ==================== -->
+<div class="phase-banner">
+  <div class="phase-icon">&#128640;</div>
+  <div>
+    <h2>Phase 2 — Expansion (Weeks 5–8)</h2>
+    <p>Canada + UK · $18→$20/day · Winner + new challenger ads</p>
+  </div>
+</div>
+
+<!-- STEP 12 -->
+<div class="step-card">
+  <div class="step-header">
+    <span class="step-num">12</span>
+    <h3>Expand Geo and Scale Budget</h3>
+  </div>
+  <div class="sub-steps">
+    <ol>
+      <li><strong>Keep your winning ad running.</strong> Never pause a winner.</li>
+      <li><strong>Turn off the losing ad</strong> from Phase 1.</li>
+      <li>In your ad set, add <strong>United Kingdom</strong> to the geo targeting (alongside Canada).</li>
+      <li>Increase your daily budget from $15 to <strong>$18</strong>. Wait 3 days.</li>
+      <li>After 3 days at $18, increase to <strong>$20</strong>.</li>
+    </ol>
+  </div>
+  <div class="callout warn">
+    <div class="callout-icon">&#9888;</div>
+    <p><strong>Never increase budget by more than 20% at a time.</strong> Big jumps reset Meta's learning phase. $15 → $18 → $20 is the correct progression.</p>
+  </div>
+</div>
+
+<!-- STEP 13 -->
+<div class="step-card creative">
+  <div class="step-header">
+    <span class="step-num">13</span>
+    <h3>Create Challenger Ad C — Testimonial Mashup</h3>
+  </div>
+  <p>This replaces your losing ad. It's a fast-cut compilation of real user testimonials.</p>
+
+  <table class="spec-table">
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Video Type</td><td>Edited compilation of user testimonial clips</td></tr>
+    <tr><td>Length</td><td><strong>15–20 seconds</strong></td></tr>
+    <tr><td>Aspect Ratio</td><td><strong>9:16 (vertical)</strong></td></tr>
+    <tr><td>Resolution</td><td><strong>1080 × 1920 px</strong></td></tr>
+    <tr><td>Format</td><td>MP4, H.264</td></tr>
+  </table>
+
+  <div class="script-block">
+<span class="timestamp">[0–3 sec]</span> <span class="direction">TEXT HOOK on dark background:</span>
+<span class="instruction">"Real guitarists. Real results."</span>
+
+<span class="timestamp">[3–7 sec]</span> <span class="direction">JAKE CLIP — Best 3-4 second bite:</span>
+<span class="instruction">"I could finally hear exactly what the guitarist was playing"</span>
+<em style="color:#888;">→ Name tag overlay: "Jake — Acoustic, 3 years"</em>
+
+<span class="timestamp">[7–11 sec]</span> <span class="direction">SARAH CLIP — Best 3-4 second bite:</span>
+<span class="instruction">"Isolating each instrument changed how I understand music"</span>
+<em style="color:#888;">→ Name tag overlay: "Sarah — Music student"</em>
+
+<span class="timestamp">[11–15 sec]</span> <span class="direction">DAVID CLIP — Best 3-4 second bite:</span>
+<span class="instruction">"I nailed songs I'd been struggling with for months"</span>
+<em style="color:#888;">→ Name tag overlay: "David — Electric, 15 years"</em>
+
+<span class="timestamp">[15–18 sec]</span> <span class="direction">END CARD:</span>
+<span class="instruction">App logo + "Join them — try it free"</span>
+  </div>
+
+  <div class="sub-steps">
+    <ol>
+      <li>Pick the most energetic/emotional moment from each testimonial</li>
+      <li>Add captions to every clip</li>
+      <li>Use a consistent name tag style: white text on a semi-transparent dark bar</li>
+      <li>Ensure no copyrighted music is playing in the background of any clip</li>
+    </ol>
+  </div>
+</div>
+
+<!-- STEP 14 -->
+<div class="step-card creative">
+  <div class="step-header">
+    <span class="step-num">14</span>
+    <h3>Prepare Backup Ads D &amp; E (Have Ready)</h3>
+  </div>
+  <p>Create these during Weeks 1–4 so they're ready to swap in if the testimonial ad doesn't beat your winner.</p>
+
+  <h4 style="margin:16px 0 10px;">Ad D — "Stop Watching Tutorials" Static Image</h4>
+  <table class="spec-table">
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Type</td><td>Single image</td></tr>
+    <tr><td>Sizes</td><td><strong>1080 × 1080 px</strong> (square for Feed) + <strong>1080 × 1920 px</strong> (vertical for Stories)</td></tr>
+    <tr><td>Format</td><td>PNG or JPG</td></tr>
+  </table>
+  <div class="script-block">
+<span class="direction">DESIGN LAYOUT:</span>
+
+<span class="instruction">TOP HALF (dark charcoal background):</span>
+  Bold white text: <span style="color:#fff; font-weight:700;">"You've watched 47 tutorials."</span>
+  Smaller text:    <span style="color:#aaa;">"Still can't play the song."</span>
+
+<span class="instruction">BOTTOM HALF:</span>
+  App screenshot in a phone mockup frame:
+  → stem separation view
+  → guitar track soloed
+  → chords visible
+  → strumming pattern showing
+
+<span class="instruction">BOTTOM CORNER:</span>
+  App logo (small) + "Free to try" badge
+  </div>
+  <div class="callout tip">
+    <div class="callout-icon">&#9989;</div>
+    <p><strong>Design rules:</strong> Keep text under 20% of the image area (Meta penalizes text-heavy images). Use your app's dark theme — it pops against the white Facebook feed. Use your charcoal + flame orange color palette.</p>
+  </div>
+
+  <h4 style="margin:24px 0 10px;">Ad E — Before/After Carousel</h4>
+  <table class="spec-table">
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Type</td><td>Carousel (3 cards)</td></tr>
+    <tr><td>Card size</td><td><strong>1080 × 1080 px</strong> each</td></tr>
+    <tr><td>Format</td><td>PNG or JPG per card</td></tr>
+    <tr><td>Ad Format</td><td>Carousel</td></tr>
+  </table>
+  <div class="script-block">
+<span class="instruction">CARD 1 — "BEFORE"</span>
+  Image: Frustrated person with guitar + laptop showing browser tabs
+  Text: <span style="color:#aaa;">"BEFORE: Watching tutorials for hours"</span>
+  Color tone: Dark, desaturated
+
+<span class="instruction">CARD 2 — "AFTER"</span>
+  Image: App screenshot — stems separated, chords visible
+  Text: <span style="color:#fff;">"AFTER: See every chord. Hear every instrument."</span>
+  Color tone: Bright, vibrant (flame orange accents)
+
+<span class="instruction">CARD 3 — CTA</span>
+  Image: Person happily playing guitar
+  Text: <span style="color:#fff;">"Start playing free — any song"</span>
+  App logo prominent
+  </div>
+</div>
+
+<!-- STEP 15 -->
+<div class="step-card decision">
+  <div class="step-header">
+    <span class="step-num">15</span>
+    <h3>Week-by-Week Phase 2 Timeline</h3>
+  </div>
+  <div class="timeline">
+    <div class="timeline-item">
+      <h4>Week 5</h4>
+      <p>Add UK to targeting. Introduce testimonial challenger ad. Increase budget to $18/day.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Week 6</h4>
+      <p>Evaluate challenger vs. winner. Kill the loser. If testimonial lost, swap in the static image (Ad D).</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Week 7</h4>
+      <p>Increase budget to $20/day. Continue running winner + current challenger.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Week 8</h4>
+      <p>Review full 8-week data. Decide: add Australia, or test Advantage+ Shopping campaign.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== BUDGET ==================== -->
+<div class="phase-banner" style="background: linear-gradient(135deg, #0f3460, #1a1a2e);">
+  <div class="phase-icon">&#128176;</div>
+  <div>
+    <h2>Budget Overview</h2>
+    <p>Total 8-week investment: approximately $950</p>
+  </div>
+</div>
+
+<div class="budget-grid" style="max-width:960px; margin:24px auto; padding: 0 24px;">
+  <div class="budget-card">
+    <div class="weeks">Weeks 1–2</div>
+    <div class="amount">$210</div>
+    <div class="daily">$15 / day</div>
+  </div>
+  <div class="budget-card">
+    <div class="weeks">Weeks 3–4</div>
+    <div class="amount">$420</div>
+    <div class="daily">$15 / day (cumulative)</div>
+  </div>
+  <div class="budget-card">
+    <div class="weeks">Weeks 5–6</div>
+    <div class="amount">$672</div>
+    <div class="daily">$18 / day (cumulative)</div>
+  </div>
+  <div class="budget-card">
+    <div class="weeks">Weeks 7–8</div>
+    <div class="amount">$952</div>
+    <div class="daily">$20 / day (cumulative)</div>
+  </div>
+</div>
+
+<!-- ==================== COPYRIGHT ==================== -->
+<div class="container">
+<div class="phase-banner" style="background: #2d3436;">
+  <div class="phase-icon">&#9878;</div>
+  <div>
+    <h2>Copyright Safety — What You Can &amp; Can't Show</h2>
+    <p>Meta will reject your ads if copyrighted content is visible. Follow these rules strictly.</p>
+  </div>
+</div>
+
+<div class="do-dont">
+  <div class="do-col">
+    <h4>&#9989; DO</h4>
+    <ul>
+      <li>Use royalty-free music in video ads</li>
+      <li>Blur or use fictional song/artist names in screenshots</li>
+      <li>Show the app UI with generic or dummy data</li>
+      <li>Film yourself playing original riffs</li>
+      <li>Use testimonial clips of people talking</li>
+    </ul>
+  </div>
+  <div class="dont-col">
+    <h4>&#10060; DON'T</h4>
+    <ul>
+      <li>Show recognizable song titles or artist names</li>
+      <li>Play copyrighted songs audibly in ads</li>
+      <li>Show album artwork or cover art</li>
+      <li>Film yourself playing a recognizable hit song</li>
+      <li>Show YouTube or Spotify branding anywhere</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== APP SCREENSHOTS ==================== -->
+<div class="step-card" style="border-left-color: var(--flame); margin-top:32px;">
+  <div class="step-header">
+    <span class="step-num" style="background:var(--flame);">!</span>
+    <h3>App Screenshots You Need to Prepare</h3>
+  </div>
+  <p>Create these before you make your ads. You'll reuse them across ads, landing page, and app stores.</p>
+  <table class="spec-table">
+    <tr><th>Screenshot</th><th>What It Shows</th><th>Where You'll Use It</th></tr>
+    <tr><td><strong>Stem separation</strong></td><td>All 5 tracks with guitar soloed/highlighted</td><td>Ads, landing page</td></tr>
+    <tr><td><strong>Chord sheet</strong></td><td>Real-time chords synced with playback + strumming pattern</td><td>Ads, landing page</td></tr>
+    <tr><td><strong>Search results</strong></td><td>Search interface (blur or use generic song names)</td><td>Ads</td></tr>
+    <tr><td><strong>Lyrics sync</strong></td><td>Lyrics scrolling in sync with music</td><td>Landing page</td></tr>
+    <tr><td><strong>Full player</strong></td><td>Complete player interface with all controls</td><td>App store listing</td></tr>
+  </table>
+  <div class="callout info">
+    <div class="callout-icon">&#128161;</div>
+    <p><strong>Screenshot rules:</strong> Use the app's dark theme (pops in white feeds). Add a phone frame mockup for polish. No copyrighted content visible. At least 1080px wide.</p>
+  </div>
+</div>
+
+<!-- ==================== GOLDEN RULES ==================== -->
+<div class="phase-banner" style="background: linear-gradient(135deg, #e94560, #ff6b35); margin-top: 48px;">
+  <div class="phase-icon">&#128293;</div>
+  <div>
+    <h2>7 Golden Rules — Tape These to Your Monitor</h2>
+    <p>Break any of these and you'll waste budget. Seriously.</p>
+  </div>
+</div>
+
+<div style="display: grid; gap: 12px; margin: 24px 0;">
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>1. Ignore "Learning Limited" warnings.</strong> At $15/day, you won't hit 50 conversions/week. The warning is just a label — evaluate by your actual cost per registration.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>2. Don't touch anything for 3–5 days after launch.</strong> Daily variance is huge. One bad day doesn't mean a bad ad.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>3. Never increase budget by more than 20% at a time.</strong> Big jumps reset learning. Follow: $15 → $18 → $20.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>4. Never pause a winning ad.</strong> Only kill the loser and introduce a new challenger.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>5. One variable at a time.</strong> Don't change audience AND creative AND budget at the same time.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>6. Check results weekly, not hourly.</strong> Meta's conversion reporting lags 24–72 hours.
+  </div>
+  <div class="step-card" style="border-left-color: var(--accent); margin-bottom:0;">
+    <strong>7. Cross-reference with your own data.</strong> Compare Meta's numbers with actual signups in your database using the UTM tags.
+  </div>
+</div>
+
+<!-- ==================== FINAL CHECKLIST ==================== -->
+<div class="phase-banner" style="background: var(--green); margin-top: 48px;">
+  <div class="phase-icon">&#9745;</div>
+  <div>
+    <h2>Pre-Launch Checklist</h2>
+    <p>Go through every item before you hit Publish.</p>
+  </div>
+</div>
+
+<div class="step-card" style="border-left-color: var(--green);">
+  <ul class="checklist">
+    <li><span class="check-box"></span> Meta Pixel Helper shows events firing on homepage and app</li>
+    <li><span class="check-box"></span> Events Manager → Test Events shows real-time events when you browse your site</li>
+    <li><span class="check-box"></span> Allow list configured for both domains</li>
+    <li><span class="check-box"></span> Automatic advanced matching is ON</li>
+    <li><span class="check-box"></span> Automatic event tracking is OFF</li>
+    <li><span class="check-box"></span> Ad videos are 9:16 vertical, at least 1080×1920px, MP4 H.264</li>
+    <li><span class="check-box"></span> Static images are 1080×1080px (Feed) and 1080×1920px (Stories)</li>
+    <li><span class="check-box"></span> No copyrighted content visible in any creative asset</li>
+    <li><span class="check-box"></span> Captions/subtitles added to all video ads</li>
+    <li><span class="check-box"></span> Landing page loads fast (&lt;3 seconds) and signup flow works</li>
+    <li><span class="check-box"></span> CompleteRegistration fires on form submit (NOT after email confirmation)</li>
+    <li><span class="check-box"></span> UTM parameters configured on all ads</li>
+    <li><span class="check-box"></span> Ad copy proofread and CTA button set to "Sign Up"</li>
+  </ul>
+</div>
+
+</div><!-- /container -->
+
+<footer>
+  Smart Guitar — Meta Ads Campaign Guide &middot; Generated March 2026
+</footer>
+
+</body>
+</html>

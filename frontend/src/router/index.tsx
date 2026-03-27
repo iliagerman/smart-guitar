@@ -1,32 +1,39 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGuard } from '@/features/auth/components/AuthGuard'
 import { SubscriptionGuard } from '@/features/subscription/components/SubscriptionGuard'
-import { LoginPage } from '@/features/auth/pages/LoginPage'
-import { RegisterPage } from '@/features/auth/pages/RegisterPage'
-import { ConfirmEmailPage } from '@/features/auth/pages/ConfirmEmailPage'
-import { CallbackPage } from '@/features/auth/pages/CallbackPage'
-import { ProfilePage } from '@/features/auth/pages/ProfilePage'
 import { AdminGuard } from '@/features/analytics/components/AdminGuard'
-import { AnalyticsDashboardPage } from '@/features/analytics/pages/AnalyticsDashboardPage'
-import { SearchPage } from '@/features/search/pages/SearchPage'
-import { LibraryPage } from '@/features/library/pages/LibraryPage'
-import { FavoritesPage } from '@/features/library/pages/FavoritesPage'
-import { SongDetailPage } from '@/features/player/pages/SongDetailPage'
-import { SubscriptionSuccessPage } from '@/features/subscription/pages/SubscriptionSuccessPage'
-import { SubscriptionFailPage } from '@/features/subscription/pages/SubscriptionFailPage'
-import { TunerPage } from '@/features/tuner/pages/TunerPage'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { ROUTES } from './routes'
+
+const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })))
+const RegisterPage = lazy(() => import('@/features/auth/pages/RegisterPage').then(m => ({ default: m.RegisterPage })))
+const ConfirmEmailPage = lazy(() => import('@/features/auth/pages/ConfirmEmailPage').then(m => ({ default: m.ConfirmEmailPage })))
+const CallbackPage = lazy(() => import('@/features/auth/pages/CallbackPage').then(m => ({ default: m.CallbackPage })))
+const ProfilePage = lazy(() => import('@/features/auth/pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
+const AnalyticsDashboardPage = lazy(() => import('@/features/analytics/pages/AnalyticsDashboardPage').then(m => ({ default: m.AnalyticsDashboardPage })))
+const SearchPage = lazy(() => import('@/features/search/pages/SearchPage').then(m => ({ default: m.SearchPage })))
+const LibraryPage = lazy(() => import('@/features/library/pages/LibraryPage').then(m => ({ default: m.LibraryPage })))
+const FavoritesPage = lazy(() => import('@/features/library/pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
+const SongDetailPage = lazy(() => import('@/features/player/pages/SongDetailPage').then(m => ({ default: m.SongDetailPage })))
+const SubscriptionSuccessPage = lazy(() => import('@/features/subscription/pages/SubscriptionSuccessPage').then(m => ({ default: m.SubscriptionSuccessPage })))
+const SubscriptionFailPage = lazy(() => import('@/features/subscription/pages/SubscriptionFailPage').then(m => ({ default: m.SubscriptionFailPage })))
+const TunerPage = lazy(() => import('@/features/tuner/pages/TunerPage').then(m => ({ default: m.TunerPage })))
+
+function SuspenseWrapper({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<LoadingSpinner size="sm" />}>{children}</Suspense>
+}
 
 export const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
       // Public routes
-      { path: ROUTES.LOGIN, element: <LoginPage /> },
-      { path: ROUTES.REGISTER, element: <RegisterPage /> },
-      { path: ROUTES.CONFIRM_EMAIL, element: <ConfirmEmailPage /> },
-      { path: ROUTES.CALLBACK, element: <CallbackPage /> },
+      { path: ROUTES.LOGIN, element: <SuspenseWrapper><LoginPage /></SuspenseWrapper> },
+      { path: ROUTES.REGISTER, element: <SuspenseWrapper><RegisterPage /></SuspenseWrapper> },
+      { path: ROUTES.CONFIRM_EMAIL, element: <SuspenseWrapper><ConfirmEmailPage /></SuspenseWrapper> },
+      { path: ROUTES.CALLBACK, element: <SuspenseWrapper><CallbackPage /></SuspenseWrapper> },
 
       // Protected + subscription-gated routes
       {
@@ -34,7 +41,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <SearchPage />
+              <SuspenseWrapper><SearchPage /></SuspenseWrapper>
             </SubscriptionGuard>
           </AuthGuard>
         ),
@@ -44,7 +51,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <LibraryPage />
+              <SuspenseWrapper><LibraryPage /></SuspenseWrapper>
             </SubscriptionGuard>
           </AuthGuard>
         ),
@@ -54,7 +61,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <FavoritesPage />
+              <SuspenseWrapper><FavoritesPage /></SuspenseWrapper>
             </SubscriptionGuard>
           </AuthGuard>
         ),
@@ -64,7 +71,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <AdminGuard>
-              <AnalyticsDashboardPage />
+              <SuspenseWrapper><AnalyticsDashboardPage /></SuspenseWrapper>
             </AdminGuard>
           </AuthGuard>
         ),
@@ -74,7 +81,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <SongDetailPage />
+              <SuspenseWrapper><SongDetailPage /></SuspenseWrapper>
             </SubscriptionGuard>
           </AuthGuard>
         ),
@@ -84,7 +91,7 @@ export const router = createBrowserRouter([
         path: ROUTES.TUNER,
         element: (
           <AuthGuard>
-            <TunerPage />
+            <SuspenseWrapper><TunerPage /></SuspenseWrapper>
           </AuthGuard>
         ),
       },
@@ -93,7 +100,7 @@ export const router = createBrowserRouter([
         path: ROUTES.PROFILE,
         element: (
           <AuthGuard>
-            <ProfilePage />
+            <SuspenseWrapper><ProfilePage /></SuspenseWrapper>
           </AuthGuard>
         ),
       },
@@ -102,7 +109,7 @@ export const router = createBrowserRouter([
         path: ROUTES.SUBSCRIPTION_SUCCESS,
         element: (
           <AuthGuard>
-            <SubscriptionSuccessPage />
+            <SuspenseWrapper><SubscriptionSuccessPage /></SuspenseWrapper>
           </AuthGuard>
         ),
       },
@@ -110,7 +117,7 @@ export const router = createBrowserRouter([
         path: ROUTES.SUBSCRIPTION_FAIL,
         element: (
           <AuthGuard>
-            <SubscriptionFailPage />
+            <SuspenseWrapper><SubscriptionFailPage /></SuspenseWrapper>
           </AuthGuard>
         ),
       },

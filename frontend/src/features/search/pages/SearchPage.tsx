@@ -54,12 +54,14 @@ export function SearchPage() {
   }
 
   return (
-    <div className="relative min-h-full flex flex-col" data-testid="search-page">
+    <div className="relative h-full flex flex-col overflow-hidden" data-testid="search-page">
       <PageBackground />
-      <PageHeader title="Search" icon={<Search size={24} />}>
-        <SearchBar onSearch={handleSearch} isLoading={search.isPending} />
-      </PageHeader>
-      <PageContainer>
+      <div className="shrink-0">
+        <PageHeader title="Search" icon={<Search size={24} />}>
+          <SearchBar onSearch={handleSearch} isLoading={search.isPending} />
+        </PageHeader>
+      </div>
+      <PageContainer className="flex-1 min-h-0 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-0">
         {selectSong.isError && (
           <div
             className="mb-3 rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-300"

@@ -62,8 +62,10 @@ logger = logging.getLogger(__name__)
 STEM_DEFINITIONS: list[StemType] = [
     StemType(name="vocals", label="Vocals"),
     StemType(name="guitar", label="Guitar"),
-    StemType(name="guitar_removed", label="No Guitar"),
-    StemType(name="vocals_guitar", label="Vocals + Guitar"),
+    StemType(name="drums", label="Drums"),
+    StemType(name="bass", label="Bass"),
+    StemType(name="piano", label="Piano"),
+    StemType(name="other", label="Other"),
 ]
 
 STEM_NAMES = [s.name for s in STEM_DEFINITIONS]

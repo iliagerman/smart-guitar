@@ -7,6 +7,7 @@ import { ROUTES } from '@/router/routes'
 import { signInWithRedirect } from 'aws-amplify/auth'
 import { env } from '@/config/env'
 import { authApi } from '@/api/auth.api'
+import { trackCustomEvent } from '@/lib/meta-pixel'
 
 function getErrorDetail(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -40,7 +41,10 @@ export function LoginForm() {
     login.mutate(
       { email: email.trim(), password },
       {
-        onSuccess: () => navigate(ROUTES.LIBRARY),
+        onSuccess: () => {
+          trackCustomEvent('Login')
+          navigate(ROUTES.LIBRARY)
+        },
       },
     )
   }
@@ -60,6 +64,7 @@ export function LoginForm() {
       Object.keys(localStorage)
         .filter(k => k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-'))
         .forEach(k => localStorage.removeItem(k))
+      trackCustomEvent('Login', { method: 'google' })
       await signInWithRedirect({ provider: 'Google' })
     } catch (err) {
       setGooglePending(false)

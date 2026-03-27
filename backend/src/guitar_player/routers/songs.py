@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,8 +56,6 @@ _STEM_KEY_MAP: dict[str, str] = {
     "thumbnail": "thumbnail_key",
     "vocals": "vocals_key",
     "guitar": "guitar_key",
-    "guitar_removed": "guitar_removed_key",
-    "vocals_guitar": "vocals_guitar_key",
 }
 
 _STEM_MEDIA_TYPE: dict[str, str] = {
@@ -85,8 +83,6 @@ def _media_type_for(stem: str, file_path: Path) -> str:
 _REPROCESSABLE_STEMS = {
     "vocals",
     "guitar",
-    "guitar_removed",
-    "vocals_guitar",
 }
 
 
@@ -371,13 +367,6 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("External strums check failed for %s: %s", song_id, e)
 
-    # If vocals+guitar merge is missing (but both source stems exist),
-    # kick off a lightweight merge without requiring a full reprocess.
-    try:
-        await job_service.trigger_vocals_guitar_merge_if_missing(song_id)
-    except Exception as e:
-        logger.warning("Admin vocals+guitar merge check failed for %s: %s", song_id, e)
-
     # Clear download_requested_at as soon as the audio file lands in S3,
     # so this response already returns download_pending=false.
     try:
@@ -459,7 +448,7 @@ async def regenerate_song_components(
     if "full" in targets:
         try:
             # Delete all derived files (stems, chords, lyrics, tabs, strums)
-            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar"):
+            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar", "drums", "bass", "piano", "other"):
                 _safe_delete(storage, getattr(song, f"{stem}_key", None))
                 if song_name:
                     _safe_delete(storage, f"{song_name}/{stem}.mp3")
@@ -476,6 +465,7 @@ async def regenerate_song_components(
                 song_id,
                 vocals_key=None, guitar_key=None, guitar_removed_key=None,
                 vocals_guitar_key=None, chords_key=None,
+                drums_key=None, bass_key=None, piano_key=None, other_key=None,
                 lyrics_key=None, lyrics_failed=False, lyrics_attempted_at=None,
                 tabs_key=None, tabs_failed=False, tabs_attempted_at=None,
                 external_strums_key=None, external_strums_failed=False, external_strums_attempted_at=None,
@@ -517,7 +507,7 @@ async def regenerate_song_components(
     if "stems" in targets:
         try:
             # Delete existing stem/chord files so trigger_reprocess re-runs
-            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar"):
+            for stem in ("vocals", "guitar", "guitar_removed", "vocals_guitar", "drums", "bass", "piano", "other"):
                 _safe_delete(storage, getattr(song, f"{stem}_key", None))
                 if song_name:
                     _safe_delete(storage, f"{song_name}/{stem}.mp3")
@@ -528,6 +518,7 @@ async def regenerate_song_components(
                 song_id,
                 vocals_key=None, guitar_key=None, guitar_removed_key=None,
                 vocals_guitar_key=None, chords_key=None,
+                drums_key=None, bass_key=None, piano_key=None, other_key=None,
             )
             job_id = await job_service.trigger_reprocess(
                 user_sub=admin.sub,

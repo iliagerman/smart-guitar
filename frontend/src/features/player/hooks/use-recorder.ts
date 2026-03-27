@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Mp3Encoder } from '@breezystack/lamejs'
+import { downloadBlob } from '../lib/download-blob'
 
 interface RecorderState {
   isRecording: boolean
@@ -23,21 +24,6 @@ function floatTo16Bit(float32: Float32Array): Int16Array {
     int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
   }
   return int16
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  if (blob.size === 0) return
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.style.display = 'none'
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => {
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }, 1000)
 }
 
 // Inline AudioWorklet processor code — captures raw PCM samples

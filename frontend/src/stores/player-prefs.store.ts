@@ -10,6 +10,11 @@ function clampInt(n: number, min: number, max: number): number {
 export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
 export type StrumSource = 'songsterr' | 'ai'
 
+export interface CameraPreviewPosition {
+  x: number
+  y: number
+}
+
 export interface PlayerPrefsState {
   /** Display-only transpose in semitones. */
   transposeSemitones: number
@@ -33,6 +38,14 @@ export interface PlayerPrefsState {
   /** Automatically download recordings when recording stops.
    *  When false, a download button is shown instead. */
   autoDownloadRecordings: boolean
+  /** When true, recording captures video (camera + audio) as WebM instead of audio-only MP3. */
+  recordVideo: boolean
+  /** Position of the camera preview thumbnail (top-left corner, in px). */
+  cameraPreviewPosition: CameraPreviewPosition | null
+  /** Whether the camera preview is minimized to a small FAB. */
+  cameraPreviewMinimized: boolean
+  /** Which stems are enabled by default when opening a song (e.g. ['vocals', 'drums']). */
+  defaultStems: string[]
   setTransposeSemitones: (semitones: number) => void
   transposeUp: () => void
   transposeDown: () => void
@@ -46,6 +59,10 @@ export interface PlayerPrefsState {
   cycleStrumSource: () => void
   setAutoRecord: (enabled: boolean) => void
   setAutoDownloadRecordings: (enabled: boolean) => void
+  setRecordVideo: (enabled: boolean) => void
+  setCameraPreviewPosition: (pos: CameraPreviewPosition) => void
+  setCameraPreviewMinimized: (minimized: boolean) => void
+  setDefaultStems: (stems: string[]) => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -59,6 +76,10 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       strumSource: 'songsterr' as StrumSource,
       autoRecord: false,
       autoDownloadRecordings: true,
+      recordVideo: false,
+      cameraPreviewPosition: null,
+      cameraPreviewMinimized: false,
+      defaultStems: ['vocals', 'drums'],
       setTransposeSemitones: (semitones) =>
         set({ transposeSemitones: clampInt(semitones, -12, 12) }),
       transposeUp: () => {
@@ -82,6 +103,10 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
         set({ strumSource: get().strumSource === 'songsterr' ? 'ai' : 'songsterr' }),
       setAutoRecord: (enabled) => set({ autoRecord: !!enabled }),
       setAutoDownloadRecordings: (enabled) => set({ autoDownloadRecordings: !!enabled }),
+      setRecordVideo: (enabled) => set({ recordVideo: !!enabled }),
+      setCameraPreviewPosition: (pos) => set({ cameraPreviewPosition: pos }),
+      setCameraPreviewMinimized: (minimized) => set({ cameraPreviewMinimized: minimized }),
+      setDefaultStems: (stems) => set({ defaultStems: stems }),
     }),
     {
       name: 'player-prefs',
@@ -123,9 +148,27 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.autoDownloadRecordings = true
         }
 
+        // Default video recording setting (v4 → v5)
+        if (state && state.recordVideo === undefined) {
+          state.recordVideo = false
+        }
+
+        // Default camera preview settings (v5 → v6)
+        if (state && state.cameraPreviewPosition === undefined) {
+          state.cameraPreviewPosition = null
+        }
+        if (state && state.cameraPreviewMinimized === undefined) {
+          state.cameraPreviewMinimized = false
+        }
+
+        // Default stem preferences (v6 → v7)
+        if (state && state.defaultStems === undefined) {
+          state.defaultStems = ['vocals', 'drums']
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 4,
+      version: 7,
     }
   )
 )

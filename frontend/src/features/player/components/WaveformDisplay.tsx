@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 interface WaveformDisplayProps {
   audioUrl: string | null
@@ -71,7 +72,7 @@ export function WaveformDisplay({ audioUrl, onSeek }: WaveformDisplayProps) {
           className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-smoke-400"
           aria-live="polite"
         >
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
+          <LoadingSpinner size="xs" inline />
           <span>Loading audio…</span>
         </div>
       )}

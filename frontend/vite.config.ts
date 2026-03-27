@@ -74,6 +74,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'aws-amplify': ['aws-amplify'],
+        },
+      },
+    },
+  },
   esbuild: {
     drop: mode === 'production' ? ['console', 'debugger'] : [],
   },

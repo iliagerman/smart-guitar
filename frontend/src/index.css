@@ -55,10 +55,8 @@
 html,
 body,
 #root {
-  min-height: 100vh;
-  min-height: 100svh;
-  min-height: 100dvh;
-  min-height: var(--vv-height);
+  height: 100%;
+  overflow: hidden;
 }
 
 body {

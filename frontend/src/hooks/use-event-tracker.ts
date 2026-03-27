@@ -33,12 +33,17 @@ export function useEventTracker() {
         }
 
         const unsubscribePlayback = usePlaybackStore.subscribe((state, prevState) => {
-            if (state.currentStem !== prevState.currentStem && state.currentSongId) {
+            const stemsChanged =
+                state.activeStems !== prevState.activeStems ||
+                state.isFullSong !== prevState.isFullSong
+            if (stemsChanged && state.currentSongId) {
                 analyticsTracker.track({
                     event_type: 'stem_switched',
                     event_category: 'player',
                     song_id: state.currentSongId,
-                    properties: { stem: state.currentStem },
+                    properties: {
+                        stems: state.isFullSong ? ['full_song'] : state.activeStems,
+                    },
                 })
             }
             if (state.playbackRate !== prevState.playbackRate && state.currentSongId) {

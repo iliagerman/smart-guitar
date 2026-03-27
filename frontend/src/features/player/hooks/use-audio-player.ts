@@ -14,24 +14,31 @@ function isSameAudioSource(currentSrc: string, newUrl: string): boolean {
     const a = new URL(currentSrc)
     const b = new URL(newUrl, window.location.href)
     if (a.origin !== b.origin || a.pathname !== b.pathname) return false
-    // S3 presigned URLs rotate query params (signature, expiry) on every
-    // backend response while the underlying file stays the same.
-    // Different stems always have different pathnames on S3, so if we get
-    // here (same origin + pathname) it's the same file.
     if (a.hostname.includes('.s3.') || a.hostname.includes('.amazonaws.com')) return true
-    // Non-S3 URLs (e.g. local API on a different port): query params
-    // distinguish stems (?stem=vocals vs ?stem=vocals_guitar).
     return a.search === b.search
   } catch {
     return false
   }
 }
 
+interface StemChannel {
+  audio: HTMLAudioElement
+  source: MediaElementAudioSourceNode
+  gain: GainNode
+  url: string
+}
+
+/**
+ * Multi-stem audio player using Web Audio API.
+ *
+ * Manages N HTMLAudioElements, each routed through a MediaElementSourceNode → GainNode
+ * into a shared AudioContext. The first channel ("primary") drives time/duration updates
+ * to the playback store.
+ */
 export function useAudioPlayer() {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const channelsRef = useRef<Map<string, StemChannel>>(new Map())
+  const audioContextRef = useRef<AudioContext | null>(null)
   const intervalRef = useRef<number | null>(null)
-  // Promoted to a ref so that seek() can update it and prevent the rAF loop
-  // from pushing a stale time on the next frame after a seek.
   const lastReportedTimeRef = useRef(0)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const playbackRate = usePlaybackStore((s) => s.playbackRate)
@@ -39,171 +46,271 @@ export function useAudioPlayer() {
   const setCurrentTime = usePlaybackStore((s) => s.setCurrentTime)
   const setDuration = usePlaybackStore((s) => s.setDuration)
 
-  useEffect(() => {
-    const audio = new Audio()
-    audioRef.current = audio
-    // Initial playback rate is set here, but updates are handled by the second useEffect
-    // to avoid recreating the audio element when playbackRate changes.
-    audio.playbackRate = usePlaybackStore.getState().playbackRate
+  // Lazily get or create the AudioContext
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext()
+    }
+    return audioContextRef.current
+  }, [])
 
-    // Use requestAnimationFrame for smoother time updates when playing.
-    // Only push to the store when the time has changed by at least 16ms
-    // to avoid unnecessary re-renders.
-    let animationFrameId: number
-    const MIN_TIME_DELTA = 0.016 // ~16ms
+  // Get the primary channel (first one in the map) for time reporting
+  const getPrimary = useCallback((): StemChannel | undefined => {
+    const channels = channelsRef.current
+    return channels.values().next().value as StemChannel | undefined
+  }, [])
 
+  // --- Time reporting (rAF + interval fallback) ---
+  const animFrameRef = useRef<number>(0)
+  const MIN_TIME_DELTA = 0.016
+
+  const reportTime = useCallback((audio: HTMLAudioElement) => {
+    if (audio.seeking) return
+    const t = audio.currentTime
+    if (Math.abs(t - lastReportedTimeRef.current) >= MIN_TIME_DELTA) {
+      lastReportedTimeRef.current = t
+      setCurrentTime(t)
+    }
+  }, [setCurrentTime])
+
+  const startTimeLoop = useCallback(() => {
     const updateTime = () => {
-      if (!audio.paused) {
-        // Skip reporting while the browser is actively seeking — audio.currentTime
-        // still reflects the OLD position until the seek completes, which would
-        // overwrite the store with stale data and desync the UI.
-        if (!audio.seeking) {
-          const t = audio.currentTime
-          if (Math.abs(t - lastReportedTimeRef.current) >= MIN_TIME_DELTA) {
-            lastReportedTimeRef.current = t
-            setCurrentTime(t)
-          }
-        }
-        animationFrameId = requestAnimationFrame(updateTime)
+      const primary = getPrimary()
+      if (primary && !primary.audio.paused) {
+        reportTime(primary.audio)
+        animFrameRef.current = requestAnimationFrame(updateTime)
       }
     }
+    animFrameRef.current = requestAnimationFrame(updateTime)
 
-    const startIntervalFallback = () => {
-      if (intervalRef.current) return
-      // Fallback for cases where requestAnimationFrame is throttled (e.g. background tab)
-      // or not running consistently. Keeps highlight updates responsive.
+    // Fallback interval for background tabs
+    if (!intervalRef.current) {
       intervalRef.current = window.setInterval(() => {
-        if (audio.paused || audio.seeking) return
-        const t = audio.currentTime
-        if (Math.abs(t - lastReportedTimeRef.current) >= MIN_TIME_DELTA) {
-          lastReportedTimeRef.current = t
-          setCurrentTime(t)
+        const primary = getPrimary()
+        if (primary && !primary.audio.paused) {
+          reportTime(primary.audio)
         }
       }, 100)
     }
+  }, [getPrimary, reportTime])
 
-    const stopIntervalFallback = () => {
-      if (!intervalRef.current) return
+  const stopTimeLoop = useCallback(() => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    if (intervalRef.current) {
       window.clearInterval(intervalRef.current)
       intervalRef.current = null
     }
+  }, [])
+
+  // --- Channel lifecycle ---
+
+  const createChannel = useCallback((name: string, url: string, seekTo: number, shouldPlay: boolean): StemChannel => {
+    const ctx = getAudioContext()
+    const audio = new Audio()
+    audio.crossOrigin = 'anonymous'
+    const source = ctx.createMediaElementSource(audio)
+    const gain = ctx.createGain()
+    gain.gain.value = 1
+    source.connect(gain)
+    gain.connect(ctx.destination)
+
+    audio.playbackRate = usePlaybackStore.getState().playbackRate
+    audio.src = url
+
+    const onMetadata = () => {
+      audio.currentTime = seekTo
+      // Report duration from the first channel that loads
+      if (channelsRef.current.values().next().value === channel) {
+        setDuration(audio.duration || 0)
+      }
+      if (shouldPlay) {
+        audio.play().catch(() => { setPlaying(false) })
+      }
+      audio.removeEventListener('loadedmetadata', onMetadata)
+    }
+    audio.addEventListener('loadedmetadata', onMetadata)
+
+    const channel: StemChannel = { audio, source, gain, url }
+    return channel
+  }, [getAudioContext, setDuration, setPlaying])
+
+  const destroyChannel = useCallback((channel: StemChannel) => {
+    channel.audio.pause()
+    channel.audio.src = ''
+    channel.gain.disconnect()
+    channel.source.disconnect()
+  }, [])
+
+  const destroyAllChannels = useCallback(() => {
+    for (const ch of channelsRef.current.values()) {
+      destroyChannel(ch)
+    }
+    channelsRef.current.clear()
+  }, [destroyChannel])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      destroyAllChannels()
+      stopTimeLoop()
+      if (audioContextRef.current) {
+        void audioContextRef.current.close()
+        audioContextRef.current = null
+      }
+    }
+  }, [destroyAllChannels, stopTimeLoop])
+
+  // Sync playback rate across all channels
+  useEffect(() => {
+    for (const ch of channelsRef.current.values()) {
+      ch.audio.playbackRate = playbackRate
+    }
+  }, [playbackRate])
+
+  // --- Helpers ---
+
+  // Attach play/pause/ended/seeked listeners to the primary channel
+  const setupPrimaryEvents = useCallback(() => {
+    const primary = getPrimary()
+    if (!primary) return
+
+    const audio = primary.audio
 
     const handlePlay = () => {
       setPlaying(true)
-      // Report immediately so UI doesn't wait for the first animation frame.
       lastReportedTimeRef.current = audio.currentTime
-      setCurrentTime(lastReportedTimeRef.current)
-      animationFrameId = requestAnimationFrame(updateTime)
-      startIntervalFallback()
+      setCurrentTime(audio.currentTime)
+      startTimeLoop()
     }
-
     const handlePause = () => {
       setPlaying(false)
-      if (animationFrameId) cancelAnimationFrame(animationFrameId)
+      stopTimeLoop()
       setCurrentTime(audio.currentTime)
-      stopIntervalFallback()
     }
-
-    const handleTimeUpdate = () => {
-      // Skip while seeking to avoid reporting stale positions.
-      if (audio.seeking) return
-      const t = audio.currentTime
-      if (Math.abs(t - lastReportedTimeRef.current) >= MIN_TIME_DELTA) {
-        lastReportedTimeRef.current = t
-        setCurrentTime(t)
-      }
+    const handleEnded = () => {
+      setPlaying(false)
+      stopTimeLoop()
     }
-
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration || 0)
-    }
-
     const handleSeeked = () => {
-      // Fires once when the browser finishes seeking. Report the actual
-      // position to guarantee the store is in sync, even if rAF or
-      // timeupdate missed it during the seek transition.
       const t = audio.currentTime
       lastReportedTimeRef.current = t
       setCurrentTime(t)
     }
-
-    const handleEnded = () => {
-      setPlaying(false)
-      if (animationFrameId) cancelAnimationFrame(animationFrameId)
-      stopIntervalFallback()
+    const handleTimeUpdate = () => {
+      if (audio.seeking) return
+      reportTime(audio)
+    }
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration || 0)
     }
 
-    audio.addEventListener('play', handlePlay)
-    audio.addEventListener('pause', handlePause)
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    audio.addEventListener('seeked', handleSeeked)
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
-    audio.addEventListener('ended', handleEnded)
+    audio.onplay = handlePlay
+    audio.onpause = handlePause
+    audio.onended = handleEnded
+    audio.onseeked = handleSeeked
+    audio.ontimeupdate = handleTimeUpdate
+    audio.onloadedmetadata = handleLoadedMetadata
+  }, [getPrimary, setPlaying, setCurrentTime, setDuration, startTimeLoop, stopTimeLoop, reportTime])
 
-    return () => {
-      audio.removeEventListener('play', handlePlay)
-      audio.removeEventListener('pause', handlePause)
-      audio.removeEventListener('timeupdate', handleTimeUpdate)
-      audio.removeEventListener('seeked', handleSeeked)
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
-      audio.removeEventListener('ended', handleEnded)
-      audio.pause()
-      audio.src = ''
-      if (animationFrameId) cancelAnimationFrame(animationFrameId)
-      stopIntervalFallback()
-    }
-  }, [setCurrentTime, setDuration, setPlaying]) // Removed playbackRate from here to avoid recreating audio element
+  // --- Public API ---
 
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate
-    }
-  }, [playbackRate])
+  /**
+   * Load multiple stems simultaneously. Diffs against current channels:
+   * keeps matching ones, creates new ones, removes old ones.
+   */
+  const loadStems = useCallback((stemUrls: Map<string, string>) => {
+    const channels = channelsRef.current
+    const primary = getPrimary()
+    const currentTime = primary ? primary.audio.currentTime : 0
+    const wasPlaying = primary ? !primary.audio.paused : false
 
-  const loadTrack = useCallback((url: string) => {
-    const audio = audioRef.current
-    if (!audio) return
-    // Skip reload if the audio element is already playing this source.
-    // Compare by origin + pathname only for S3 presigned URLs whose query
-    // params (signature, expiry) rotate on every backend response.
-    if (isSameAudioSource(audio.src, url)) return
-    const currentTime = audio.currentTime
-    const wasPlaying = !audio.paused
-    audio.src = url
-
-    // Wait for metadata before seeking — setting currentTime before
-    // loadedmetadata is silently ignored by the browser.
-    const resume = () => {
-      audio.currentTime = currentTime
-      lastReportedTimeRef.current = currentTime
-      setCurrentTime(currentTime)
-      if (wasPlaying) {
-        audio.play().catch(() => { })
+    // Remove channels no longer needed
+    for (const [name, ch] of channels) {
+      if (!stemUrls.has(name)) {
+        destroyChannel(ch)
+        channels.delete(name)
       }
-      audio.removeEventListener('loadedmetadata', resume)
     }
-    audio.addEventListener('loadedmetadata', resume)
-  }, [setCurrentTime])
+
+    // Add or update channels
+    for (const [name, url] of stemUrls) {
+      const existing = channels.get(name)
+      if (existing && isSameAudioSource(existing.audio.src, url)) {
+        continue // Already loaded
+      }
+      if (existing) {
+        destroyChannel(existing)
+      }
+      const ch = createChannel(name, url, currentTime, wasPlaying)
+      channels.set(name, ch)
+    }
+
+    // Wire play/pause/ended events on new primary
+    setupPrimaryEvents()
+  }, [getPrimary, destroyChannel, createChannel, setupPrimaryEvents])
+
+  /**
+   * Load a single full-song URL (original MP3). Clears all stem channels.
+   */
+  const loadFullSong = useCallback((url: string) => {
+    const channels = channelsRef.current
+    const primary = getPrimary()
+
+    // If already playing this exact URL, skip
+    if (channels.size === 1) {
+      const only = channels.values().next().value as StemChannel
+      if (only && isSameAudioSource(only.audio.src, url)) return
+    }
+
+    const currentTime = primary ? primary.audio.currentTime : 0
+    const wasPlaying = primary ? !primary.audio.paused : false
+
+    destroyAllChannels()
+    const ch = createChannel('__full__', url, currentTime, wasPlaying)
+    channels.set('__full__', ch)
+
+    setupPrimaryEvents()
+  }, [getPrimary, destroyAllChannels, createChannel, setupPrimaryEvents])
 
   const togglePlay = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    if (audio.paused) {
-      audio.play().catch(() => { })
+    const channels = channelsRef.current
+    if (channels.size === 0) return
+
+    const ctx = getAudioContext()
+    if (ctx.state === 'suspended') {
+      void ctx.resume()
+    }
+
+    const primary = getPrimary()
+    if (!primary) return
+
+    if (primary.audio.paused) {
+      for (const ch of channels.values()) {
+        ch.audio.play().catch(() => { })
+      }
       setPlaying(true)
     } else {
-      audio.pause()
+      for (const ch of channels.values()) {
+        ch.audio.pause()
+      }
       setPlaying(false)
     }
-  }, [setPlaying])
+  }, [getAudioContext, getPrimary, setPlaying])
 
   const seek = useCallback((time: number) => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.currentTime = time
+    for (const ch of channelsRef.current.values()) {
+      ch.audio.currentTime = time
+    }
     lastReportedTimeRef.current = time
     setCurrentTime(time)
   }, [setCurrentTime])
 
-  return { audioRef, loadTrack, togglePlay, seek, isPlaying }
+  // Legacy single-track loader for backward compat during transition
+  const loadTrack = useCallback((url: string) => {
+    const m = new Map<string, string>()
+    m.set('__single__', url)
+    loadStems(m)
+  }, [loadStems])
+
+  return { loadTrack, loadStems, loadFullSong, togglePlay, seek, isPlaying }
 }

@@ -1,6 +1,7 @@
 import type { SearchResult } from '@/types/song'
 import { formatDuration } from '@/lib/format-duration'
 import { slugToTitleCase } from '@/lib/format-song'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { Check } from 'lucide-react'
 
 interface SearchResultCardProps {
@@ -25,7 +26,7 @@ export function SearchResultCard({ result, onSelect, isSelecting, isActive, down
         {result.thumbnail_url ? (
           <img src={result.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
+          <LoadingSpinner size="sm" />
         )}
       </div>
       <div className="flex-1 min-w-0">
@@ -35,7 +36,7 @@ export function SearchResultCard({ result, onSelect, isSelecting, isActive, down
       <div className="flex items-center gap-2 shrink-0">
         {showSpinner && (
           <span className="inline-flex items-center gap-2 text-xs text-smoke-300" aria-live="polite">
-            <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-3.5 w-3.5 rounded-full object-cover" />
+            <LoadingSpinner size="sm" />
             <span className="hidden sm:inline">{downloadLabel ?? 'Downloading…'}</span>
           </span>
         )}

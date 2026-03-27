@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 interface SearchBarProps {
   onSearch: (query: string) => void
@@ -31,7 +32,7 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
       />
       {isLoading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="h-4 w-4 rounded-full object-cover" />
+          <LoadingSpinner size="xs" inline />
         </div>
       )}
     </form>

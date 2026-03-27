@@ -18,10 +18,12 @@ export function AnalyticsDashboardPage() {
     const { data: emails = [] } = useAnalyticsUserEmails()
 
     return (
-        <div className="relative min-h-full flex flex-col" data-testid="analytics-dashboard-page">
+        <div className="relative h-full flex flex-col overflow-hidden" data-testid="analytics-dashboard-page">
             <PageBackground />
-            <DashboardHeader emails={emails} />
-            <PageContainer className="max-w-7xl space-y-6">
+            <div className="shrink-0">
+                <DashboardHeader emails={emails} />
+            </div>
+            <PageContainer className="flex-1 min-h-0 overflow-y-auto max-w-7xl space-y-6 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-6">
                 {isLoading ? (
                     <>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

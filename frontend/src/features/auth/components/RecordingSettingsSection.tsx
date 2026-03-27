@@ -1,4 +1,4 @@
-import { Mic } from 'lucide-react'
+import { Mic, Video } from 'lucide-react'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { cn } from '@/lib/cn'
 
@@ -41,13 +41,15 @@ function ToggleRow({ label, description, value, onChange, testId }: ToggleRowPro
 
 /**
  * Recording settings section for the profile page.
- * Controls auto-record and auto-download preferences.
+ * Controls auto-record, auto-download, and auto-record mode preferences.
  */
 export function RecordingSettingsSection() {
   const autoRecord = usePlayerPrefsStore((s) => s.autoRecord)
   const autoDownloadRecordings = usePlayerPrefsStore((s) => s.autoDownloadRecordings)
+  const recordVideo = usePlayerPrefsStore((s) => s.recordVideo)
   const setAutoRecord = usePlayerPrefsStore((s) => s.setAutoRecord)
   const setAutoDownloadRecordings = usePlayerPrefsStore((s) => s.setAutoDownloadRecordings)
+  const setRecordVideo = usePlayerPrefsStore((s) => s.setRecordVideo)
 
   return (
     <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600">
@@ -71,6 +73,43 @@ export function RecordingSettingsSection() {
           onChange={setAutoDownloadRecordings}
           testId="auto-download-toggle"
         />
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-smoke-100 text-sm font-medium">Default Recording Mode</p>
+            <p className="text-smoke-500 text-xs">Used for auto-record; manual recording always asks</p>
+          </div>
+          <div className="flex rounded-lg border border-charcoal-600 overflow-hidden">
+            <button
+              onClick={() => setRecordVideo(false)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',
+                !recordVideo
+                  ? 'bg-flame-400/15 border-r border-flame-400/40 text-flame-400'
+                  : 'border-r border-charcoal-600 text-smoke-500 hover:text-smoke-300',
+              )}
+              aria-label="Audio mode"
+              data-testid="default-mode-audio-btn"
+            >
+              <Mic size={14} />
+              Audio
+            </button>
+            <button
+              onClick={() => setRecordVideo(true)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',
+                recordVideo
+                  ? 'bg-flame-400/15 text-flame-400'
+                  : 'text-smoke-500 hover:text-smoke-300',
+              )}
+              aria-label="Video mode"
+              data-testid="default-mode-video-btn"
+            >
+              <Video size={14} />
+              Video
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

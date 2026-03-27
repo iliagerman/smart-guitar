@@ -3,18 +3,50 @@ import { cn } from '@/lib/cn'
 interface LoadingSpinnerProps {
   className?: string
   label?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   fullScreen?: boolean
+  inline?: boolean
 }
 
 const sizeClasses = {
+  xs: 'h-4 w-4',
   sm: 'h-8 w-8',
   md: 'h-24 w-24',
   lg: 'h-105 w-105',
 }
 
-export function LoadingSpinner({ className, label, size = 'md', fullScreen = false }: LoadingSpinnerProps) {
+export function LoadingSpinner({ className, label, size = 'md', fullScreen = false, inline = false }: LoadingSpinnerProps) {
   const isLarge = size === 'lg'
+
+  const videoElement = isLarge ? (
+    <video
+      src="/guitar.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
+      aria-hidden="true"
+      className={cn('h-105 w-105 object-cover', inline && className)}
+      style={{
+        maskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
+        WebkitMaskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
+      }}
+    />
+  ) : (
+    <video
+      src="/guitar.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
+      aria-hidden="true"
+      className={cn('object-cover rounded-full', sizeClasses[size], inline && className)}
+    />
+  )
+
+  if (inline) {
+    return videoElement
+  }
 
   return (
     <div
@@ -24,35 +56,11 @@ export function LoadingSpinner({ className, label, size = 'md', fullScreen = fal
         className,
       )}
     >
-      {isLarge ? (
-        <video
-          src="/guitar.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-hidden="true"
-          className="h-105 w-105 object-cover"
-          style={{
-            maskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
-            WebkitMaskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
-          }}
-        />
-      ) : (
-        <video
-          src="/guitar.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-hidden="true"
-          className={cn('object-cover', size === 'sm' && 'rounded-full', sizeClasses[size])}
-        />
-      )}
+      {videoElement}
       {label && (
         <span className={cn(
           'text-smoke-300',
-          isLarge ? 'text-lg' : size === 'md' ? 'text-base' : 'text-sm',
+          isLarge ? 'text-lg' : size === 'md' ? 'text-base' : size === 'sm' ? 'text-sm' : 'text-xs',
         )}>
           {label}
         </span>

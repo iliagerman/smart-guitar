@@ -4,6 +4,7 @@ import { ROUTES } from '@/router/routes'
 import { LogOut, User } from 'lucide-react'
 import { SubscriptionSection } from '@/features/subscription/components/SubscriptionSection'
 import { RecordingSettingsSection } from '../components/RecordingSettingsSection'
+import { DefaultStemsSection } from '../components/DefaultStemsSection'
 
 export function ProfilePage() {
   const { email, logout } = useAuthStore()
@@ -15,8 +16,8 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="p-4 max-w-3xl mx-auto" data-testid="profile-page">
-      <h1 className="text-2xl font-bold mb-8">Profile</h1>
+    <div className="h-full overflow-y-auto p-4 max-w-3xl mx-auto pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-4" data-testid="profile-page">
+      <h1 className="text-2xl font-bold mb-8">Settings</h1>
 
       {/* User info */}
       <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600 mb-4">
@@ -39,6 +40,11 @@ export function ProfilePage() {
       {/* Recording settings */}
       <div className="mb-4">
         <RecordingSettingsSection />
+      </div>
+
+      {/* Default stems */}
+      <div className="mb-4">
+        <DefaultStemsSection />
       </div>
 
       {/* Sign out */}

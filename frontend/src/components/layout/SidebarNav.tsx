@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, User, BarChart3, Mic } from 'lucide-react'
+import { Search, Library, Heart, Settings, BarChart3, Mic } from 'lucide-react'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
 import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
@@ -78,8 +78,8 @@ export function SidebarNav() {
                     }
                     data-testid="sidebar-profile"
                 >
-                    <User size={22} className="text-flame-400/80" />
-                    <span className="truncate">Profile</span>
+                    <Settings size={22} className="text-flame-400/80" />
+                    <span className="truncate">Settings</span>
                 </NavLink>
 
                 <div className="mt-3 px-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-smoke-500">

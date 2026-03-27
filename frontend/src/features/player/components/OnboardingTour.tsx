@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
 import { Heart, Music, Type, LayoutGrid, Circle } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/cn'
 import { useSubscriptionStore } from '@/stores/subscription.store'
 import { subscriptionApi } from '@/api/subscription.api'
+import { queryKeys } from '@/api/query-keys'
 
 interface TourStep {
   tourAttr: string
@@ -22,7 +24,7 @@ const STEPS: TourStep[] = [
   {
     tourAttr: 'record',
     title: 'Record Yourself',
-    description: 'Record your practice session and download it when you\'re done. Recordings stay on your device.',
+    description: 'Record your practice session and download it when you\'re done. You can also enable video recording in Settings.',
     icon: <Circle size={20} />,
   },
   {
@@ -56,6 +58,7 @@ function getTargetRect(tourAttr: string): DOMRect | null {
 }
 
 export function OnboardingTour() {
+  const queryClient = useQueryClient()
   const hasSeenOnboarding = useSubscriptionStore((s) => s.status?.has_seen_onboarding ?? true)
   const isLoaded = useSubscriptionStore((s) => s.isLoaded)
   const [stepIndex, setStepIndex] = useState(0)
@@ -87,16 +90,23 @@ export function OnboardingTour() {
     return () => window.removeEventListener('resize', measure)
   }, [active, stepIndex])
 
-  const dismiss = useCallback(() => {
+  const dismiss = useCallback(async () => {
     setActive(false)
-    // Mark as seen on the server
-    subscriptionApi.markOnboardingSeen().catch(() => {})
     // Optimistically update the local store
     const store = useSubscriptionStore.getState()
     if (store.status) {
       store.setStatus({ ...store.status, has_seen_onboarding: true })
     }
-  }, [])
+    // Persist to server, then invalidate the query cache so refetches
+    // return the updated value instead of overwriting the optimistic update
+    try {
+      await subscriptionApi.markOnboardingSeen()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.subscription.status() })
+    } catch {
+      // If the API call fails, the optimistic update stays — tour won't reappear
+      // until the next full page load
+    }
+  }, [queryClient])
 
   const handleNext = useCallback(() => {
     if (stepIndex < STEPS.length - 1) {

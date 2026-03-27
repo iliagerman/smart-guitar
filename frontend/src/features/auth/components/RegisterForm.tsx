@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { signInWithRedirect } from 'aws-amplify/auth'
 import { env } from '@/config/env'
+import { trackEvent } from '@/lib/meta-pixel'
 
 function getErrorDetail(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -35,6 +36,7 @@ export function RegisterForm() {
       Object.keys(localStorage)
         .filter(k => k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-'))
         .forEach(k => localStorage.removeItem(k))
+      trackEvent('CompleteRegistration', { method: 'google' })
       await signInWithRedirect({ provider: 'Google' })
     } catch (err) {
       setGooglePending(false)
@@ -56,7 +58,10 @@ export function RegisterForm() {
     register.mutate(
       { email: normalizedEmail, password },
       {
-        onSuccess: () => navigate(`${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`, { state: { email: normalizedEmail } }),
+        onSuccess: () => {
+          trackEvent('CompleteRegistration')
+          navigate(`${ROUTES.CONFIRM_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`, { state: { email: normalizedEmail } })
+        },
       },
     )
   }
