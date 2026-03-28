@@ -141,6 +141,49 @@ const CHORD_SHAPES: Record<string, ChordShape> = {
     Gaug: { frets: [3, 2, 1, 0, 0, 3] },
     Aaug: { frets: ['x', 0, 3, 2, 2, 1] },
     Baug: { frets: ['x', 2, 1, 0, 0, 3] },
+
+    // ── 6th chords ──
+    C6: { frets: ['x', 3, 2, 2, 1, 0] },
+    D6: { frets: ['x', 'x', 0, 2, 0, 2] },
+    E6: { frets: [0, 2, 2, 1, 2, 0] },
+    G6: { frets: [3, 2, 0, 0, 0, 0] },
+    A6: { frets: ['x', 0, 2, 2, 2, 2] },
+
+    // ── 6/9 chords ──
+    'C6/9': { frets: ['x', 3, 2, 2, 3, 3] },
+    'D6/9': { frets: ['x', 5, 4, 0, 3, 0] },
+    'E6/9': { frets: [0, 2, 2, 1, 2, 2] },
+    'G6/9': { frets: [3, 2, 0, 2, 0, 0] },
+    'A6/9': { frets: ['x', 0, 4, 2, 2, 2] },
+
+    // ── 9th chords ──
+    C9: { frets: ['x', 3, 2, 3, 3, 3] },
+    D9: { frets: ['x', 'x', 0, 2, 1, 2] },
+    E9: { frets: [0, 2, 0, 1, 0, 2] },
+    G9: { frets: [3, 2, 0, 2, 0, 1] },
+    A9: { frets: ['x', 0, 2, 4, 2, 3] },
+
+    // ── Add9 chords ──
+    Cadd9: { frets: ['x', 3, 2, 0, 3, 0] },
+    Dadd9: { frets: ['x', 'x', 0, 2, 3, 0] },
+    Eadd9: { frets: [0, 2, 2, 1, 0, 2] },
+    Gadd9: { frets: [3, 2, 0, 0, 0, 3] },
+    Aadd9: { frets: ['x', 0, 2, 2, 2, 0] },
+
+    // ── Minor 9th ──
+    Am9: { frets: ['x', 0, 2, 4, 1, 3] },
+    Dm9: { frets: ['x', 'x', 0, 2, 1, 0] },
+    Em9: { frets: [0, 2, 2, 0, 3, 2] },
+
+    // ── Power chords ──
+    C5: { frets: ['x', 3, 5, 5, 'x', 'x'] },
+    D5: { frets: ['x', 'x', 0, 2, 3, 'x'] },
+    E5: { frets: [0, 2, 2, 'x', 'x', 'x'] },
+    F5: { frets: [1, 3, 3, 'x', 'x', 'x'] },
+    G5: { frets: [3, 5, 5, 'x', 'x', 'x'] },
+    A5: { frets: ['x', 0, 2, 2, 'x', 'x'] },
+    B5: { frets: ['x', 2, 4, 4, 'x', 'x'] },
+
 }
 
 function normalizeChordName(raw: string): string {
@@ -150,18 +193,21 @@ function normalizeChordName(raw: string): string {
     // Convert backend notation (e.g. "C:maj") to display notation (e.g. "C")
     const formatted = formatChordName(trimmed)
 
-    // Strip slash bass notes: C/G -> C
-    const noSlash = formatted.split('/')[0] ?? formatted
+    // Remove parentheses/extra spacing: "Am(add9)" -> "Amadd9"
+    const simplified = formatted.replaceAll(' ', '').replaceAll('(', '').replaceAll(')', '')
 
-    // Remove parentheses/extra spacing: "Am(add9)" -> "Amadd9" (we likely won't have shapes anyway)
-    const simplified = noSlash.replaceAll(' ', '').replaceAll('(', '').replaceAll(')', '')
+    // Try full name first (handles D6/9, C6/9 etc.)
+    if (CHORD_SHAPES[simplified]) return simplified
 
-    // Keep just the common display part for lookup.
-    // Examples:
-    //  - "Am" => "Am"
-    //  - "A#m" => "A#m" (no shape provided, but we preserve)
-    //  - "F#" => "F#"
-    //  - "F#m" => "F#m"
+    // Strip slash bass notes for slash chords: C/G -> C, D/F# -> D
+    const slashIdx = simplified.lastIndexOf('/')
+    if (slashIdx > 0) {
+        const after = simplified.slice(slashIdx + 1)
+        if (/^[A-G][#b]?$/.test(after)) {
+            return simplified.slice(0, slashIdx)
+        }
+    }
+
     return simplified
 }
 
@@ -186,12 +232,7 @@ export function ChordDiagram({ chord }: { chord: string }) {
     const shape = getShape(chord)
 
     if (!shape) {
-        return (
-            <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
-                <div className="text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatChordName(chord)}</div>
-                <div className="mt-1 text-xs text-smoke-500">No diagram yet</div>
-            </div>
-        )
+        return null
     }
 
     const baseFret = computeBaseFret(shape.frets)

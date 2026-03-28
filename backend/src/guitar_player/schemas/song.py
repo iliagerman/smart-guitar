@@ -157,6 +157,10 @@ class SongDetailResponse(BaseModel):
     tutorial_url: Optional[str] = None  # YouTube tutorial link (best match)
     tutorial_links: list[dict] = []  # All tutorial links [{"url": str, "title": str}]
     songsterr_status: Optional[str] = None  # null=pending, "ready", "failed", "unavailable"
+    chord_source: Optional[str] = None  # "gemini" | "autochord"
+    recommended_capo: Optional[int] = None  # from chord_meta.json
+    song_key: Optional[str] = None  # e.g. "Em", "G"
+    web_chords_failed: bool = False
     active_job: Optional[ActiveJobInfo] = None
     download_pending: bool = False
 

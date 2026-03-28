@@ -7,6 +7,9 @@ import { type ChordOption } from '@/types/song'
 interface ChordOptionSelectorProps {
   chordOptions: ChordOption[]
   hasTabs?: boolean
+  recommendedCapo?: number | null
+  songKey?: string | null
+  chordSource?: string | null
 }
 
 interface OptionEntry {
@@ -16,7 +19,7 @@ interface OptionEntry {
   apply: () => void
 }
 
-export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOptionSelectorProps) {
+export function ChordOptionSelector({ chordOptions, hasTabs = false, recommendedCapo, songKey, chordSource }: ChordOptionSelectorProps) {
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const setSelectedChordOptionIndex = usePlaybackStore((s) => s.setSelectedChordOptionIndex)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
@@ -24,12 +27,13 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOpti
 
   if (chordOptions.length === 0 && !hasTabs) return null
 
-  // Build cycle list
+  // Build cycle list — primary chords labeled by source
+  const primaryLabel = chordSource === 'gemini' ? 'Chords (V2)' : chordSource === 'autochord' ? 'Chords (V1)' : 'Standard'
   const entries: OptionEntry[] = [
     {
       key: 'standard',
-      label: 'Standard',
-      capo: 0,
+      label: primaryLabel,
+      capo: recommendedCapo ?? 0,
       apply: () => {
         setSheetMode('chords')
         setSelectedChordOptionIndex(null)
@@ -92,9 +96,20 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false }: ChordOpti
         <SlidersHorizontal size={16} className="text-smoke-300" />
         <span className="truncate">{current.label}</span>
       </button>
-      {current.capo > 0 && (
-        <span className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded">
-          Capo {current.capo}
+      {(current.capo > 0 || (recommendedCapo && recommendedCapo > 0)) && (
+        <span
+          className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded"
+          data-testid="chord-capo-badge"
+        >
+          Capo {current.capo > 0 ? current.capo : recommendedCapo}
+        </span>
+      )}
+      {songKey && (
+        <span
+          className="bg-emerald-400/20 text-emerald-400 text-xs px-1.5 py-0.5 rounded"
+          data-testid="chord-key-badge"
+        >
+          Key: {songKey}
         </span>
       )}
     </div>

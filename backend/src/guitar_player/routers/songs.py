@@ -367,6 +367,11 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("External strums check failed for %s: %s", song_id, e)
 
+    try:
+        await job_service.trigger_web_chords_if_missing(song_id)
+    except Exception as e:
+        logger.warning("Web chords check failed for %s: %s", song_id, e)
+
     # Clear download_requested_at as soon as the audio file lands in S3,
     # so this response already returns download_pending=false.
     try:

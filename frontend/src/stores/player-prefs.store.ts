@@ -9,6 +9,15 @@ function clampInt(n: number, min: number, max: number): number {
 
 export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
 export type StrumSource = 'songsterr' | 'ai'
+export type ChordVersion = 'v1' | 'v2'
+
+export interface SongOverrides {
+  lyricsMode?: LyricsMode
+  chordVersion?: ChordVersion
+  transposeSemitones?: number
+  lyricsOffsetMs?: number
+  strumSource?: StrumSource
+}
 
 export interface CameraPreviewPosition {
   x: number
@@ -46,6 +55,10 @@ export interface PlayerPrefsState {
   cameraPreviewMinimized: boolean
   /** Which stems are enabled by default when opening a song (e.g. ['vocals', 'drums']). */
   defaultStems: string[]
+  /** Per-song setting overrides. Key is songId. */
+  songOverrides: Record<string, SongOverrides>
+  setSongOverride: <K extends keyof SongOverrides>(songId: string, key: K, value: SongOverrides[K]) => void
+  clearSongOverrides: (songId: string) => void
   setTransposeSemitones: (semitones: number) => void
   transposeUp: () => void
   transposeDown: () => void
@@ -72,7 +85,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       showStrums: true,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
-      lyricsMode: 'ver1' as LyricsMode,
+      lyricsMode: 'ver3' as LyricsMode,
       strumSource: 'songsterr' as StrumSource,
       autoRecord: false,
       autoDownloadRecordings: true,
@@ -80,6 +93,20 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       cameraPreviewPosition: null,
       cameraPreviewMinimized: false,
       defaultStems: ['vocals', 'drums'],
+      songOverrides: {},
+      setSongOverride: (songId, key, value) =>
+        set((state) => ({
+          songOverrides: {
+            ...state.songOverrides,
+            [songId]: { ...state.songOverrides[songId], [key]: value },
+          },
+        })),
+      clearSongOverrides: (songId) =>
+        set((state) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { [songId]: _removed, ...rest } = state.songOverrides
+          return { songOverrides: rest }
+        }),
       setTransposeSemitones: (semitones) =>
         set({ transposeSemitones: clampInt(semitones, -12, 12) }),
       transposeUp: () => {
@@ -166,9 +193,14 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.defaultStems = ['vocals', 'drums']
         }
 
+        // Default per-song overrides (v7 → v8)
+        if (state && state.songOverrides === undefined) {
+          state.songOverrides = {}
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 7,
+      version: 8,
     }
   )
 )

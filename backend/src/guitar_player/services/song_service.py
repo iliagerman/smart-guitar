@@ -745,27 +745,90 @@ class SongService:
             if key and self._storage.file_exists(key):
                 setattr(stems, stem_name, self._storage.get_url(key))
 
-        # Read chords from DB-stored path
+        # Read chords from both sources
         chords: list[ChordEntry] = []
+        autochord_chords: list[ChordEntry] = []
+        gemini_chords: list[ChordEntry] = []
+        chord_source: str | None = None
+        recommended_capo: int | None = None
+        song_key: str | None = None
+
+        # Load autochord chords
         if song.chords_key and self._storage.file_exists(song.chords_key):
             try:
                 raw = self._storage.read_json(song.chords_key)
                 if isinstance(raw, list):
-                    chords = [ChordEntry(**c) for c in raw]
+                    autochord_chords = [ChordEntry(**c) for c in raw]
             except Exception as e:
                 logger.warning("Failed to read chords for %s: %s", song.song_name, e)
 
-        # Discover simplified chord variant files (chords_intermediate.json, etc.)
+        # Load Gemini web chords
+        web_chords_key = song.web_chords_key
+        if not web_chords_key and song.song_name:
+            candidate = f"{song.song_name}/chords_web.json"
+            if self._storage.file_exists(candidate):
+                web_chords_key = candidate
+
+        if web_chords_key and self._storage.file_exists(web_chords_key):
+            try:
+                raw = self._storage.read_json(web_chords_key)
+                if isinstance(raw, list):
+                    gemini_chords = [ChordEntry(**c) for c in raw]
+            except Exception as e:
+                logger.warning("Failed to read web chords for %s: %s", song.song_name, e)
+
+        # Primary chords = Gemini if available, else autochord
+        if gemini_chords:
+            chords = gemini_chords
+            chord_source = "gemini"
+        elif autochord_chords:
+            chords = autochord_chords
+            chord_source = "autochord"
+
+        # Load chord metadata (capo, key, etc.) from chord_meta.json
+        if song.song_name:
+            meta_key = f"{song.song_name}/chord_meta.json"
+            if self._storage.file_exists(meta_key):
+                try:
+                    meta = self._storage.read_json(meta_key)
+                    if isinstance(meta, dict):
+                        recommended_capo = meta.get("capo") or None
+                        song_key = meta.get("key") or None
+                except Exception as e:
+                    logger.warning("Failed to read chord_meta for %s: %s", song.song_name, e)
+
+        # Build chord options — include both sources + simplified variants
         chord_options: list[ChordOption] = []
+
+        # Add autochord as an option when Gemini is primary
+        if gemini_chords and autochord_chords:
+            chord_options.append(
+                ChordOption(
+                    name="Detected (V1)",
+                    description="Auto-detected chords from audio analysis",
+                    capo=0,
+                    chords=autochord_chords,
+                )
+            )
+
+        # Discover simplified chord variant files (beginner, capo, etc.)
         if song.song_name:
             try:
                 files = self._storage.list_files(song.song_name)
+                # Prefer web variants when available, otherwise use autochord variants
+                has_web_variants = any(
+                    "chords_web_" in f.rsplit("/", 1)[-1] for f in files
+                )
                 variant_keys = sorted(
                     f
                     for f in files
                     if f.rsplit("/", 1)[-1].startswith(CHORD_VARIANT_PREFIX)
                     and f.endswith(CHORD_VARIANT_SUFFIX)
                     and "intermediate" not in f.rsplit("/", 1)[-1].lower()
+                    and (
+                        not has_web_variants
+                        or "chords_web_" in f.rsplit("/", 1)[-1]
+                    )
                 )
                 for key in variant_keys:
                     try:
@@ -1004,6 +1067,10 @@ class SongService:
             tutorial_url=tutorial_url,
             tutorial_links=tutorial_links,
             songsterr_status=songsterr_status,
+            chord_source=chord_source,
+            recommended_capo=recommended_capo,
+            song_key=song_key,
+            web_chords_failed=song.web_chords_failed,
             download_pending=song.download_requested_at is not None,
         )
 

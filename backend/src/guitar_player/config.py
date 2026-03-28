@@ -178,6 +178,10 @@ class TavilyConfig(BaseModel):
     api_key: Optional[str] = None
 
 
+class GeminiConfig(BaseModel):
+    api_key: Optional[str] = None
+
+
 class ExternalStrumsConfig(BaseModel):
     enabled: bool = True
     fetch_timeout_seconds: float = 15.0
@@ -209,6 +213,7 @@ class Settings(BaseModel):
     analytics: AnalyticsConfig = AnalyticsConfig()
     external_strums: ExternalStrumsConfig = ExternalStrumsConfig()
     tavily: TavilyConfig = TavilyConfig()
+    gemini: GeminiConfig = GeminiConfig()
     subscription_bypass_emails: list[str] = []
     admin_users: list[str] = []
 
@@ -560,12 +565,25 @@ def _resolve_secrets(merged: dict, config_dir: Path, app_env: str = "local") -> 
         if cookies_file:
             merged["youtube"]["cookies_file"] = str(cookies_file)
 
-    # Env var should always win (works locally + ECS task env).
+    # Gemini (optional)
+    gemini_secrets = secrets.get("gemini", {})
+    if "gemini" not in merged:
+        merged["gemini"] = {}
+    if not merged["gemini"].get("api_key"):
+        merged["gemini"]["api_key"] = gemini_secrets.get("api_key") or gemini_secrets.get("api-key")
+
+    # Env vars should always win (works locally + ECS task env).
     env_api_key = os.environ.get("OPENAI_API_KEY")
     if env_api_key:
         if "openai" not in merged:
             merged["openai"] = {}
         merged["openai"]["api_key"] = env_api_key
+
+    env_gemini_key = os.environ.get("GEMINI_API_KEY")
+    if env_gemini_key:
+        if "gemini" not in merged:
+            merged["gemini"] = {}
+        merged["gemini"]["api_key"] = env_gemini_key
 
     return merged
 

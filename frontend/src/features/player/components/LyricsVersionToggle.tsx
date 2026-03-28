@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
-import { usePlayerPrefsStore, type LyricsMode } from '@/stores/player-prefs.store'
+import type { LyricsMode } from '@/stores/player-prefs.store'
 
 interface LyricsVersionToggleProps {
   className?: string
@@ -10,14 +10,16 @@ interface LyricsVersionToggleProps {
   hasVer3Lyrics: boolean
   hasVer4Lyrics?: boolean
   isVer3Generating?: boolean
+  selected: LyricsMode
+  onSelect: (mode: LyricsMode) => void
 }
 
-const OPTIONS: { value: LyricsMode; label: string; shortLabel: string }[] = [
-  { value: 'ver1', label: 'Ver 1', shortLabel: 'V1' },
-  { value: 'ver2', label: 'Ver 2', shortLabel: 'V2' },
-  { value: 'ver3', label: 'Ver 3', shortLabel: 'V3' },
-  { value: 'ver4', label: 'Ver 4', shortLabel: 'V4' },
-  { value: 'none', label: 'None', shortLabel: 'Off' },
+const OPTIONS: { value: LyricsMode; label: string; shortLabel: string; tooltip: string }[] = [
+  { value: 'ver1', label: 'V1 - Fast', shortLabel: 'V1', tooltip: 'V1: Fast lyrics (basic timing, quick to load)' },
+  { value: 'ver2', label: 'V2 - Timed', shortLabel: 'V2', tooltip: 'V2: Timed lyrics (word-level highlighting)' },
+  { value: 'ver3', label: 'V3 - Best', shortLabel: 'V3', tooltip: 'V3: Corrected lyrics (most accurate, recommended)' },
+  { value: 'ver4', label: 'V4 - Alt', shortLabel: 'V4', tooltip: 'V4: Alternative lyrics source' },
+  { value: 'none', label: 'Off', shortLabel: 'Off', tooltip: 'Turn off lyrics' },
 ]
 
 function LyricsIcon({ size = 48, label, className }: { size?: number; label: string; className?: string }) {
@@ -53,9 +55,9 @@ export function LyricsVersionToggle({
   hasVer3Lyrics,
   hasVer4Lyrics = false,
   isVer3Generating = false,
+  selected: lyricsMode,
+  onSelect: setLyricsMode,
 }: LyricsVersionToggleProps) {
-  const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
-  const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
 
   const available = OPTIONS.filter((opt) => {
     if (opt.value === 'ver1') return hasVer1Lyrics
@@ -91,7 +93,7 @@ export function LyricsVersionToggle({
         className,
       )}
       onClick={cycleNext}
-      title={`Lyrics: ${currentOption.label}. Click to cycle.`}
+      title={`${currentOption.tooltip}. Click to cycle.`}
       aria-label={`Lyrics mode: ${currentOption.label}`}
       data-testid="lyrics-mode-toggle"
     >

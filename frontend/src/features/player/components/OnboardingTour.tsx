@@ -35,8 +35,8 @@ const STEPS: TourStep[] = [
   },
   {
     tourAttr: 'lyrics-toggle',
-    title: 'Change the Lyrics',
-    description: 'Cycle through different lyric versions for better accuracy, or turn them off.',
+    title: 'Switch Lyrics Version',
+    description: 'Tap to switch between lyrics versions: V1 (fast, basic), V2 (timed with word highlighting), V3 (corrected & most accurate), or turn lyrics off entirely.',
     icon: <Type size={20} />,
   },
   {

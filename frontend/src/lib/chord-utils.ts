@@ -74,11 +74,17 @@ function transposeNoteSharpsOnly(note: string, semitones: number): string {
 
 function splitSlash(input: string): { main: string; bass: string | null } {
   const s = (input || '').trim()
-  const parts = s.split('/')
-  if (parts.length <= 1) return { main: s, bass: null }
-  const main = parts[0] ?? ''
-  const bass = parts.slice(1).join('/')
-  return { main, bass: bass || null }
+  // Find the LAST slash that separates a bass note (A-G with optional #/b).
+  // This avoids splitting extension chords like D6/9, G6/9, C6/9 where
+  // the slash is part of the chord quality, not a bass note indicator.
+  const lastSlash = s.lastIndexOf('/')
+  if (lastSlash <= 0) return { main: s, bass: null }
+  const after = s.slice(lastSlash + 1)
+  // Only split if what follows the slash is an actual note name
+  if (/^[A-G][#b]?$/.test(after)) {
+    return { main: s.slice(0, lastSlash), bass: after }
+  }
+  return { main: s, bass: null }
 }
 
 function isNoteLike(input: string): boolean {

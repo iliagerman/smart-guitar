@@ -82,6 +82,14 @@ class Song(UUIDMixin, TimestampMixin, Base):
     external_strums_failed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    web_chords_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
+    # Storage key for Gemini-detected chords (chords_web.json)
+    web_chords_key: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
 
     # Timestamps for lightweight task cooldowns — prevent re-enqueuing
     # background lyrics/tabs/merge on every poll (5-6 sec interval).
@@ -95,6 +103,9 @@ class Song(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     external_strums_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    web_chords_attempted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

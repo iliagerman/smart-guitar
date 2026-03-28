@@ -22,6 +22,7 @@ import { ChordDisplayControls } from '../components/ChordDisplayControls'
 
 import { LyricsSyncControl } from '../components/LyricsSyncControl'
 import { LyricsVersionToggle } from '../components/LyricsVersionToggle'
+import { ChordVersionToggle } from '../components/ChordVersionToggle'
 import { ScrollModeControl } from '../components/ScrollModeControl'
 import { OnboardingTour } from '../components/OnboardingTour'
 import { LyricsSyncDebug } from '../components/LyricsSyncDebug'
@@ -189,9 +190,46 @@ export function SongDetailPage() {
   const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: true })
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
-  const transposeSemitones = usePlayerPrefsStore((s) => s.transposeSemitones)
-  const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
-  const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
+  const globalTranspose = usePlayerPrefsStore((s) => s.transposeSemitones)
+  const globalLyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
+  const globalLyricsOffset = usePlayerPrefsStore((s) => s.lyricsOffsetMs)
+  const globalStrumSource = usePlayerPrefsStore((s) => s.strumSource)
+  const songOverrides = usePlayerPrefsStore((s) => s.songOverrides[songId!])
+  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
+
+  // Per-song values with global fallback
+  const chordVersion = songOverrides?.chordVersion ?? 'v2'
+  const lyricsMode = songOverrides?.lyricsMode ?? globalLyricsMode
+  const transposeSemitones = songOverrides?.transposeSemitones ?? globalTranspose
+  const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? globalLyricsOffset
+  const strumSource = songOverrides?.strumSource ?? globalStrumSource
+
+  // Sync per-song effective values into global store so child components
+  // that read from the global store (ChordDisplayControls, LyricsSyncControl, etc.) work.
+  const setGlobalTranspose = usePlayerPrefsStore((s) => s.setTransposeSemitones)
+  const setGlobalLyricsOffset = usePlayerPrefsStore((s) => s.setLyricsOffsetMs)
+  const setGlobalLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
+  const setGlobalStrumSource = usePlayerPrefsStore((s) => s.setStrumSource)
+
+  useEffect(() => {
+    setGlobalTranspose(transposeSemitones)
+  }, [transposeSemitones, setGlobalTranspose])
+
+  useEffect(() => {
+    setGlobalLyricsOffset(lyricsOffsetMs)
+  }, [lyricsOffsetMs, setGlobalLyricsOffset])
+
+  useEffect(() => {
+    setGlobalLyricsMode(lyricsMode)
+  }, [lyricsMode, setGlobalLyricsMode])
+
+  useEffect(() => {
+    setGlobalStrumSource(strumSource)
+  }, [strumSource, setGlobalStrumSource])
+
+  // Track whether we've auto-detected lyrics for this song load
+  const didAutoDetectLyrics = useRef(false)
+
   const [showTutorial, setShowTutorial] = useState(false)
   const [tutorialIndex, setTutorialIndex] = useState(0)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
@@ -209,6 +247,7 @@ export function SongDetailPage() {
   useEffect(() => {
     if (!songId) return
     hasRecordedPlayRef.current = false
+    didAutoDetectLyrics.current = false
     setCurrentSong(songId)
     // Initialize stems from user's default preferences.
     const defaults = usePlayerPrefsStore.getState().defaultStems
@@ -275,14 +314,33 @@ export function SongDetailPage() {
     }
   }
 
-  // Resolve active chords based on selected chord option
-  const activeChords = useMemo(() => {
+  // Resolve base chords based on chord version (V1=autochord, V2=gemini)
+  const hasV1Chords = detail?.chord_options?.some((o) => o.name === 'Detected (V1)') ?? false
+  const hasV2Chords = detail?.chord_source === 'gemini'
+
+  const baseChords = useMemo(() => {
     if (!detail) return []
-    if (selectedChordOptionIndex !== null && detail.chord_options?.[selectedChordOptionIndex]) {
-      return detail.chord_options[selectedChordOptionIndex].chords
+    if (chordVersion === 'v1' && hasV1Chords) {
+      const v1Option = detail.chord_options?.find((o) => o.name === 'Detected (V1)')
+      if (v1Option) return v1Option.chords
     }
     return detail.chords
-  }, [detail, selectedChordOptionIndex])
+  }, [detail, chordVersion, hasV1Chords])
+
+  // Chord options excluding the V1 source option (that's handled by the version toggle)
+  const filteredChordOptions = useMemo(
+    () => (detail?.chord_options ?? []).filter((o) => o.name !== 'Detected (V1)'),
+    [detail?.chord_options],
+  )
+
+  // Resolve active chords based on selected chord option (beginner, capo, etc.)
+  const activeChords = useMemo(() => {
+    if (!detail) return []
+    if (selectedChordOptionIndex !== null && filteredChordOptions[selectedChordOptionIndex]) {
+      return filteredChordOptions[selectedChordOptionIndex].chords
+    }
+    return baseChords
+  }, [detail, selectedChordOptionIndex, filteredChordOptions, baseChords])
 
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
@@ -353,6 +411,17 @@ export function SongDetailPage() {
     [detail],
   )
   const ver4LyricsSource = detail?.ver4_lyrics_source ?? null
+
+  // Auto-switch to ver3 once when corrected lyrics become available,
+  // but only if the user hasn't explicitly set a per-song override.
+  useEffect(() => {
+    if (didAutoDetectLyrics.current) return
+    if (songOverrides?.lyricsMode !== undefined) return
+    if (ver3Lyrics.length > 0 && lyricsMode !== 'ver3' && lyricsMode !== 'ver4' && lyricsMode !== 'none') {
+      setGlobalLyricsMode('ver3')
+      didAutoDetectLyrics.current = true
+    }
+  }, [ver3Lyrics.length, lyricsMode, songOverrides?.lyricsMode, setGlobalLyricsMode])
 
   const activeLyrics = useMemo(() => {
     if (!detail) return []
@@ -437,33 +506,33 @@ export function SongDetailPage() {
   const isVer3LyricsGenerating =
     !!detail && !hasVer3Lyrics && hasVer1Lyrics && hasVer2Lyrics && (isJobProcessing || !detail.active_job)
 
-  // When a song loads, pick the best available lyrics mode.
-  // Non-English songs prefer ver1 (fast transcription handles non-Latin better).
-  // English songs prefer ver2 (full Whisper transcription, more accurate).
+  // When a song loads, pick the best available lyrics mode — but only if
+  // the user hasn't explicitly set a per-song override for this song.
+  // Default: v3 > (non-English: v1 > v2) / (English: v2 > v1) > none
   useEffect(() => {
     if (!detail) return
+    if (songOverrides?.lyricsMode !== undefined) return
+    if (didAutoDetectLyrics.current) return
+    didAutoDetectLyrics.current = true
 
-    // Detect non-English: check if lyrics text has significant non-ASCII content
     const sampleText = (ver1Lyrics[0]?.text ?? ver2Lyrics[0]?.text ?? '').slice(0, 200)
     const nonAsciiRatio = sampleText.length > 0
       ? [...sampleText].filter((c) => c.charCodeAt(0) > 127).length / sampleText.length
       : 0
     const isNonEnglish = nonAsciiRatio > 0.3
 
-    if (isNonEnglish) {
-      // Non-English: ver1 > ver2 > ver3
-      if (hasVer1Lyrics) setLyricsMode('ver1')
-      else if (hasVer2Lyrics) setLyricsMode('ver2')
-      else if (hasVer3Lyrics) setLyricsMode('ver3')
-      else setLyricsMode('none')
+    if (hasVer3Lyrics) {
+      setGlobalLyricsMode('ver3')
+    } else if (isNonEnglish) {
+      if (hasVer1Lyrics) setGlobalLyricsMode('ver1')
+      else if (hasVer2Lyrics) setGlobalLyricsMode('ver2')
+      else setGlobalLyricsMode('none')
     } else {
-      // English: ver2 > ver3 > ver1
-      if (hasVer2Lyrics) setLyricsMode('ver2')
-      else if (hasVer3Lyrics) setLyricsMode('ver3')
-      else if (hasVer1Lyrics) setLyricsMode('ver1')
-      else setLyricsMode('none')
+      if (hasVer2Lyrics) setGlobalLyricsMode('ver2')
+      else if (hasVer1Lyrics) setGlobalLyricsMode('ver1')
+      else setGlobalLyricsMode('none')
     }
-  }, [detail, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, ver1Lyrics, ver2Lyrics, setLyricsMode])
+  }, [detail, songOverrides?.lyricsMode, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, ver1Lyrics, ver2Lyrics, setGlobalLyricsMode])
 
   if (isLoading || !detail) {
     return (
@@ -477,7 +546,9 @@ export function SongDetailPage() {
       ? getAudioUrl(songId!, activeStems[0], detail)
       : null
   const hasChords = activeChords.length > 0
-  const hasChordSheet = hasChords || hasAnyLyrics
+  const chordsLoading = !hasChords && !detail?.chord_source && hasStemsProcessed
+  const chordsUpgrading = hasChords && detail?.chord_source === 'autochord' && !detail?.web_chords_failed
+  const hasChordSheet = hasChords || hasAnyLyrics || chordsLoading
 
   const showBackgroundProcessing = hasStemsProcessed && hasChords && (!hasAnyLyrics || (sheetMode === 'tabs' && !hasTabs))
   // Only show audio status when stems are processed but the selected stem URL
@@ -608,6 +679,12 @@ export function SongDetailPage() {
                       stemTypes={detail.stem_types}
                     />
                   </div>
+                  <ChordVersionToggle
+                    hasV1={hasV1Chords}
+                    hasV2={hasV2Chords}
+                    selected={chordVersion}
+                    onSelect={(v) => setSongOverride(songId!, 'chordVersion', v)}
+                  />
                   <div className="contents" data-tour="lyrics-toggle">
                     <LyricsVersionToggle
                       hasVer1Lyrics={hasVer1Lyrics}
@@ -615,6 +692,8 @@ export function SongDetailPage() {
                       hasVer3Lyrics={hasVer3Lyrics}
                       hasVer4Lyrics={hasVer4Lyrics}
                       isVer3Generating={isVer3LyricsGenerating}
+                      selected={lyricsMode}
+                      onSelect={(mode) => setSongOverride(songId!, 'lyricsMode', mode)}
                     />
                   </div>
                   <div className="contents" data-tour="chord-map">
@@ -624,7 +703,13 @@ export function SongDetailPage() {
               }
               secondaryControls={
                 <>
-                  <ChordOptionSelector chordOptions={detail.chord_options ?? []} hasTabs={hasTabs} />
+                  <ChordOptionSelector
+                    chordOptions={filteredChordOptions}
+                    hasTabs={hasTabs}
+                    recommendedCapo={detail.recommended_capo}
+                    songKey={detail.song_key}
+                    chordSource={chordVersion === 'v1' ? 'autochord' : detail.chord_source}
+                  />
                   <ChordDisplayControls />
 
                   <PlaybackSpeedSelector />
@@ -679,7 +764,23 @@ export function SongDetailPage() {
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
                   <CurrentChordPanel chords={displayChords} />
                   <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-                    {sheetMode === 'tabs' && hasTabs ? (
+                    {chordsUpgrading && (
+                      <div
+                        className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-flame-400/10 border border-flame-400/20 text-smoke-300 text-xs"
+                        data-testid="chords-upgrading-banner"
+                      >
+                        <div className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-smoke-600 border-t-flame-400 shrink-0" />
+                        <span>Improving chords — a more accurate version should be available in 1-2 minutes</span>
+                      </div>
+                    )}
+                    {chordsLoading && !hasChords ? (
+                      <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
+                          <span className="text-sm">Detecting chords...</span>
+                        </div>
+                      </div>
+                    ) : sheetMode === 'tabs' && hasTabs ? (
                       <TabsSheet
                         tabs={detail.tabs}
                         lyrics={activeLyrics}

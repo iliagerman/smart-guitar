@@ -54,12 +54,15 @@ class SongRecord(BaseModel):
     lyrics_failed: bool = False
     tabs_failed: bool = False
     external_strums_failed: bool = False
+    web_chords_failed: bool = False
+    web_chords_key: Optional[str] = None
 
     # Cooldown timestamps
     lyrics_attempted_at: Optional[datetime] = None
     tabs_attempted_at: Optional[datetime] = None
     merge_attempted_at: Optional[datetime] = None
     external_strums_attempted_at: Optional[datetime] = None
+    web_chords_attempted_at: Optional[datetime] = None
     download_requested_at: Optional[datetime] = None
 
     downloaded_by: Optional[uuid.UUID] = None

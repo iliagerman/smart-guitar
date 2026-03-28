@@ -119,6 +119,10 @@ export interface SongDetail {
   tutorial_url?: string | null
   tutorial_links?: { url: string; title: string }[]
   songsterr_status?: string | null  // null=pending, "ready", "failed", "unavailable"
+  chord_source?: string | null  // "gemini" | "autochord"
+  recommended_capo?: number | null
+  song_key?: string | null
+  web_chords_failed?: boolean
   active_job: ActiveJobInfo | null
   download_pending: boolean
 }

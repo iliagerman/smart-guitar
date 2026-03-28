@@ -462,6 +462,27 @@ def _enqueue_external_strums_fetch(song_id: uuid.UUID) -> None:
     task.add_done_callback(_done)
 
 
+# ---- Gemini web chords background fetch ----
+
+_WEB_CHORDS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
+
+
+def _enqueue_web_chords_fetch(song_id: uuid.UUID) -> None:
+    """Fire-and-forget Gemini chord detection in the background."""
+    existing = _WEB_CHORDS_TASKS.get(song_id)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_fetch_gemini_chords(song_id))
+    _WEB_CHORDS_TASKS[song_id] = task
+
+    def _done(t: asyncio.Task) -> None:
+        if _WEB_CHORDS_TASKS.get(song_id) is t:
+            _WEB_CHORDS_TASKS.pop(song_id, None)
+
+    task.add_done_callback(_done)
+
+
 class JobService:
     def __init__(
         self,
@@ -1319,6 +1340,80 @@ class JobService:
             song.title,
         )
         _enqueue_external_strums_fetch(song_id)
+        return True
+
+    async def trigger_web_chords_if_missing(
+        self,
+        song_id: uuid.UUID,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """If Gemini web chords are missing, enqueue background detection.
+
+        Returns True if a background task was enqueued.
+        """
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            return False
+
+        if not song.song_name or not song.audio_key:
+            return False
+
+        # Already present on disk
+        if (
+            song.web_chords_key
+            and self._storage.file_exists(song.web_chords_key)
+            and not force
+        ):
+            return False
+
+        # Check on disk even if DB key is missing
+        candidate = f"{song.song_name}/chords_web.json"
+        if not force and self._storage.file_exists(candidate):
+            await self._song_dao.update_by_id(
+                song.id, web_chords_key=candidate
+            )
+            return False
+
+        # Cooldown check
+        attempt_age_s: float | None = None
+        if song.web_chords_attempted_at:
+            attempt_age_s = (
+                _utcnow() - _to_aware_utc(song.web_chords_attempted_at)
+            ).total_seconds()
+
+        if song.web_chords_failed and not force:
+            if (
+                attempt_age_s is not None
+                and attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                return False
+
+        if song.web_chords_attempted_at and not force:
+            if (
+                attempt_age_s is not None
+                and attempt_age_s < _LIGHTWEIGHT_TASK_COOLDOWN_SECONDS
+            ):
+                return False
+
+        # Check for existing in-flight task
+        existing_task = _WEB_CHORDS_TASKS.get(song_id)
+        if existing_task and not existing_task.done():
+            return False
+
+        # Record attempt timestamp
+        update_kwargs: dict = {"web_chords_attempted_at": _utcnow()}
+        if force or song.web_chords_failed:
+            update_kwargs["web_chords_failed"] = False
+        await self._song_dao.update_by_id(song.id, **update_kwargs)
+
+        logger.info(
+            "Web chords: enqueuing Gemini detection for %s (%s - %s)",
+            song_id,
+            song.artist,
+            song.title,
+        )
+        _enqueue_web_chords_fetch(song_id)
         return True
 
     async def get_active_job_for_song(self, song_id: uuid.UUID) -> JobRecord | None:
@@ -2228,6 +2323,154 @@ async def _fetch_external_strums(song_id: uuid.UUID) -> None:
         except Exception:
             logger.debug(
                 "Failed to persist external_strums_failed for %s",
+                song_id,
+                exc_info=True,
+            )
+
+
+async def _fetch_gemini_chords(song_id: uuid.UUID) -> None:
+    """Detect chords via Gemini 2.5 Pro, merge with autochord timing, and store."""
+    try:
+        storage = get_storage()
+    except Exception:
+        return
+
+    from guitar_player.config import get_settings
+
+    settings = get_settings()
+    gemini_api_key = settings.gemini.api_key
+    if not gemini_api_key:
+        logger.debug("Gemini API key not configured, skipping web chords for %s", song_id)
+        return
+
+    async with safe_session() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_id(song_id)
+        if not song or not song.song_name or not song.audio_key:
+            return
+        song_name = song.song_name
+        audio_key = song.audio_key
+        audio_duration = float(song.duration_seconds or 300)
+
+    t0 = time.monotonic()
+    try:
+        from guitar_player.services.gemini_chord_service import detect_chords
+        from guitar_player.services.chord_merger import (
+            build_chord_meta,
+            clean_chords,
+        )
+
+        # Resolve audio path for Gemini upload
+        audio_path = storage.resolve_service_path(audio_key)
+
+        # Load tutorial context from songsterr_data to help Gemini
+        bpm = 0.0
+        tutorial_context: str | None = None
+        songsterr_key = f"{song_name}/songsterr_data.json"
+        if storage.file_exists(songsterr_key):
+            try:
+                songsterr = storage.read_json(songsterr_key)
+                bpm = float(songsterr.get("source_bpm", 0))
+                # Collect Tavily tutorial content to help Gemini
+                parts: list[str] = []
+                if songsterr.get("strum_notes"):
+                    parts.append(f"Playing notes: {songsterr['strum_notes']}")
+                if songsterr.get("lyrics_text"):
+                    parts.append(f"Lyrics: {songsterr['lyrics_text'][:2000]}")
+                if parts:
+                    tutorial_context = "\n\n".join(parts)
+            except Exception:
+                pass
+
+        # Also try loading cached Tavily search content
+        tavily_key = f"{song_name}/tavily_content.json"
+        if storage.file_exists(tavily_key):
+            try:
+                tavily_data = storage.read_json(tavily_key)
+                if isinstance(tavily_data, dict) and tavily_data.get("content"):
+                    tavily_text = tavily_data["content"]
+                    if tutorial_context:
+                        tutorial_context += f"\n\n{tavily_text[:4000]}"
+                    else:
+                        tutorial_context = tavily_text[:6000]
+            except Exception:
+                pass
+
+        # Call Gemini with tutorial context
+        gemini_result = await detect_chords(
+            audio_path, gemini_api_key, tutorial_context,
+        )
+        if not gemini_result or not gemini_result.chords:
+            logger.warning("Gemini returned no chords for %s", song_id)
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, web_chords_failed=True)
+                await song_dao.commit()
+            return
+
+        # Use Gemini's BPM if we don't have one from Songsterr
+        if not bpm and gemini_result.bpm:
+            bpm = float(gemini_result.bpm)
+
+        # Use Gemini's own timestamps directly — they reflect the song structure
+        # better than autochord's noisy change points. Just clean up the output.
+        gemini_dicts = [
+            {"start_time": c.start_time, "end_time": c.end_time, "chord": c.chord}
+            for c in gemini_result.chords
+        ]
+
+        merged = clean_chords(gemini_dicts, audio_duration)
+
+        # Store chords_web.json
+        web_chords_key = f"{song_name}/chords_web.json"
+        storage.write_json(web_chords_key, merged)
+
+        # Store chord_meta.json
+        meta = build_chord_meta(
+            capo=gemini_result.capo,
+            key=gemini_result.key,
+            bpm=gemini_result.bpm,
+            tuning=gemini_result.tuning,
+            time_signature=gemini_result.time_signature,
+            notes=gemini_result.notes,
+        )
+        storage.write_json(f"{song_name}/chord_meta.json", meta)
+
+        # Note: simplified variants (beginner/capo) for web chords are not
+        # generated here because the chords_generator is a separate microservice.
+        # The existing autochord variants remain available as chord options.
+
+        # Update DB
+        async with safe_session() as session:
+            song_dao = SongDAO(session)
+            await song_dao.update_by_id(
+                song_id,
+                web_chords_key=web_chords_key,
+                web_chords_failed=False,
+                web_chords_attempted_at=None,
+            )
+            await song_dao.commit()
+
+        elapsed = time.monotonic() - t0
+        logger.info(
+            "Gemini chords: stored %d entries for %s (%.1fs)",
+            len(merged), song_name, elapsed,
+        )
+
+    except Exception as exc:
+        elapsed = time.monotonic() - t0
+        logger.warning(
+            "Gemini chords fetch failed (%.1fs): %s song_id=%s",
+            elapsed, exc, song_id,
+        )
+        try:
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, web_chords_failed=True)
+                await song_dao.commit()
+        except Exception:
+            logger.debug(
+                "Failed to persist web_chords_failed for %s",
                 song_id,
                 exc_info=True,
             )
