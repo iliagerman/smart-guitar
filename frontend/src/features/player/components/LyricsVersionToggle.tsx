@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
-import type { LyricsMode } from '@/stores/player-prefs.store'
+type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
 
 interface LyricsVersionToggleProps {
   className?: string

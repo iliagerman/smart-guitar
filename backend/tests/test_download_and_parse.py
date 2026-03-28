@@ -9,10 +9,26 @@ import os
 import shutil
 import tempfile
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.youtube_service import YoutubeService
+
+
+def _has_aws_credentials() -> bool:
+    try:
+        boto3.client("sts").get_caller_identity()
+        return True
+    except (ClientError, NoCredentialsError, Exception):
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _has_aws_credentials(),
+    reason="AWS credentials not available",
+)
 
 
 @pytest.mark.asyncio
@@ -38,7 +54,7 @@ async def test_search_download_and_parse_eagles_hotel_california(settings):
     print(f"\n[2/3] Downloading MP3 for {youtube_id} ...", flush=True)
     tmp_dir = tempfile.mkdtemp(prefix="test_dl_")
     try:
-        local_mp3, raw_title = await youtube.download(youtube_id, tmp_dir)
+        local_mp3, raw_title, _metadata = await youtube.download(youtube_id, tmp_dir)
 
         size_mb = os.path.getsize(local_mp3) / (1024 * 1024)
         print(f"  Downloaded: {local_mp3} ({size_mb:.1f} MB)", flush=True)

@@ -59,7 +59,8 @@ def client(mock_cognito, mock_telegram) -> TestClient:
         ).get_telegram_service
     ] = lambda: mock_telegram
 
-    return TestClient(app)
+    with patch("guitar_player.routers.auth.track_event"):
+        yield TestClient(app)
 
 
 # ── Tests: /auth/register ────────────────────────────────────────

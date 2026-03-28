@@ -1,43 +1,35 @@
 import { Guitar, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
-import type { ChordVersion } from '@/stores/player-prefs.store'
-
-export type { ChordVersion }
-
-export interface VersionInfo {
-  version: ChordVersion
-  label: string
-  tooltip: string
-  createdBy?: string | null
-}
+import type { ChordOption } from '@/types/song'
 
 interface ChordVersionToggleProps {
   className?: string
-  versions: VersionInfo[]
-  selected: ChordVersion
+  versions: ChordOption[]
+  selectedIndex: number
   currentUserEmail?: string
-  onSelect: (version: ChordVersion) => void
+  onSelect: (index: number) => void
   onDelete?: () => void
 }
 
 export function ChordVersionToggle({
   className,
   versions,
-  selected,
+  selectedIndex,
   currentUserEmail,
   onSelect,
   onDelete,
 }: ChordVersionToggleProps) {
   if (versions.length < 2) return null
 
-  const current = versions.find((v) => v.version === selected) ?? versions[0]
-  const isOwned = currentUserEmail && current.createdBy === currentUserEmail
+  const clampedIndex = Math.min(selectedIndex, versions.length - 1)
+  const current = versions[clampedIndex] ?? versions[0]
+  const label = `V${clampedIndex + 1}`
+  const isOwned = currentUserEmail && current.created_by === currentUserEmail
 
   function cycleNext() {
-    const idx = versions.findIndex((v) => v.version === selected)
-    const nextIdx = (idx >= 0 ? idx + 1 : 1) % versions.length
-    onSelect(versions[nextIdx].version)
+    const nextIdx = (clampedIndex + 1) % versions.length
+    onSelect(nextIdx)
   }
 
   return (
@@ -55,13 +47,13 @@ export function ChordVersionToggle({
           className,
         )}
         onClick={cycleNext}
-        title={`${current.tooltip}. Click to switch.`}
-        aria-label={`Chord version: ${current.label}`}
+        title={`${current.name}. Click to switch.`}
+        aria-label={`Version: ${label}`}
         data-testid="chord-version-toggle"
       >
         <div className="flex flex-col items-center gap-0.5">
           <Guitar size={24} />
-          <span className="text-[10px] font-bold leading-none">{current.label}</span>
+          <span className="text-[10px] font-bold leading-none">{label}</span>
         </div>
       </button>
       {isOwned && onDelete && (

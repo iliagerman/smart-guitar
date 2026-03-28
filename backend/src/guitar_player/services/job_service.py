@@ -295,6 +295,7 @@ DEFAULT_REQUESTED_OUTPUTS = ["guitar_isolated", "vocals_isolated"]
 # job payloads can stay stable even if the demucs microservice contract differs.
 _DEMUCS_OUTPUT_KEYS: set[str] = {
     "guitar_isolated",
+    "guitar_removed",
     "vocals_isolated",
     "vocals_removed",
 }
@@ -302,6 +303,7 @@ _DEMUCS_OUTPUT_KEYS: set[str] = {
 _CANONICAL_TO_DEMUCS_OUTPUT: dict[str, str] = {
     # canonical -> demucs output key
     "guitar": "guitar_isolated",
+    "guitar_removed": "guitar_removed",
     "vocals": "vocals_isolated",
     "vocals_removed": "vocals_removed",
 }

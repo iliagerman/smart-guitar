@@ -16,8 +16,8 @@ export function useDeleteChords() {
     mutationFn: ({ songId }: DeleteChordsParams) => songsApi.deleteChords(songId),
     onSuccess: (updatedDetail, variables) => {
       queryClient.setQueryData(queryKeys.songs.detail(variables.songId), updatedDetail)
-      // Switch back to V2
-      usePlayerPrefsStore.getState().setSongOverride(variables.songId, 'chordVersion', 'v2')
+      // Switch back to primary version (index 0)
+      usePlayerPrefsStore.getState().setSongOverride(variables.songId, 'selectedVersionIndex', 0)
       usePlaybackStore.getState().setSelectedChordOptionIndex(null)
       toast.success('Chord version deleted')
     },

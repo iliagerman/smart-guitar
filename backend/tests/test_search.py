@@ -23,14 +23,31 @@ import asyncio
 import shutil
 from pathlib import Path
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.services.artwork_service import ArtworkService
 from guitar_player.services.llm_service import LlmService, ParsedSearchItem
 from guitar_player.services.song_service import SongService
 from guitar_player.services.youtube_service import YoutubeService
-from guitar_player.storage import create_storage
+
+
+def _has_aws_credentials() -> bool:
+    """Return True if valid AWS credentials are available for Bedrock."""
+    try:
+        sts = boto3.client("sts")
+        sts.get_caller_identity()
+        return True
+    except (ClientError, NoCredentialsError, Exception):
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _has_aws_credentials(),
+    reason="AWS credentials not available for Bedrock integration tests",
+)
 
 TEST_USER_SUB = "test-search-user"
 TEST_USER_EMAIL = "test-search@example.com"

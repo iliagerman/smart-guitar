@@ -1,16 +1,12 @@
 """Tests for tutorial link scoring, language detection, and YouTube fallback."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from guitar_player.services.job_service import (
     _score_tutorial_link,
     _search_youtube_tutorial,
-    _TUTORIAL_POSITIVE,
-    _TUTORIAL_NEGATIVE,
-    _TUTORIAL_DOMAIN_BONUS,
 )
 from guitar_player.services.llm_service import (
     _detect_language,
@@ -210,7 +206,7 @@ class TestSearchYoutubeTutorial:
 
         with patch("yt_dlp.YoutubeDL") as mock_yt_dlp_cls:
             mock_yt_dlp_cls.return_value = mock_ydl
-            url = await _search_youtube_tutorial("שיר", "שלמה ארצי")
+            url, _links = await _search_youtube_tutorial("שיר", "שלמה ארצי")
 
         assert url == "https://www.youtube.com/watch?v=vid2"
 
@@ -225,7 +221,7 @@ class TestSearchYoutubeTutorial:
 
         with patch("yt_dlp.YoutubeDL") as mock_yt_dlp_cls:
             mock_yt_dlp_cls.return_value = mock_ydl
-            url = await _search_youtube_tutorial("Unknown Song", "Unknown Artist")
+            url, _links = await _search_youtube_tutorial("Unknown Song", "Unknown Artist")
 
         assert url == ""
 
@@ -238,7 +234,7 @@ class TestSearchYoutubeTutorial:
 
         with patch("yt_dlp.YoutubeDL") as mock_yt_dlp_cls:
             mock_yt_dlp_cls.return_value = mock_ydl
-            url = await _search_youtube_tutorial("Song", "Artist")
+            url, _links = await _search_youtube_tutorial("Song", "Artist")
 
         assert url == ""
 
@@ -297,7 +293,7 @@ class TestSearchYoutubeTutorial:
 
         with patch("yt_dlp.YoutubeDL") as mock_yt_dlp_cls:
             mock_yt_dlp_cls.return_value = mock_ydl
-            url = await _search_youtube_tutorial("Song", "Artist")
+            url, _links = await _search_youtube_tutorial("Song", "Artist")
 
         # vid3 is neutral (score=0), others are negative
         assert url == "https://www.youtube.com/watch?v=vid3"

@@ -22,8 +22,7 @@ import { PlaybackSpeedSelector } from '../components/PlaybackSpeedSelector'
 import { ChordDisplayControls } from '../components/ChordDisplayControls'
 
 import { LyricsSyncControl } from '../components/LyricsSyncControl'
-import { LyricsVersionToggle } from '../components/LyricsVersionToggle'
-import { ChordVersionToggle, type ChordVersion, type VersionInfo } from '../components/ChordVersionToggle'
+import { ChordVersionToggle } from '../components/ChordVersionToggle'
 import { ScrollModeControl } from '../components/ScrollModeControl'
 import { OnboardingTour } from '../components/OnboardingTour'
 import { LyricsSyncDebug } from '../components/LyricsSyncDebug'
@@ -49,19 +48,6 @@ import { cn } from '@/lib/cn'
 import { trackCustomEvent } from '@/lib/meta-pixel'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { transposeChordLabel } from '@/lib/chord-utils'
-import type { LyricsSegment } from '@/types/song'
-
-function pickLyricsVersion(
-  preferred: LyricsSegment[] | undefined,
-  legacy: LyricsSegment[] | undefined,
-): LyricsSegment[] {
-  return preferred ?? legacy ?? []
-}
-
-function pickLyricsSource(preferred?: string | null, legacy?: string | null): string | null {
-  return preferred ?? legacy ?? null
-}
-
 function CurrentChordPanel({ chords }: { chords: { chord: string; start_time: number; end_time: number }[] }) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const displayChord = useMemo(() => {
@@ -218,7 +204,6 @@ export function SongDetailPage() {
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
   const globalTranspose = usePlayerPrefsStore((s) => s.transposeSemitones)
-  const globalLyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
   const globalLyricsOffset = usePlayerPrefsStore((s) => s.lyricsOffsetMs)
   const globalStrumSource = usePlayerPrefsStore((s) => s.strumSource)
   const songOverrides = usePlayerPrefsStore((s) => s.songOverrides[songId!])
@@ -242,8 +227,7 @@ export function SongDetailPage() {
   const userEmail = useAuthStore((s) => s.email)
 
   // Per-song values with global fallback
-  const chordVersion = songOverrides?.chordVersion ?? 'v2'
-  const lyricsMode = songOverrides?.lyricsMode ?? globalLyricsMode
+  const selectedVersionIndex = songOverrides?.selectedVersionIndex ?? 0
   const transposeSemitones = songOverrides?.transposeSemitones ?? globalTranspose
   const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? globalLyricsOffset
   const strumSource = songOverrides?.strumSource ?? globalStrumSource
@@ -252,7 +236,6 @@ export function SongDetailPage() {
   // that read from the global store (ChordDisplayControls, LyricsSyncControl, etc.) work.
   const setGlobalTranspose = usePlayerPrefsStore((s) => s.setTransposeSemitones)
   const setGlobalLyricsOffset = usePlayerPrefsStore((s) => s.setLyricsOffsetMs)
-  const setGlobalLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
   const setGlobalStrumSource = usePlayerPrefsStore((s) => s.setStrumSource)
 
   useEffect(() => {
@@ -264,15 +247,8 @@ export function SongDetailPage() {
   }, [lyricsOffsetMs, setGlobalLyricsOffset])
 
   useEffect(() => {
-    setGlobalLyricsMode(lyricsMode)
-  }, [lyricsMode, setGlobalLyricsMode])
-
-  useEffect(() => {
     setGlobalStrumSource(strumSource)
   }, [strumSource, setGlobalStrumSource])
-
-  // Track whether we've auto-detected lyrics for this song load
-  const didAutoDetectLyrics = useRef(false)
 
   const [showTutorial, setShowTutorial] = useState(false)
   const [tutorialIndex, setTutorialIndex] = useState(0)
@@ -291,7 +267,6 @@ export function SongDetailPage() {
   useEffect(() => {
     if (!songId) return
     hasRecordedPlayRef.current = false
-    didAutoDetectLyrics.current = false
     setCurrentSong(songId)
     // Initialize stems from user's default preferences.
     const defaults = usePlayerPrefsStore.getState().defaultStems
@@ -358,65 +333,34 @@ export function SongDetailPage() {
     }
   }
 
-  // Resolve base chords based on chord version (V1=autochord, V2=gemini, V3+=user)
-  const hasV1Chords = detail?.chord_options?.some((o) => o.name === 'Detected (V1)') ?? false
-  const hasV2Chords = detail?.chord_source === 'gemini'
-
-  // User-edited chord options (version_key contains 'chords_user')
-  const userChordOptions = useMemo(
-    () => (detail?.chord_options ?? []).filter((o) => o.version_key?.includes('chords_user')),
+  // --- Unified version system: each version bundles chords + lyrics ---
+  // Split chord_options into versions (primary, V1, user) vs beginner/capo variants
+  const allVersions = useMemo(
+    () => (detail?.chord_options ?? []).filter(
+      (o) => !o.hidden && !o.is_variant,
+    ),
     [detail?.chord_options],
   )
 
-  // Build the list of available versions for the toggle
-  const chordVersions = useMemo(() => {
-    const versions: VersionInfo[] = []
-    if (hasV2Chords) versions.push({ version: 'v2', label: 'V2', tooltip: 'V2: AI-improved chords (recommended)' })
-    if (hasV1Chords) versions.push({ version: 'v1', label: 'V1', tooltip: 'V1: Auto-detected chords (basic)' })
-    userChordOptions.forEach((o, i) => {
-      const num = i + 3
-      const author = o.created_by ? ` by ${o.created_by.split('@')[0]}` : ''
-      versions.push({
-        version: `v${num}` as ChordVersion,
-        label: `V${num}`,
-        tooltip: `V${num}: ${o.name || 'User-edited chords'}${author}`,
-        createdBy: o.created_by,
-      })
-    })
-    return versions
-  }, [hasV1Chords, hasV2Chords, userChordOptions])
-
-  const baseChords = useMemo(() => {
-    if (!detail) return []
-    if (chordVersion === 'v1' && hasV1Chords) {
-      const v1Option = detail.chord_options?.find((o) => o.name === 'Detected (V1)')
-      if (v1Option) return v1Option.chords
-    }
-    // V3+ = user-edited versions
-    const vNum = parseInt(chordVersion.slice(1), 10)
-    if (vNum >= 3) {
-      const userOption = userChordOptions[vNum - 3]
-      if (userOption) return userOption.chords
-    }
-    return detail.chords
-  }, [detail, chordVersion, hasV1Chords, userChordOptions])
-
-  // Chord options excluding V1 and user versions (handled by the version toggle)
-  const filteredChordOptions = useMemo(
-    () => (detail?.chord_options ?? []).filter(
-      (o) => o.name !== 'Detected (V1)' && !o.version_key?.includes('chords_user'),
-    ),
+  const variantOptions = useMemo(
+    () => (detail?.chord_options ?? []).filter((o) => o.is_variant),
     [detail?.chord_options],
+  )
+
+  const activeVersion = allVersions[selectedVersionIndex] ?? allVersions[0]
+  const baseChords = useMemo(
+    () => activeVersion?.chords ?? [],
+    [activeVersion],
   )
 
   // Resolve active chords based on selected chord option (beginner, capo, etc.)
   const activeChords = useMemo(() => {
     if (!detail) return []
-    if (selectedChordOptionIndex !== null && filteredChordOptions[selectedChordOptionIndex]) {
-      return filteredChordOptions[selectedChordOptionIndex].chords
+    if (selectedChordOptionIndex !== null && variantOptions[selectedChordOptionIndex]) {
+      return variantOptions[selectedChordOptionIndex].chords
     }
     return baseChords
-  }, [detail, selectedChordOptionIndex, filteredChordOptions, baseChords])
+  }, [detail, selectedChordOptionIndex, variantOptions, baseChords])
 
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
@@ -463,86 +407,12 @@ export function SongDetailPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Resolve which lyrics version to display (hook must be before early return)
-  const ver1Lyrics = useMemo(
-    () => (detail ? pickLyricsVersion(detail.ver1_lyrics, detail.quick_lyrics) : []),
-    [detail],
+  // Lyrics come from the active unified version (chords + lyrics bundled together)
+  const activeLyrics = useMemo(
+    () => activeVersion?.lyrics ?? [],
+    [activeVersion],
   )
-  const ver2Lyrics = useMemo(
-    () => (detail ? pickLyricsVersion(detail.ver2_lyrics, detail.lyrics) : []),
-    [detail],
-  )
-  const ver3Lyrics = useMemo(
-    () => (detail ? pickLyricsVersion(detail.ver3_lyrics, detail.corrected_lyrics) : []),
-    [detail],
-  )
-  const ver1LyricsSource = detail
-    ? pickLyricsSource(detail.ver1_lyrics_source, detail.quick_lyrics_source)
-    : null
-  const ver2LyricsSource = detail
-    ? pickLyricsSource(detail.ver2_lyrics_source, detail.lyrics_source)
-    : null
-  const ver3LyricsSource = detail
-    ? pickLyricsSource(detail.ver3_lyrics_source, detail.corrected_lyrics_source)
-    : null
-  const ver4Lyrics = useMemo(
-    () => (detail?.ver4_lyrics?.length ? detail.ver4_lyrics : []),
-    [detail],
-  )
-  const ver4LyricsSource = detail?.ver4_lyrics_source ?? null
-
-  // Auto-switch to ver3 once when corrected lyrics become available,
-  // but only if the user hasn't explicitly set a per-song override.
-  useEffect(() => {
-    if (didAutoDetectLyrics.current) return
-    if (songOverrides?.lyricsMode !== undefined) return
-    if (ver3Lyrics.length > 0 && lyricsMode !== 'ver3' && lyricsMode !== 'ver4' && lyricsMode !== 'none') {
-      setGlobalLyricsMode('ver3')
-      didAutoDetectLyrics.current = true
-    }
-  }, [ver3Lyrics.length, lyricsMode, songOverrides?.lyricsMode, setGlobalLyricsMode])
-
-  const activeLyrics = useMemo(() => {
-    if (!detail) return []
-    const hasVer1 = ver1Lyrics.length > 0
-    const hasVer2 = ver2Lyrics.length > 0
-    const hasVer3 = ver3Lyrics.length > 0
-    const hasVer4 = ver4Lyrics.length > 0
-    if (lyricsMode === 'ver4' && hasVer4) return ver4Lyrics
-    if (lyricsMode === 'ver3' && hasVer3) return ver3Lyrics
-    if (lyricsMode === 'ver2' && hasVer2) return ver2Lyrics
-    if (lyricsMode === 'ver1' && hasVer1) return ver1Lyrics
-    // For 'none' or when preferred version isn't available, fall back
-    if (hasVer3) return ver3Lyrics
-    if (hasVer2) return ver2Lyrics
-    return ver1Lyrics
-  }, [detail, lyricsMode, ver1Lyrics, ver2Lyrics, ver3Lyrics, ver4Lyrics])
-
-  const activeLyricsSource = useMemo(() => {
-    if (!detail) return null
-    const hasVer1 = ver1Lyrics.length > 0
-    const hasVer2 = ver2Lyrics.length > 0
-    const hasVer3 = ver3Lyrics.length > 0
-    const hasVer4 = ver4Lyrics.length > 0
-    if (lyricsMode === 'ver4' && hasVer4) return ver4LyricsSource
-    if (lyricsMode === 'ver3' && hasVer3) return ver3LyricsSource
-    if (lyricsMode === 'ver2' && hasVer2) return ver2LyricsSource
-    if (lyricsMode === 'ver1' && hasVer1) return ver1LyricsSource
-    if (hasVer3) return ver3LyricsSource
-    if (hasVer2) return ver2LyricsSource
-    return ver1LyricsSource
-  }, [
-    detail,
-    lyricsMode,
-    ver1Lyrics.length,
-    ver1LyricsSource,
-    ver2Lyrics.length,
-    ver2LyricsSource,
-    ver3Lyrics.length,
-    ver3LyricsSource,
-    ver4Lyrics.length,
-    ver4LyricsSource,
-  ])
+  const activeLyricsSource = activeVersion?.lyrics_source ?? null
 
   // Normalize lyrics for the debug overlay (same transform the display components use)
   const debugNormalizedSegments = useMemo(
@@ -570,48 +440,8 @@ export function SongDetailPage() {
 
   const thumbnailSrc = (!thumbFailed ? cachedThumbnail : null) ?? '/art/album-placeholder.png'
 
-  const hasVer1Lyrics = ver1Lyrics.length > 0
-  const hasVer2Lyrics = ver2Lyrics.length > 0
-  const hasVer3Lyrics = ver3Lyrics.length > 0
-  const hasVer4Lyrics = ver4Lyrics.length > 0
-  const hasAnyLyrics = hasVer1Lyrics || hasVer2Lyrics || hasVer3Lyrics || hasVer4Lyrics
+  const hasAnyLyrics = activeLyrics.length > 0
   const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
-
-  const isJobProcessing =
-    detail?.active_job?.status === 'PENDING' || detail?.active_job?.status === 'PROCESSING'
-
-  // Ver 3 is generated from ver1 + ver2. While it's being created,
-  // keep the toggle visible and show a spinner on the Ver 3 option.
-  const isVer3LyricsGenerating =
-    !!detail && !hasVer3Lyrics && hasVer1Lyrics && hasVer2Lyrics && (isJobProcessing || !detail.active_job)
-
-  // When a song loads, pick the best available lyrics mode — but only if
-  // the user hasn't explicitly set a per-song override for this song.
-  // Default: v3 > (non-English: v1 > v2) / (English: v2 > v1) > none
-  useEffect(() => {
-    if (!detail) return
-    if (songOverrides?.lyricsMode !== undefined) return
-    if (didAutoDetectLyrics.current) return
-    didAutoDetectLyrics.current = true
-
-    const sampleText = (ver1Lyrics[0]?.text ?? ver2Lyrics[0]?.text ?? '').slice(0, 200)
-    const nonAsciiRatio = sampleText.length > 0
-      ? [...sampleText].filter((c) => c.charCodeAt(0) > 127).length / sampleText.length
-      : 0
-    const isNonEnglish = nonAsciiRatio > 0.3
-
-    if (hasVer3Lyrics) {
-      setGlobalLyricsMode('ver3')
-    } else if (isNonEnglish) {
-      if (hasVer1Lyrics) setGlobalLyricsMode('ver1')
-      else if (hasVer2Lyrics) setGlobalLyricsMode('ver2')
-      else setGlobalLyricsMode('none')
-    } else {
-      if (hasVer2Lyrics) setGlobalLyricsMode('ver2')
-      else if (hasVer1Lyrics) setGlobalLyricsMode('ver1')
-      else setGlobalLyricsMode('none')
-    }
-  }, [detail, songOverrides?.lyricsMode, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, ver1Lyrics, ver2Lyrics, setGlobalLyricsMode])
 
   // Chord editing handlers
   const handleEnterEditMode = useCallback(() => {
@@ -800,27 +630,18 @@ export function SongDetailPage() {
                       stemTypes={detail.stem_types}
                     />
                   </div>
+                  <div className="contents" data-tour="version-toggle">
                   <ChordVersionToggle
-                    versions={chordVersions}
-                    selected={chordVersion}
+                    versions={allVersions}
+                    selectedIndex={selectedVersionIndex}
                     currentUserEmail={userEmail ?? undefined}
-                    onSelect={(v) => setSongOverride(songId!, 'chordVersion', v)}
+                    onSelect={(idx: number) => setSongOverride(songId!, 'selectedVersionIndex', idx)}
                     onDelete={() => {
                       if (songId && confirm('Delete your chord version?')) {
                         deleteChordsMutation.mutate({ songId })
                       }
                     }}
                   />
-                  <div className="contents" data-tour="lyrics-toggle">
-                    <LyricsVersionToggle
-                      hasVer1Lyrics={hasVer1Lyrics}
-                      hasVer2Lyrics={hasVer2Lyrics}
-                      hasVer3Lyrics={hasVer3Lyrics}
-                      hasVer4Lyrics={hasVer4Lyrics}
-                      isVer3Generating={isVer3LyricsGenerating}
-                      selected={lyricsMode}
-                      onSelect={(mode) => setSongOverride(songId!, 'lyricsMode', mode)}
-                    />
                   </div>
                   <div className="contents" data-tour="chord-map">
                     <ChordMapDialog chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} tutorialLinks={detail.tutorial_links} strumLoading={!detail.songsterr_status} iconOnly onOpenTutorial={() => setShowTutorial(true)} />
@@ -830,10 +651,10 @@ export function SongDetailPage() {
               secondaryControls={
                 <>
                   <ChordOptionSelector
-                    chordOptions={filteredChordOptions}
+                    chordOptions={variantOptions}
                     hasTabs={hasTabs}
                     recommendedCapo={detail.recommended_capo}
-                    chordSource={chordVersion === 'v1' ? 'autochord' : detail.chord_source}
+                    chordSource={detail.chord_source}
                   />
                   <ChordDisplayControls />
 
@@ -846,14 +667,6 @@ export function SongDetailPage() {
           </div>
         </div>
       </div>
-
-      {/* Ver 3 lyrics generating banner */}
-      {isVer3LyricsGenerating && (
-        <div className="relative z-20 bg-flame-400/10 border-b border-flame-400/20 px-4 py-2 flex items-center justify-center gap-2 text-sm text-flame-300">
-          <LoadingSpinner size="xs" inline className="h-3 w-3" />
-          <span>Generating Ver 3 lyrics — using Ver 2 in the meantime</span>
-        </div>
-      )}
 
       {/* Content — fills remaining space */}
       <div className="relative z-10 flex-1 min-h-0 flex flex-col">

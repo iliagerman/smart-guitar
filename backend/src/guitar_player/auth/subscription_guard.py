@@ -13,6 +13,7 @@ from guitar_player.config import Settings, get_settings
 from guitar_player.dao.subscription_dao import SubscriptionDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import get_db
+from guitar_player.services.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,16 @@ async def require_active_subscription(
         return user
 
     user_dao = UserDAO(session)
+    is_new = (await user_dao.get_by_cognito_sub(user.sub)) is None
     db_user = await user_dao.get_or_create(user.sub, user.email)
+
+    if is_new:
+        is_google = (user.username or "").startswith("Google_") or user.sub.startswith("Google_") or user.sub.startswith("google")
+        method = "Google OAuth" if is_google else "email/password"
+        telegram = TelegramService(settings.telegram)
+        await telegram.send_event(
+            f"<b>New user registered</b>\nEmail: {user.email}\nMethod: {method}"
+        )
 
     subscription_dao = SubscriptionDAO(session)
 

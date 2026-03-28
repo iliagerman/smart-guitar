@@ -43,10 +43,13 @@ export interface ChordOption {
   description: string
   capo: number
   chords: ChordEntry[]
+  lyrics?: LyricsSegment[] | null
+  lyrics_source?: string | null
   version_key?: string | null
   created_by?: string | null
   vote_score?: number
   hidden?: boolean
+  is_variant?: boolean
 }
 
 export interface TabNote {

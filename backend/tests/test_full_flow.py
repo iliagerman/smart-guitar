@@ -12,11 +12,27 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.youtube_service import YoutubeService
+
+
+def _has_aws_credentials() -> bool:
+    try:
+        boto3.client("sts").get_caller_identity()
+        return True
+    except (ClientError, NoCredentialsError, Exception):
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _has_aws_credentials(),
+    reason="AWS credentials not available",
+)
 
 
 async def _search_download_and_process(
@@ -47,7 +63,7 @@ async def _search_download_and_process(
     print(f"\n[2/6] Downloading MP3 for {youtube_id} ...", flush=True)
     tmp_dir = tempfile.mkdtemp(prefix="test_full_")
     try:
-        local_mp3, raw_title = await youtube.download(youtube_id, tmp_dir)
+        local_mp3, raw_title, _metadata = await youtube.download(youtube_id, tmp_dir)
         size_mb = os.path.getsize(local_mp3) / (1024 * 1024)
         print(f"  Downloaded: {local_mp3} ({size_mb:.1f} MB)", flush=True)
         assert os.path.isfile(local_mp3)
@@ -73,7 +89,7 @@ async def _search_download_and_process(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     # 5. Stem separation and chord recognition in parallel
-    print(f"\n[5/6] Running stem separation + chord recognition in parallel ...", flush=True)
+    print("\n[5/6] Running stem separation + chord recognition in parallel ...", flush=True)
     separation, chords = await asyncio.gather(
         processing.separate_stems(str(dest_mp3)),
         processing.recognize_chords(str(dest_mp3)),

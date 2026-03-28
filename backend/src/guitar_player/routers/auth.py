@@ -25,7 +25,8 @@ from guitar_player.services.cognito_auth_service import (
     CognitoAuthService,
 )
 from guitar_player.services.analytics_helpers import track_event
-from guitar_player.dependencies import get_cognito_auth_service
+from guitar_player.services.telegram_service import TelegramService
+from guitar_player.dependencies import get_cognito_auth_service, get_telegram_service
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ async def confirm(
     body: ConfirmRequest,
     background_tasks: BackgroundTasks,
     auth_service: CognitoAuthService = Depends(get_cognito_auth_service),
+    telegram: TelegramService = Depends(get_telegram_service),
 ) -> ConfirmResponse:
     try:
         auth_service.confirm(body.email, body.confirmation_code)
@@ -97,8 +99,17 @@ async def confirm(
             body.email,
             extra={"email": body.email, "event_type": "user_confirmed"},
         )
+        await telegram.send_event(
+            f"<b>User confirmed email</b>\nEmail: {body.email}\nMethod: email/password"
+        )
         return ConfirmResponse(message="Email confirmed successfully.")
     except CognitoAuthError as exc:
+        if exc.code in ("CodeMismatchException", "ExpiredCodeException"):
+            await telegram.send_error(
+                f"<b>Bad auth code</b>\n"
+                f"<b>Email:</b> {body.email}\n"
+                f"<b>Error:</b> {exc.code}: {exc.message}"
+            )
         raise _cognito_to_http(exc)
 
 

@@ -5,7 +5,7 @@ provider-agnostic subscription router.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
-from guitar_player.dependencies import get_payment_provider, get_telegram_service
+from guitar_player.dependencies import get_db, get_payment_provider, get_telegram_service
 from guitar_player.routers.subscription import router, webhook_router
 from guitar_player.schemas.subscription import (
     CancelSubscriptionResponse,
@@ -44,16 +44,40 @@ def current_user() -> CurrentUser:
 
 
 @pytest.fixture
-def client(mock_provider, mock_telegram, current_user) -> TestClient:
+def mock_db_user() -> MagicMock:
+    user = MagicMock()
+    user.has_seen_onboarding = True
+    user.id = 1
+    return user
+
+
+@pytest.fixture
+def client(mock_provider, mock_telegram, current_user, mock_db_user) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     app.include_router(webhook_router, prefix="/api/v1")
 
+    mock_session = AsyncMock()
+
     app.dependency_overrides[get_current_user] = lambda: current_user
     app.dependency_overrides[get_payment_provider] = lambda: mock_provider
     app.dependency_overrides[get_telegram_service] = lambda: mock_telegram
+    app.dependency_overrides[get_db] = lambda: mock_session
 
-    return TestClient(app)
+    with (
+        patch("guitar_player.routers.subscription.UserDAO") as mock_user_dao_cls,
+        patch("guitar_player.routers.subscription.SongDAO") as mock_song_dao_cls,
+    ):
+        mock_user_dao = AsyncMock()
+        mock_user_dao.get_by_cognito_sub.return_value = mock_db_user  # existing user
+        mock_user_dao.get_or_create.return_value = mock_db_user
+        mock_user_dao_cls.return_value = mock_user_dao
+
+        mock_song_dao = AsyncMock()
+        mock_song_dao.get_by_song_name.return_value = None
+        mock_song_dao_cls.return_value = mock_song_dao
+
+        yield TestClient(app)
 
 
 # ── Tests: GET /subscription/status ───────────────────────────────

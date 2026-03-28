@@ -7,13 +7,13 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, rounded))
 }
 
-export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
+/** Whether lyrics highlighting is active or disabled (auto-scroll). */
+export type LyricsHighlightMode = 'highlight' | 'none'
 export type StrumSource = 'songsterr' | 'ai'
-export type ChordVersion = 'v1' | 'v2' | `v${number}`
 
 export interface SongOverrides {
-  lyricsMode?: LyricsMode
-  chordVersion?: ChordVersion
+  /** Index into the unified chord_options array (each entry has chords + lyrics). */
+  selectedVersionIndex?: number
   transposeSemitones?: number
   lyricsOffsetMs?: number
   strumSource?: StrumSource
@@ -34,12 +34,8 @@ export interface PlayerPrefsState {
   lyricsOffsetMs: number
   /** Auto-scroll speed in pixels per second (used when lyricsMode is 'none'). */
   autoScrollSpeed: number
-  /** Lyrics display mode:
-    *  - 'ver1': show the quick/base lyrics version with highlighting
-    *  - 'ver2': show the regular/timed lyrics version with highlighting
-    *  - 'ver3': show the merged/fixed lyrics version with highlighting
-   *  - 'none': disable highlighting, use auto-scroll */
-  lyricsMode: LyricsMode
+  /** Lyrics highlight mode: 'highlight' = show synced highlighting, 'none' = auto-scroll. */
+  lyricsMode: LyricsHighlightMode
   /** Strum pattern source: 'songsterr' (tab data) or 'ai' (LLM-generated). */
   strumSource: StrumSource
   /** Automatically start recording when a song starts playing. */
@@ -67,7 +63,7 @@ export interface PlayerPrefsState {
   toggleShowStrums: () => void
   setLyricsOffsetMs: (ms: number) => void
   setAutoScrollSpeed: (pxPerSec: number) => void
-  setLyricsMode: (mode: LyricsMode) => void
+  setLyricsMode: (mode: LyricsHighlightMode) => void
   setStrumSource: (source: StrumSource) => void
   cycleStrumSource: () => void
   setAutoRecord: (enabled: boolean) => void
@@ -85,7 +81,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       showStrums: true,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
-      lyricsMode: 'ver3' as LyricsMode,
+      lyricsMode: 'highlight' as LyricsHighlightMode,
       strumSource: 'songsterr' as StrumSource,
       autoRecord: false,
       autoDownloadRecordings: true,
@@ -198,9 +194,26 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.songOverrides = {}
         }
 
+        // Unified versions: migrate chordVersion + lyricsMode to selectedVersionIndex (v8 → v9)
+        if (state && typeof state.songOverrides === 'object') {
+          for (const overrides of Object.values(
+            state.songOverrides as Record<string, Record<string, unknown>>,
+          )) {
+            delete overrides.chordVersion
+            delete overrides.lyricsMode
+          }
+        }
+        // Migrate global lyricsMode: old ver1/ver2/ver3/ver4 values → 'highlight'
+        if (state) {
+          const mode = state.lyricsMode as string | undefined
+          if (mode && mode !== 'none' && mode !== 'highlight') {
+            state.lyricsMode = 'highlight'
+          }
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 8,
+      version: 9,
     }
   )
 )

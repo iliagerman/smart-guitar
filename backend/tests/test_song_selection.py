@@ -15,15 +15,24 @@ import shutil
 import uuid
 from pathlib import Path
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from guitar_player.dao.song_dao import SongDAO
-from guitar_player.dao.user_dao import UserDAO
 from guitar_player.services.artwork_service import ArtworkService
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.song_service import SongService
 from guitar_player.services.sync_service import ensure_default_user, sync_local_bucket
 from guitar_player.services.youtube_service import YoutubeService
+
+
+def _has_aws_credentials() -> bool:
+    try:
+        boto3.client("sts").get_caller_identity()
+        return True
+    except (ClientError, NoCredentialsError, Exception):
+        return False
 
 TEST_USER_SUB = "test-select-user"
 TEST_USER_EMAIL = "test-select@example.com"
@@ -84,6 +93,7 @@ async def test_select_existing_song_returns_detail(
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
+@pytest.mark.skipif(not _has_aws_credentials(), reason="AWS credentials not available")
 async def test_select_new_song_downloads_and_indexes(
     project_root: Path, settings, session_factory, storage
 ):
@@ -205,7 +215,7 @@ async def test_existence_check_uses_db_not_filesystem(
         )
 
         print(f"  DB record exists with audio_key: {found.audio_key}", flush=True)
-        print(f"  No file on disk — existence check is DB-based: PASS", flush=True)
+        print("  No file on disk — existence check is DB-based: PASS", flush=True)
 
         # Cleanup: remove test record
         await song_dao.delete_by_id(found.id)

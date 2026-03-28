@@ -75,10 +75,13 @@ class ChordOption(BaseModel):
     description: str
     capo: int = 0
     chords: list[ChordEntry] = []
+    lyrics: list["LyricsSegment"] | None = None
+    lyrics_source: str | None = None
     version_key: str | None = None
     created_by: str | None = None
     vote_score: int = 0
     hidden: bool = False
+    is_variant: bool = False
 
 
 class LyricsWord(BaseModel):

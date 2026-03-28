@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react'
-import { Heart, Music, Pencil, Type, LayoutGrid, Circle } from 'lucide-react'
+import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/cn'
@@ -35,10 +35,10 @@ const STEPS: TourStep[] = [
     icon: <Music size={20} />,
   },
   {
-    tourAttr: 'lyrics-toggle',
-    title: 'Switch Lyrics Version',
-    description: 'Tap to switch between lyrics versions: V1 (fast, basic), V2 (timed with word highlighting), V3 (corrected), or turn lyrics off entirely.',
-    icon: <Type size={20} />,
+    tourAttr: 'version-toggle',
+    title: 'Switch Version',
+    description: 'Tap to cycle through song versions. Each version pairs chords with lyrics — from auto-detected to AI-improved to your own edits.',
+    icon: <Guitar size={20} />,
   },
   {
     tourAttr: 'chord-map',

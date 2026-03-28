@@ -802,25 +802,17 @@ class SongService:
                 except Exception as e:
                     logger.warning("Failed to read chord_meta for %s: %s", song.song_name, e)
 
-        # Build chord options — include both sources + simplified variants
+        # Build chord_options: unified versions (chords + lyrics) first,
+        # then beginner/capo variants at the end (no lyrics, handled by
+        # ChordOptionSelector on the frontend).
         chord_options: list[ChordOption] = []
 
-        # Add autochord as an option when Gemini is primary
-        if gemini_chords and autochord_chords:
-            chord_options.append(
-                ChordOption(
-                    name="Detected (V1)",
-                    description="Auto-detected chords from audio analysis",
-                    capo=0,
-                    chords=autochord_chords,
-                )
-            )
-
-        # Discover simplified chord variant files (beginner, capo, etc.)
+        # Collect user versions and beginner/capo variants from disk
+        user_versions: list[ChordOption] = []
+        variant_options: list[ChordOption] = []
         if song.song_name:
             try:
                 files = self._storage.list_files(song.song_name)
-                # Prefer web variants when available, otherwise use autochord variants
                 has_web_variants = any(
                     "chords_web_" in f.rsplit("/", 1)[-1] for f in files
                 )
@@ -840,16 +832,30 @@ class SongService:
                     try:
                         data = self._storage.read_json(key)
                         if isinstance(data, dict) and "chords" in data:
-                            chord_options.append(
-                                ChordOption(
-                                    name=data.get("name", ""),
-                                    description=data.get("description", ""),
-                                    capo=data.get("capo", 0),
-                                    chords=[ChordEntry(**c) for c in data["chords"]],
-                                    version_key=key,
-                                    created_by=data.get("created_by"),
-                                )
+                            filename = key.rsplit("/", 1)[-1]
+                            is_user_version = "chords_user" in filename
+                            # Load per-version lyrics if stored alongside chords
+                            version_lyrics = None
+                            version_lyrics_source = None
+                            if isinstance(data.get("lyrics"), list):
+                                version_lyrics = [
+                                    LyricsSegment(**seg) for seg in data["lyrics"]
+                                ]
+                                version_lyrics_source = "user"
+                            option = ChordOption(
+                                name=data.get("name", ""),
+                                description=data.get("description", ""),
+                                capo=data.get("capo", 0),
+                                chords=[ChordEntry(**c) for c in data["chords"]],
+                                lyrics=version_lyrics,
+                                lyrics_source=version_lyrics_source,
+                                version_key=key,
+                                created_by=data.get("created_by"),
                             )
+                            if is_user_version:
+                                user_versions.append(option)
+                            else:
+                                variant_options.append(option)
                     except Exception as e:
                         logger.warning("Failed to read chord variant %s: %s", key, e)
             except Exception as e:
@@ -857,10 +863,11 @@ class SongService:
                     "Failed to list chord variants for %s: %s", song.song_name, e
                 )
 
-        # Enrich chord_options with vote scores
+        # Enrich user versions with vote scores
+        all_versioned = user_versions  # vote scores only matter for user versions
         try:
             vote_counts = await self._chord_vote_dao.get_vote_counts(song_id)
-            for option in chord_options:
+            for option in all_versioned:
                 if option.version_key and option.version_key in vote_counts:
                     option.vote_score = vote_counts[option.version_key]
                     option.hidden = option.vote_score <= -10
@@ -963,8 +970,9 @@ class SongService:
                     "Failed to read corrected lyrics for %s: %s", song.song_name, e
                 )
 
-        # Read tabs and rhythm from storage.
+        # Read tabs, strums, and rhythm from storage.
         tabs: list[TabNote] = []
+        tabs_strums: list[StrumEvent] = []
         tabs_source: str | None = None
         rhythm: RhythmInfo | None = None
         tabs_key = song.tabs_key
@@ -981,13 +989,15 @@ class SongService:
                     if isinstance(raw.get("notes"), list):
                         tabs = [TabNote(**n) for n in raw["notes"]]
                         tabs_source = "detected"
+                    if isinstance(raw.get("strums"), list):
+                        tabs_strums = [StrumEvent(**s) for s in raw["strums"]]
                     if isinstance(raw.get("rhythm"), dict):
                         rhythm = RhythmInfo(**raw["rhythm"])
             except Exception as e:
                 logger.warning("Failed to read tabs for %s: %s", song.song_name, e)
 
         # Read Songsterr data (enriched format with tabs, strums, sections).
-        strums: list[StrumEvent] = []
+        strums: list[StrumEvent] = tabs_strums if tabs_strums else []
         sections: list[SongSection] = []
         source_bpm: float | None = None
         time_signature: list[int] | None = None
@@ -1052,6 +1062,60 @@ class SongService:
                         "Failed to read Songsterr lyrics for %s: %s",
                         song.song_name, e,
                     )
+
+        # Best lyrics for Gemini version: ver3 > ver2 > ver1 (skip ver4/tabs)
+        best_system_lyrics = (
+            corrected_lyrics or lyrics or quick_lyrics or None
+        )
+        best_system_lyrics_source = (
+            corrected_lyrics_source or lyrics_source or quick_lyrics_source
+        )
+
+        # --- Assemble chord_options: system versions first, then user, then variants ---
+
+        # Autochord + each available lyrics version (V1, V2, V3 …)
+        if autochord_chords:
+            for lyr, lyr_src, label in [
+                (quick_lyrics, quick_lyrics_source, "Detected + Lyrics V1"),
+                (lyrics, lyrics_source, "Detected + Lyrics V2"),
+                (corrected_lyrics, corrected_lyrics_source, "Detected + Lyrics V3"),
+            ]:
+                if lyr:
+                    chord_options.append(
+                        ChordOption(
+                            name=label,
+                            description="Auto-detected chords",
+                            capo=0,
+                            chords=autochord_chords,
+                            lyrics=lyr,
+                            lyrics_source=lyr_src,
+                        )
+                    )
+
+        # Gemini chords + best available lyrics
+        if gemini_chords:
+            chord_options.append(
+                ChordOption(
+                    name="AI Chords",
+                    description="Gemini-detected chords",
+                    capo=recommended_capo or 0,
+                    chords=gemini_chords,
+                    lyrics=best_system_lyrics,
+                    lyrics_source=best_system_lyrics_source,
+                )
+            )
+
+        # User-created versions (auto-pair legacy saves that have no lyrics)
+        for opt in user_versions:
+            if opt.lyrics is None:
+                opt.lyrics = best_system_lyrics
+                opt.lyrics_source = best_system_lyrics_source
+            chord_options.append(opt)
+
+        # Beginner/capo variants at the end (no lyrics, applied on top of active version)
+        for opt in variant_options:
+            opt.is_variant = True
+        chord_options.extend(variant_options)
 
         return SongDetailResponse(
             song=song_resp,
@@ -1287,43 +1351,75 @@ class SongService:
             for x, y in zip(a, b)
         )
 
+    def _lyrics_match(
+        self,
+        a: list[LyricsSegment] | None,
+        b: list[LyricsSegment] | None,
+    ) -> bool:
+        """Check if two lyrics lists are identical (same text and timing)."""
+        if a is None and b is None:
+            return True
+        if a is None or b is None:
+            return False
+        if len(a) != len(b):
+            return False
+        return all(
+            x.text == y.text
+            and abs(x.start - y.start) < 0.05
+            and abs(x.end - y.end) < 0.05
+            for x, y in zip(a, b)
+        )
+
     def _find_duplicate_version(
         self,
         song_name: str,
         new_chords: list[ChordEntry],
+        new_lyrics: list[LyricsSegment] | None = None,
     ) -> str | None:
-        """Return the name of an existing chord version that matches, or None."""
-        # Check primary chord files
-        for key, label in [
-            (f"{song_name}/chords_web.json", "Gemini (V2)"),
-            (f"{song_name}/chords.json", "Autochord (V1)"),
-        ]:
-            if self._storage.file_exists(key):
-                try:
-                    raw = self._storage.read_json(key)
-                    if isinstance(raw, list):
-                        existing = [ChordEntry(**c) for c in raw]
-                        if self._chords_match(new_chords, existing):
-                            return label
-                except Exception:
-                    pass
+        """Return the name of an existing version where BOTH chords and lyrics match."""
+        # Primary chord files have no stored lyrics — if the user changed
+        # lyrics only, it is NOT a duplicate even when chords match.
+        if new_lyrics is None or len(new_lyrics) == 0:
+            # No lyrics submitted → fall back to chord-only comparison
+            for key, label in [
+                (f"{song_name}/chords_web.json", "Gemini (V2)"),
+                (f"{song_name}/chords.json", "Autochord (V1)"),
+            ]:
+                if self._storage.file_exists(key):
+                    try:
+                        raw = self._storage.read_json(key)
+                        if isinstance(raw, list):
+                            existing = [ChordEntry(**c) for c in raw]
+                            if self._chords_match(new_chords, existing):
+                                return label
+                    except Exception:
+                        pass
 
-        # Check variant files
+        # Check user version files (chords + lyrics)
         try:
             files = self._storage.list_files(song_name)
-            variant_keys = [
+            user_keys = [
                 f for f in files
-                if f.rsplit("/", 1)[-1].startswith(CHORD_VARIANT_PREFIX)
-                and f.endswith(CHORD_VARIANT_SUFFIX)
-                and "intermediate" not in f.rsplit("/", 1)[-1].lower()
+                if "chords_user" in f.rsplit("/", 1)[-1]
+                and f.endswith(".json")
             ]
-            for key in variant_keys:
+            for key in user_keys:
                 try:
                     data = self._storage.read_json(key)
                     if isinstance(data, dict) and "chords" in data:
                         existing = [ChordEntry(**c) for c in data["chords"]]
-                        if self._chords_match(new_chords, existing):
-                            return data.get("name", key.rsplit("/", 1)[-1])
+                        if not self._chords_match(new_chords, existing):
+                            continue
+                        # Also compare lyrics
+                        existing_lyrics = None
+                        if isinstance(data.get("lyrics"), list):
+                            existing_lyrics = [
+                                LyricsSegment(**seg)
+                                for seg in data["lyrics"]
+                            ]
+                        if not self._lyrics_match(new_lyrics, existing_lyrics):
+                            continue
+                        return data.get("name", key.rsplit("/", 1)[-1])
                 except Exception:
                     pass
         except Exception:
@@ -1377,7 +1473,9 @@ class SongService:
             raise NotFoundError("Song not found")
 
         # Check for duplicates — skip the user's own existing file
-        duplicate_name = self._find_duplicate_version(song.song_name, request.chords)
+        duplicate_name = self._find_duplicate_version(
+            song.song_name, request.chords, request.lyrics,
+        )
         if duplicate_name:
             detail = await self.get_song_detail(song_id)
             return SaveUserChordsResponse(
@@ -1402,12 +1500,9 @@ class SongService:
             "created_by": user_email,
             "chords": [c.model_dump() for c in request.chords],
         }
-        self._storage.write_json(storage_key, payload)
-
         if request.lyrics:
-            lyrics_key = f"{song.song_name}/lyrics_user.json"
-            lyrics_payload = [seg.model_dump() for seg in request.lyrics]
-            self._storage.write_json(lyrics_key, lyrics_payload)
+            payload["lyrics"] = [seg.model_dump() for seg in request.lyrics]
+        self._storage.write_json(storage_key, payload)
 
         detail = await self.get_song_detail(song_id)
         return SaveUserChordsResponse(detail=detail, saved=True)
