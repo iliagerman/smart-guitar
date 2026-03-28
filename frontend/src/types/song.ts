@@ -43,6 +43,10 @@ export interface ChordOption {
   description: string
   capo: number
   chords: ChordEntry[]
+  version_key?: string | null
+  created_by?: string | null
+  vote_score?: number
+  hidden?: boolean
 }
 
 export interface TabNote {

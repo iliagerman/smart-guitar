@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Heart, Pause, Play, Shield, SkipBack, SkipForward, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Heart, Pause, Pencil, Play, Shield, SkipBack, SkipForward, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSongDetail } from '../hooks/use-song-detail'
 import { useAudioPlayer } from '../hooks/use-audio-player'
@@ -11,6 +11,7 @@ import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../l
 import { TransportControls } from '../components/TransportControls'
 import { TrackSelector } from '../components/TrackSelector'
 import { ChordSheet } from '../components/ChordSheet'
+import { ChordEditToolbar } from '../components/ChordEditToolbar'
 import { ChordOptionSelector } from '../components/ChordOptionSelector'
 import { TabsSheet } from '../components/TabsSheet'
 import { ProcessButton } from '../components/ProcessButton'
@@ -22,7 +23,7 @@ import { ChordDisplayControls } from '../components/ChordDisplayControls'
 
 import { LyricsSyncControl } from '../components/LyricsSyncControl'
 import { LyricsVersionToggle } from '../components/LyricsVersionToggle'
-import { ChordVersionToggle } from '../components/ChordVersionToggle'
+import { ChordVersionToggle, type ChordVersion, type VersionInfo } from '../components/ChordVersionToggle'
 import { ScrollModeControl } from '../components/ScrollModeControl'
 import { OnboardingTour } from '../components/OnboardingTour'
 import { LyricsSyncDebug } from '../components/LyricsSyncDebug'
@@ -39,6 +40,11 @@ import { useFavorites } from '@/features/library/hooks/use-favorites'
 import { useJobWatcherStore } from '@/stores/job-watcher.store'
 import { env } from '@/config/env'
 import { songsApi } from '@/api/songs.api'
+import { subscriptionApi } from '@/api/subscription.api'
+import { useAuthStore } from '@/stores/auth.store'
+import { useChordEditStore } from '@/stores/chord-edit.store'
+import { useSaveChords } from '../hooks/use-save-chords'
+import { useDeleteChords } from '../hooks/use-delete-chords'
 import { cn } from '@/lib/cn'
 import { trackCustomEvent } from '@/lib/meta-pixel'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
@@ -120,6 +126,19 @@ function AdminMenu({ songId }: { songId: string }) {
     }
   }
 
+  const handleResetOnboarding = async () => {
+    setLoading('Reset Onboarding')
+    setOpen(false)
+    try {
+      await subscriptionApi.resetOnboarding()
+      toast.success('Onboarding reset — reload the page to see it')
+    } catch {
+      toast.error('Failed to reset onboarding')
+    } finally {
+      setLoading(null)
+    }
+  }
+
   const items = [
     { label: 'Regenerate Lyrics', targets: ['lyrics'] },
     { label: 'Regenerate Stems & Chords', targets: ['stems'] },
@@ -147,7 +166,7 @@ function AdminMenu({ songId }: { songId: string }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-56 rounded-lg bg-charcoal-800 border border-charcoal-600 shadow-xl z-50 py-1">
+        <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 w-56 rounded-lg bg-charcoal-800 border border-charcoal-600 shadow-xl z-50 py-1">
           {items.map((item) => (
             <button
               key={item.label}
@@ -158,6 +177,14 @@ function AdminMenu({ songId }: { songId: string }) {
               {item.label}
             </button>
           ))}
+          <div className="border-t border-charcoal-600 my-1" />
+          <button
+            onClick={handleResetOnboarding}
+            disabled={!!loading}
+            className="w-full text-left px-3 py-2 text-sm text-smoke-200 hover:bg-charcoal-700 hover:text-flame-400 transition-colors disabled:opacity-50"
+          >
+            Reset Onboarding Tour
+          </button>
         </div>
       )}
     </div>
@@ -196,6 +223,23 @@ export function SongDetailPage() {
   const globalStrumSource = usePlayerPrefsStore((s) => s.strumSource)
   const songOverrides = usePlayerPrefsStore((s) => s.songOverrides[songId!])
   const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
+
+  // Chord editing
+  const isEditMode = useChordEditStore((s) => s.isEditMode)
+  const editingChords = useChordEditStore((s) => s.editingChords)
+  const editingLyrics = useChordEditStore((s) => s.editingLyrics)
+  const selectedEditChordIndex = useChordEditStore((s) => s.selectedChordIndex)
+
+  const enterEditMode = useChordEditStore((s) => s.enterEditMode)
+  const selectChord = useChordEditStore((s) => s.selectChord)
+  const updateChordLabel = useChordEditStore((s) => s.updateChordLabel)
+  const deleteChord = useChordEditStore((s) => s.deleteChord)
+  const moveChordToTime = useChordEditStore((s) => s.moveChordToTime)
+  const addChordAtTime = useChordEditStore((s) => s.addChordAtTime)
+  const updateWordText = useChordEditStore((s) => s.updateWordText)
+  const saveChordsMutation = useSaveChords()
+  const deleteChordsMutation = useDeleteChords()
+  const userEmail = useAuthStore((s) => s.email)
 
   // Per-song values with global fallback
   const chordVersion = songOverrides?.chordVersion ?? 'v2'
@@ -314,9 +358,33 @@ export function SongDetailPage() {
     }
   }
 
-  // Resolve base chords based on chord version (V1=autochord, V2=gemini)
+  // Resolve base chords based on chord version (V1=autochord, V2=gemini, V3+=user)
   const hasV1Chords = detail?.chord_options?.some((o) => o.name === 'Detected (V1)') ?? false
   const hasV2Chords = detail?.chord_source === 'gemini'
+
+  // User-edited chord options (version_key contains 'chords_user')
+  const userChordOptions = useMemo(
+    () => (detail?.chord_options ?? []).filter((o) => o.version_key?.includes('chords_user')),
+    [detail?.chord_options],
+  )
+
+  // Build the list of available versions for the toggle
+  const chordVersions = useMemo(() => {
+    const versions: VersionInfo[] = []
+    if (hasV2Chords) versions.push({ version: 'v2', label: 'V2', tooltip: 'V2: AI-improved chords (recommended)' })
+    if (hasV1Chords) versions.push({ version: 'v1', label: 'V1', tooltip: 'V1: Auto-detected chords (basic)' })
+    userChordOptions.forEach((o, i) => {
+      const num = i + 3
+      const author = o.created_by ? ` by ${o.created_by.split('@')[0]}` : ''
+      versions.push({
+        version: `v${num}` as ChordVersion,
+        label: `V${num}`,
+        tooltip: `V${num}: ${o.name || 'User-edited chords'}${author}`,
+        createdBy: o.created_by,
+      })
+    })
+    return versions
+  }, [hasV1Chords, hasV2Chords, userChordOptions])
 
   const baseChords = useMemo(() => {
     if (!detail) return []
@@ -324,12 +392,20 @@ export function SongDetailPage() {
       const v1Option = detail.chord_options?.find((o) => o.name === 'Detected (V1)')
       if (v1Option) return v1Option.chords
     }
+    // V3+ = user-edited versions
+    const vNum = parseInt(chordVersion.slice(1), 10)
+    if (vNum >= 3) {
+      const userOption = userChordOptions[vNum - 3]
+      if (userOption) return userOption.chords
+    }
     return detail.chords
-  }, [detail, chordVersion, hasV1Chords])
+  }, [detail, chordVersion, hasV1Chords, userChordOptions])
 
-  // Chord options excluding the V1 source option (that's handled by the version toggle)
+  // Chord options excluding V1 and user versions (handled by the version toggle)
   const filteredChordOptions = useMemo(
-    () => (detail?.chord_options ?? []).filter((o) => o.name !== 'Detected (V1)'),
+    () => (detail?.chord_options ?? []).filter(
+      (o) => o.name !== 'Detected (V1)' && !o.version_key?.includes('chords_user'),
+    ),
     [detail?.chord_options],
   )
 
@@ -350,7 +426,10 @@ export function SongDetailPage() {
     }))
   }, [activeChords, transposeSemitones])
 
-  const chordNamesForMap = useMemo(() => displayChords.map((c) => c.chord).filter(Boolean), [displayChords])
+  const chordNamesForMap = useMemo(() => {
+    const source = isEditMode ? editingChords : displayChords
+    return source.map((c) => c.chord).filter(Boolean)
+  }, [isEditMode, editingChords, displayChords])
   const representativeStrumPattern = useMemo(() => {
     if (!detail) return []
     return getRepresentativeSongStrumPattern(displayChords, detail.strums, {
@@ -534,6 +613,29 @@ export function SongDetailPage() {
     }
   }, [detail, songOverrides?.lyricsMode, hasVer1Lyrics, hasVer2Lyrics, hasVer3Lyrics, ver1Lyrics, ver2Lyrics, setGlobalLyricsMode])
 
+  // Chord editing handlers
+  const handleEnterEditMode = useCallback(() => {
+    if (!activeChords.length) return
+    enterEditMode(activeChords, activeLyrics)
+  }, [activeChords, activeLyrics, enterEditMode])
+
+  const handleSaveChords = useCallback(() => {
+    if (!songId) return
+    saveChordsMutation.mutate({
+      songId,
+      name: 'Custom',
+      chords: editingChords,
+      lyrics: editingLyrics,
+    })
+  }, [songId, editingChords, editingLyrics, saveChordsMutation])
+
+  const handleAddChordAtWord = useCallback(
+    (startTime: number) => {
+      addChordAtTime('Am', startTime)
+    },
+    [addChordAtTime]
+  )
+
   if (isLoading || !detail) {
     return (
       <LoadingSpinner size="lg" label={loadingLabel} className="flex-1 min-h-screen" />
@@ -551,6 +653,7 @@ export function SongDetailPage() {
   const hasChordSheet = hasChords || hasAnyLyrics || chordsLoading
 
   const showBackgroundProcessing = hasStemsProcessed && hasChords && (!hasAnyLyrics || (sheetMode === 'tabs' && !hasTabs))
+
   // Only show audio status when stems are processed but the selected stem URL
   // is still loading. Hide it during processing (the checklist covers that).
   const showAudioStatus = !audioUrl && hasStemsProcessed
@@ -669,6 +772,24 @@ export function SongDetailPage() {
                     />
                   </button>
                   <RecordButton songTitle={headerTitle} artist={headerArtist} />
+                  <div className="contents" data-tour="chord-edit">
+                    {hasChords && !isEditMode && (
+                      <button
+                        type="button"
+                        onClick={handleEnterEditMode}
+                        className={cn(
+                          'inline-flex items-center justify-center rounded-lg w-16 h-16',
+                          'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
+                          'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
+                          'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+                        )}
+                        aria-label="Edit chords"
+                        data-testid="chord-edit-toggle"
+                      >
+                        <Pencil size={24} />
+                      </button>
+                    )}
+                  </div>
                   <div className="contents" data-tour="stem-selector">
                     <TrackSelector
                       activeStems={activeStems}
@@ -680,10 +801,15 @@ export function SongDetailPage() {
                     />
                   </div>
                   <ChordVersionToggle
-                    hasV1={hasV1Chords}
-                    hasV2={hasV2Chords}
+                    versions={chordVersions}
                     selected={chordVersion}
+                    currentUserEmail={userEmail ?? undefined}
                     onSelect={(v) => setSongOverride(songId!, 'chordVersion', v)}
+                    onDelete={() => {
+                      if (songId && confirm('Delete your chord version?')) {
+                        deleteChordsMutation.mutate({ songId })
+                      }
+                    }}
                   />
                   <div className="contents" data-tour="lyrics-toggle">
                     <LyricsVersionToggle
@@ -707,7 +833,6 @@ export function SongDetailPage() {
                     chordOptions={filteredChordOptions}
                     hasTabs={hasTabs}
                     recommendedCapo={detail.recommended_capo}
-                    songKey={detail.song_key}
                     chordSource={chordVersion === 'v1' ? 'autochord' : detail.chord_source}
                   />
                   <ChordDisplayControls />
@@ -766,7 +891,7 @@ export function SongDetailPage() {
                   <div className="flex-1 min-w-0 min-h-0 flex flex-col">
                     {chordsUpgrading && (
                       <div
-                        className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-flame-400/10 border border-flame-400/20 text-smoke-300 text-xs"
+                        className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-flame-400/10 border border-flame-400/20 text-smoke-300 text-sm"
                         data-testid="chords-upgrading-banner"
                       >
                         <div className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-smoke-600 border-t-flame-400 shrink-0" />
@@ -789,15 +914,31 @@ export function SongDetailPage() {
                         onSeek={seek}
                       />
                     ) : (
-                      <ChordSheet
-                        chords={displayChords}
-                        lyrics={activeLyrics}
-                        onSeek={seek}
-                      />
+                      <>
+                        {isEditMode && (
+                          <ChordEditToolbar
+                            onSave={handleSaveChords}
+                            isSaving={saveChordsMutation.isPending}
+                          />
+                        )}
+                        <ChordSheet
+                          chords={isEditMode ? editingChords : displayChords}
+                          lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
+                          onSeek={seek}
+                          isEditMode={isEditMode}
+                          selectedChordIndex={selectedEditChordIndex}
+                          onChordSelect={selectChord}
+                          onChordRename={updateChordLabel}
+                          onChordDelete={deleteChord}
+                          onChordDrop={moveChordToTime}
+                          onWordClick={isEditMode ? handleAddChordAtWord : undefined}
+                          onWordRename={isEditMode ? updateWordText : undefined}
+                        />
+                      </>
                     )}
                   </div>
                   <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
-                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} tutorialLinks={detail.tutorial_links} strumLoading={!detail.songsterr_status} onOpenTutorial={() => setShowTutorial(true)} />
+                    <ChordMap chords={chordNamesForMap} representativePattern={representativeStrumPattern} sectionPatterns={sectionStrumPatterns} bpm={detail.source_bpm ?? detail.rhythm?.bpm} strumNotes={detail.strum_notes} tutorialUrl={detail.tutorial_url} tutorialLinks={detail.tutorial_links} strumLoading={!detail.songsterr_status} songKey={detail.song_key} onOpenTutorial={() => setShowTutorial(true)} />
                   </div>
                 </div>
               ) : null}

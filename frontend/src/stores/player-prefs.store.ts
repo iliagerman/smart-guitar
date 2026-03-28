@@ -9,7 +9,7 @@ function clampInt(n: number, min: number, max: number): number {
 
 export type LyricsMode = 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'none'
 export type StrumSource = 'songsterr' | 'ai'
-export type ChordVersion = 'v1' | 'v2'
+export type ChordVersion = 'v1' | 'v2' | `v${number}`
 
 export interface SongOverrides {
   lyricsMode?: LyricsMode

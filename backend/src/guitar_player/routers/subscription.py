@@ -9,10 +9,12 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from guitar_player.auth.admin import require_admin_user
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import _is_bypass_user
 from guitar_player.config import Settings, get_settings
+from guitar_player.dao.song_dao import SongDAO  # used in get_subscription_status
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import get_db, get_payment_provider, get_telegram_service
 from guitar_player.schemas.subscription import (
@@ -30,6 +32,8 @@ from guitar_player.services.payment_provider import PaymentProviderProtocol
 from guitar_player.services.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
+
+ONBOARDING_SONG_NAME = "rem/losing_my_religion"
 
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
@@ -53,6 +57,12 @@ async def get_subscription_status(
     db_user = await user_dao.get_or_create(user.sub, user.email)
     status.has_seen_onboarding = db_user.has_seen_onboarding
     status.is_admin = user.email in settings.admin_users
+
+    if not db_user.has_seen_onboarding:
+        song_dao = SongDAO(session)
+        onboarding_song = await song_dao.get_by_song_name(ONBOARDING_SONG_NAME)
+        if onboarding_song:
+            status.onboarding_song_id = str(onboarding_song.id)
 
     if is_new:
         method = "Google OAuth" if user.username.startswith("Google_") else "email/password"
@@ -105,6 +115,18 @@ async def mark_onboarding_seen(
     user_dao = UserDAO(session)
     db_user = await user_dao.get_or_create(user.sub, user.email)
     await user_dao.update_by_id(db_user.id, has_seen_onboarding=True)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/onboarding-reset")
+async def reset_onboarding(
+    user: CurrentUser = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    user_dao = UserDAO(session)
+    db_user = await user_dao.get_or_create(user.sub, user.email)
+    await user_dao.update_by_id(db_user.id, has_seen_onboarding=False)
     await session.commit()
     return {"ok": True}
 

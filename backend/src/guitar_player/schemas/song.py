@@ -75,6 +75,10 @@ class ChordOption(BaseModel):
     description: str
     capo: int = 0
     chords: list[ChordEntry] = []
+    version_key: str | None = None
+    created_by: str | None = None
+    vote_score: int = 0
+    hidden: bool = False
 
 
 class LyricsWord(BaseModel):
@@ -214,3 +218,27 @@ class FeedbackRating(str, Enum):
 class SongFeedbackRequest(BaseModel):
     rating: FeedbackRating
     comment: Optional[str] = None
+
+
+class SaveUserChordsRequest(BaseModel):
+    name: str = "Custom"
+    description: str = "User-edited chords"
+    capo: int = 0
+    chords: list[ChordEntry]
+    lyrics: list[LyricsSegment] | None = None
+
+
+class SaveUserChordsResponse(BaseModel):
+    detail: SongDetailResponse
+    saved: bool = True
+    duplicate_of: str | None = None
+
+
+class ChordVersionVoteRequest(BaseModel):
+    version_key: str
+    vote: int  # +1 or -1
+
+
+class ChordVersionVoteResponse(BaseModel):
+    version_key: str
+    vote_score: int

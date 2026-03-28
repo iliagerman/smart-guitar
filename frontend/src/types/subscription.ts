@@ -12,6 +12,7 @@ export interface SubscriptionStatus {
   subscription: SubscriptionDetail | null
   has_seen_onboarding: boolean
   is_admin: boolean
+  onboarding_song_id: string | null
 }
 
 export interface PriceDetail {

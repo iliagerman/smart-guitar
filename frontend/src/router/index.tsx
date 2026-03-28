@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react'
+import { lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGuard } from '@/features/auth/components/AuthGuard'
 import { SubscriptionGuard } from '@/features/subscription/components/SubscriptionGuard'
 import { AdminGuard } from '@/features/analytics/components/AdminGuard'
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
+import { SuspenseWrapper } from '@/components/shared/SuspenseWrapper'
+import { OnboardingRedirect } from '@/features/subscription/components/OnboardingRedirect'
 import { ROUTES } from './routes'
 
 const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -20,10 +21,6 @@ const SongDetailPage = lazy(() => import('@/features/player/pages/SongDetailPage
 const SubscriptionSuccessPage = lazy(() => import('@/features/subscription/pages/SubscriptionSuccessPage').then(m => ({ default: m.SubscriptionSuccessPage })))
 const SubscriptionFailPage = lazy(() => import('@/features/subscription/pages/SubscriptionFailPage').then(m => ({ default: m.SubscriptionFailPage })))
 const TunerPage = lazy(() => import('@/features/tuner/pages/TunerPage').then(m => ({ default: m.TunerPage })))
-
-function SuspenseWrapper({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<LoadingSpinner size="sm" />}>{children}</Suspense>
-}
 
 export const router = createBrowserRouter([
   {
@@ -51,7 +48,9 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <SuspenseWrapper><LibraryPage /></SuspenseWrapper>
+              <OnboardingRedirect>
+                <SuspenseWrapper><LibraryPage /></SuspenseWrapper>
+              </OnboardingRedirect>
             </SubscriptionGuard>
           </AuthGuard>
         ),

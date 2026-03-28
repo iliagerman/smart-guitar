@@ -1,14 +1,15 @@
 import { SlidersHorizontal } from 'lucide-react'
+import { useParams } from 'react-router-dom'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { type ChordOption } from '@/types/song'
+import { ChordVersionVote } from './ChordVersionVote'
 
 interface ChordOptionSelectorProps {
   chordOptions: ChordOption[]
   hasTabs?: boolean
   recommendedCapo?: number | null
-  songKey?: string | null
   chordSource?: string | null
 }
 
@@ -16,16 +17,22 @@ interface OptionEntry {
   key: string
   label: string
   capo: number
+  versionKey?: string | null
+  voteScore?: number
   apply: () => void
 }
 
-export function ChordOptionSelector({ chordOptions, hasTabs = false, recommendedCapo, songKey, chordSource }: ChordOptionSelectorProps) {
+export function ChordOptionSelector({ chordOptions, hasTabs = false, recommendedCapo, chordSource }: ChordOptionSelectorProps) {
+  const { songId } = useParams<{ songId: string }>()
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const setSelectedChordOptionIndex = usePlaybackStore((s) => s.setSelectedChordOptionIndex)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const setSheetMode = usePlaybackStore((s) => s.setSheetMode)
 
-  if (chordOptions.length === 0 && !hasTabs) return null
+  // Filter hidden versions (10+ downvotes)
+  const visibleOptions = chordOptions.filter((o) => !o.hidden)
+
+  if (visibleOptions.length === 0 && !hasTabs) return null
 
   // Build cycle list — primary chords labeled by source
   const primaryLabel = chordSource === 'gemini' ? 'Chords (V2)' : chordSource === 'autochord' ? 'Chords (V1)' : 'Standard'
@@ -39,10 +46,12 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false, recommended
         setSelectedChordOptionIndex(null)
       },
     },
-    ...chordOptions.map((option, index) => ({
+    ...visibleOptions.map((option, index) => ({
       key: String(index),
       label: option.name,
       capo: option.capo,
+      versionKey: option.version_key,
+      voteScore: option.vote_score,
       apply: () => {
         setSheetMode('chords')
         setSelectedChordOptionIndex(index)
@@ -96,20 +105,19 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false, recommended
         <SlidersHorizontal size={16} className="text-smoke-300" />
         <span className="truncate">{current.label}</span>
       </button>
+      {current.versionKey && songId && (
+        <ChordVersionVote
+          songId={songId}
+          versionKey={current.versionKey}
+          voteScore={current.voteScore ?? 0}
+        />
+      )}
       {(current.capo > 0 || (recommendedCapo && recommendedCapo > 0)) && (
         <span
           className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded"
           data-testid="chord-capo-badge"
         >
           Capo {current.capo > 0 ? current.capo : recommendedCapo}
-        </span>
-      )}
-      {songKey && (
-        <span
-          className="bg-emerald-400/20 text-emerald-400 text-xs px-1.5 py-0.5 rounded"
-          data-testid="chord-key-badge"
-        >
-          Key: {songKey}
         </span>
       )}
     </div>

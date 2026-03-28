@@ -21,6 +21,7 @@ from guitar_player.services.audio_normalize import (
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from guitar_player.dao.chord_vote_dao import ChordVoteDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.exceptions import (
@@ -30,11 +31,14 @@ from guitar_player.exceptions import (
 from guitar_player.schemas.song import (
     ChordEntry,
     ChordOption,
+    ChordVersionVoteResponse,
     EnrichedSearchResult,
     GenreCount,
     LyricsSegment,
     LyricsWord,
     PaginatedSongsResponse,
+    SaveUserChordsRequest,
+    SaveUserChordsResponse,
     SongDetailResponse,
     SongResponse,
     SongSection,
@@ -123,6 +127,7 @@ class SongService:
         self._artwork = artwork
         self._song_dao = SongDAO(session)
         self._user_dao = UserDAO(session)
+        self._chord_vote_dao = ChordVoteDAO(session)
 
     async def search_youtube(self, query: str, max_results: int = 10) -> list[dict]:
         return await self._youtube.search(query, max_results)
@@ -828,6 +833,7 @@ class SongService:
                     and (
                         not has_web_variants
                         or "chords_web_" in f.rsplit("/", 1)[-1]
+                        or "chords_user" in f.rsplit("/", 1)[-1]
                     )
                 )
                 for key in variant_keys:
@@ -840,6 +846,8 @@ class SongService:
                                     description=data.get("description", ""),
                                     capo=data.get("capo", 0),
                                     chords=[ChordEntry(**c) for c in data["chords"]],
+                                    version_key=key,
+                                    created_by=data.get("created_by"),
                                 )
                             )
                     except Exception as e:
@@ -848,6 +856,17 @@ class SongService:
                 logger.warning(
                     "Failed to list chord variants for %s: %s", song.song_name, e
                 )
+
+        # Enrich chord_options with vote scores
+        try:
+            vote_counts = await self._chord_vote_dao.get_vote_counts(song_id)
+            for option in chord_options:
+                if option.version_key and option.version_key in vote_counts:
+                    option.vote_score = vote_counts[option.version_key]
+                    option.hidden = option.vote_score <= -10
+        except Exception as e:
+            logger.warning("Failed to load chord vote counts for %s: %s", song_id, e)
+            await self._chord_vote_dao.rollback()
 
         # Read lyrics from DB-stored path
         lyrics: list[LyricsSegment] = []
@@ -1254,3 +1273,182 @@ class SongService:
             self._storage.write_json(external_strums_key, raw_songsterr)
 
         return [SongSection(**s) for s in sections_data]
+
+    def _chords_match(
+        self, a: list[ChordEntry], b: list[ChordEntry],
+    ) -> bool:
+        """Check if two chord lists are identical (same chords, same timing)."""
+        if len(a) != len(b):
+            return False
+        return all(
+            x.chord == y.chord
+            and abs(x.start_time - y.start_time) < 0.05
+            and abs(x.end_time - y.end_time) < 0.05
+            for x, y in zip(a, b)
+        )
+
+    def _find_duplicate_version(
+        self,
+        song_name: str,
+        new_chords: list[ChordEntry],
+    ) -> str | None:
+        """Return the name of an existing chord version that matches, or None."""
+        # Check primary chord files
+        for key, label in [
+            (f"{song_name}/chords_web.json", "Gemini (V2)"),
+            (f"{song_name}/chords.json", "Autochord (V1)"),
+        ]:
+            if self._storage.file_exists(key):
+                try:
+                    raw = self._storage.read_json(key)
+                    if isinstance(raw, list):
+                        existing = [ChordEntry(**c) for c in raw]
+                        if self._chords_match(new_chords, existing):
+                            return label
+                except Exception:
+                    pass
+
+        # Check variant files
+        try:
+            files = self._storage.list_files(song_name)
+            variant_keys = [
+                f for f in files
+                if f.rsplit("/", 1)[-1].startswith(CHORD_VARIANT_PREFIX)
+                and f.endswith(CHORD_VARIANT_SUFFIX)
+                and "intermediate" not in f.rsplit("/", 1)[-1].lower()
+            ]
+            for key in variant_keys:
+                try:
+                    data = self._storage.read_json(key)
+                    if isinstance(data, dict) and "chords" in data:
+                        existing = [ChordEntry(**c) for c in data["chords"]]
+                        if self._chords_match(new_chords, existing):
+                            return data.get("name", key.rsplit("/", 1)[-1])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return None
+
+    def _list_user_chord_files(self, song_name: str) -> list[str]:
+        """Return all user chord file keys for a song."""
+        try:
+            files = self._storage.list_files(song_name)
+        except Exception:
+            return []
+        return [
+            f for f in files
+            if "chords_user" in f.rsplit("/", 1)[-1]
+            and f.endswith(".json")
+        ]
+
+    def _find_user_chord_key(self, song_name: str, user_email: str) -> str | None:
+        """Find the chord file created by a specific user, or None."""
+        for key in self._list_user_chord_files(song_name):
+            try:
+                data = self._storage.read_json(key)
+                if isinstance(data, dict) and data.get("created_by") == user_email:
+                    return key
+            except Exception:
+                pass
+        return None
+
+    def _next_user_chord_key(self, song_name: str) -> str | None:
+        """Return the next available chords_user[_N].json key, or None if at limit."""
+        existing = self._list_user_chord_files(song_name)
+        if not existing:
+            return f"{song_name}/chords_user.json"
+        # Cap at 8 user versions (V3–V10)
+        if len(existing) >= 8:
+            return None
+        n = len(existing) + 1
+        return f"{song_name}/chords_user_{n}.json"
+
+    async def save_user_chords(
+        self,
+        song_id: uuid.UUID,
+        request: SaveUserChordsRequest,
+        user_email: str,
+    ) -> SaveUserChordsResponse:
+        """Save user-edited chords as a new chord variant."""
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song not found")
+
+        # Check for duplicates — skip the user's own existing file
+        duplicate_name = self._find_duplicate_version(song.song_name, request.chords)
+        if duplicate_name:
+            detail = await self.get_song_detail(song_id)
+            return SaveUserChordsResponse(
+                detail=detail,
+                saved=False,
+                duplicate_of=duplicate_name,
+            )
+
+        # Find existing version by this user (overwrite) or create new
+        existing_key = self._find_user_chord_key(song.song_name, user_email)
+        if existing_key:
+            storage_key = existing_key
+        else:
+            storage_key = self._next_user_chord_key(song.song_name)
+            if not storage_key:
+                raise BadRequestError("Maximum of 8 user chord versions reached")
+
+        payload: dict[str, Any] = {
+            "name": request.name,
+            "description": request.description,
+            "capo": request.capo,
+            "created_by": user_email,
+            "chords": [c.model_dump() for c in request.chords],
+        }
+        self._storage.write_json(storage_key, payload)
+
+        if request.lyrics:
+            lyrics_key = f"{song.song_name}/lyrics_user.json"
+            lyrics_payload = [seg.model_dump() for seg in request.lyrics]
+            self._storage.write_json(lyrics_key, lyrics_payload)
+
+        detail = await self.get_song_detail(song_id)
+        return SaveUserChordsResponse(detail=detail, saved=True)
+
+    async def delete_user_chords(
+        self,
+        song_id: uuid.UUID,
+        user_email: str,
+    ) -> SongDetailResponse:
+        """Delete the chord version created by this user."""
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song not found")
+
+        key = self._find_user_chord_key(song.song_name, user_email)
+        if not key:
+            raise NotFoundError("No chord version found for this user")
+
+        self._storage.delete_file(key)
+        return await self.get_song_detail(song_id)
+
+    async def vote_chord_version(
+        self,
+        song_id: uuid.UUID,
+        version_key: str,
+        user_sub: str,
+        vote: int,
+    ) -> ChordVersionVoteResponse:
+        """Submit or update a user's vote on a chord version."""
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song not found")
+
+        user = await self._user_dao.get_by_cognito_sub(user_sub)
+        if not user:
+            raise NotFoundError("User not found")
+
+        clamped_vote = max(-1, min(1, vote))
+        await self._chord_vote_dao.upsert_vote(song_id, version_key, user.id, clamped_vote)
+        await self._chord_vote_dao.commit()
+
+        counts = await self._chord_vote_dao.get_vote_counts(song_id)
+        score = counts.get(version_key, 0)
+        return ChordVersionVoteResponse(version_key=version_key, vote_score=score)

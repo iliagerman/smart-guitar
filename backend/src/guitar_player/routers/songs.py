@@ -25,11 +25,15 @@ from guitar_player.dependencies import (
 )
 from guitar_player.schemas.job import ActiveJobInfo
 from guitar_player.schemas.song import (
+    ChordVersionVoteRequest,
+    ChordVersionVoteResponse,
     DownloadRequest,
     EnrichedSearchResponse,
     FeedbackRating,
     GenreListResponse,
     PaginatedSongsResponse,
+    SaveUserChordsRequest,
+    SaveUserChordsResponse,
     SearchRequest,
     SelectSongRequest,
     SongDetailResponse,
@@ -258,6 +262,40 @@ async def submit_feedback(
         lines.append(f"\U0001f4ac {body.comment}")
     await telegram.send_feedback("\n".join(lines))
     return Response(status_code=204)
+
+
+@router.put("/{song_id}/chords", response_model=SaveUserChordsResponse)
+async def save_user_chords(
+    song_id: uuid.UUID,
+    body: SaveUserChordsRequest,
+    user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+) -> SaveUserChordsResponse:
+    """Save user-edited chords as a new chord variant."""
+    return await song_service.save_user_chords(song_id, body, user.email)
+
+
+@router.delete("/{song_id}/chords", response_model=SongDetailResponse)
+async def delete_user_chords(
+    song_id: uuid.UUID,
+    user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+) -> SongDetailResponse:
+    """Delete the chord version created by the current user."""
+    return await song_service.delete_user_chords(song_id, user.email)
+
+
+@router.post("/{song_id}/chord-votes", response_model=ChordVersionVoteResponse)
+async def vote_chord_version(
+    song_id: uuid.UUID,
+    body: ChordVersionVoteRequest,
+    user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+) -> ChordVersionVoteResponse:
+    """Submit or update a vote on a user-edited chord version."""
+    return await song_service.vote_chord_version(
+        song_id, body.version_key, user.sub, body.vote,
+    )
 
 
 # --- Dynamic /{song_id} endpoints ---

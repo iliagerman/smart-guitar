@@ -317,6 +317,7 @@ export function ChordMap({
     tutorialLinks,
     strumLoading,
     showHeader = true,
+    songKey,
     className,
     onOpenTutorial,
 }: {
@@ -329,6 +330,7 @@ export function ChordMap({
     tutorialLinks?: { url: string; title: string }[]
     strumLoading?: boolean
     showHeader?: boolean
+    songKey?: string | null
     className?: string
     onOpenTutorial?: () => void
 }) {
@@ -353,7 +355,17 @@ export function ChordMap({
         <aside className={cn('flex flex-col gap-3 min-h-0 h-full', className)} data-testid="chord-map">
             {showHeader && (
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-smoke-200">Chord Map</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-smoke-200">Chord Map</h3>
+                        {songKey && (
+                            <span
+                                className="bg-emerald-400/20 text-emerald-400 text-xs px-1.5 py-0.5 rounded"
+                                data-testid="chord-key-badge"
+                            >
+                                Key: {songKey}
+                            </span>
+                        )}
+                    </div>
                     <span className="text-xs text-smoke-500">shapes</span>
                 </div>
             )}

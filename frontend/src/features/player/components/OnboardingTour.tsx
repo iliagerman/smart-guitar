@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Heart, Music, Type, LayoutGrid, Circle } from 'lucide-react'
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react'
+import { Heart, Music, Pencil, Type, LayoutGrid, Circle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/cn'
 import { useSubscriptionStore } from '@/stores/subscription.store'
+import { usePlaybackStore } from '@/stores/playback.store'
 import { subscriptionApi } from '@/api/subscription.api'
 import { queryKeys } from '@/api/query-keys'
 
@@ -36,7 +37,7 @@ const STEPS: TourStep[] = [
   {
     tourAttr: 'lyrics-toggle',
     title: 'Switch Lyrics Version',
-    description: 'Tap to switch between lyrics versions: V1 (fast, basic), V2 (timed with word highlighting), V3 (corrected & most accurate), or turn lyrics off entirely.',
+    description: 'Tap to switch between lyrics versions: V1 (fast, basic), V2 (timed with word highlighting), V3 (corrected), or turn lyrics off entirely.',
     icon: <Type size={20} />,
   },
   {
@@ -44,6 +45,12 @@ const STEPS: TourStep[] = [
     title: 'Strumming & Chord Map',
     description: 'View chord shapes and strumming patterns for the song.',
     icon: <LayoutGrid size={20} />,
+  },
+  {
+    tourAttr: 'chord-edit',
+    title: 'Edit Chords',
+    description: 'Tap Edit to enter chord editing mode. Click any word to place a chord above it, drag chords to reposition them, double-click a chord to rename it, or double-click a word to fix lyrics. Save your edits as a new chord version.',
+    icon: <Pencil size={20} />,
   },
 ]
 
@@ -64,6 +71,9 @@ export function OnboardingTour() {
   const [stepIndex, setStepIndex] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [active, setActive] = useState(false)
+  const savedStemsRef = useRef<{ stems: string[]; isFullSong: boolean } | null>(null)
+
+  const STEM_STEP_INDEX = STEPS.findIndex((s) => s.tourAttr === 'stem-selector')
 
   // Wait for subscription data to load and target elements to exist before starting
   useEffect(() => {
@@ -79,6 +89,24 @@ export function OnboardingTour() {
     return () => clearTimeout(timer)
   }, [isLoaded, hasSeenOnboarding])
 
+  // Switch to guitar-only stem when entering the stem step, restore on leave
+  useEffect(() => {
+    if (!active) return
+    const playback = usePlaybackStore.getState()
+    if (stepIndex === STEM_STEP_INDEX) {
+      savedStemsRef.current = { stems: playback.activeStems, isFullSong: playback.isFullSong }
+      playback.setActiveStems(['guitar'])
+    } else if (savedStemsRef.current) {
+      const { stems, isFullSong } = savedStemsRef.current
+      if (isFullSong) {
+        playback.selectFullSong()
+      } else {
+        playback.setActiveStems(stems)
+      }
+      savedStemsRef.current = null
+    }
+  }, [active, stepIndex, STEM_STEP_INDEX])
+
   // Measure the current step's target element
   useLayoutEffect(() => {
     if (!active) return
@@ -91,6 +119,17 @@ export function OnboardingTour() {
   }, [active, stepIndex])
 
   const dismiss = useCallback(async () => {
+    // Restore stems if dismissed while on stem step
+    if (savedStemsRef.current) {
+      const { stems, isFullSong } = savedStemsRef.current
+      const playback = usePlaybackStore.getState()
+      if (isFullSong) {
+        playback.selectFullSong()
+      } else {
+        playback.setActiveStems(stems)
+      }
+      savedStemsRef.current = null
+    }
     setActive(false)
     // Optimistically update the local store
     const store = useSubscriptionStore.getState()

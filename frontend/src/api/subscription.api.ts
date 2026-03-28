@@ -20,4 +20,7 @@ export const subscriptionApi = {
 
   markOnboardingSeen: () =>
     api.post('/api/v1/subscription/onboarding-seen').then((r) => r.data),
+
+  resetOnboarding: () =>
+    api.post('/api/v1/subscription/onboarding-reset').then((r) => r.data),
 }

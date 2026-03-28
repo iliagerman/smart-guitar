@@ -50,6 +50,7 @@ api.interceptors.response.use(
         subscription: null,
         has_seen_onboarding: false,
         is_admin: false,
+        onboarding_song_id: null,
       })
       return Promise.reject(error)
     }

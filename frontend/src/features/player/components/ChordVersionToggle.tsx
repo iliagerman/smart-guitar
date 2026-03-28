@@ -1,57 +1,83 @@
-import { Guitar } from 'lucide-react'
+import { Guitar, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
+import type { ChordVersion } from '@/stores/player-prefs.store'
 
-export type ChordVersion = 'v1' | 'v2'
+export type { ChordVersion }
+
+export interface VersionInfo {
+  version: ChordVersion
+  label: string
+  tooltip: string
+  createdBy?: string | null
+}
 
 interface ChordVersionToggleProps {
   className?: string
-  hasV1: boolean
-  hasV2: boolean
+  versions: VersionInfo[]
   selected: ChordVersion
+  currentUserEmail?: string
   onSelect: (version: ChordVersion) => void
-}
-
-const LABELS: Record<ChordVersion, { short: string; tooltip: string }> = {
-  v1: { short: 'V1', tooltip: 'V1: Auto-detected chords (basic)' },
-  v2: { short: 'V2', tooltip: 'V2: AI-improved chords (recommended)' },
+  onDelete?: () => void
 }
 
 export function ChordVersionToggle({
   className,
-  hasV1,
-  hasV2,
+  versions,
   selected,
+  currentUserEmail,
   onSelect,
+  onDelete,
 }: ChordVersionToggleProps) {
-  if (!hasV1 || !hasV2) return null
+  if (versions.length < 2) return null
 
-  const current = LABELS[selected]
+  const current = versions.find((v) => v.version === selected) ?? versions[0]
+  const isOwned = currentUserEmail && current.createdBy === currentUserEmail
 
   function cycleNext() {
-    onSelect(selected === 'v2' ? 'v1' : 'v2')
+    const idx = versions.findIndex((v) => v.version === selected)
+    const nextIdx = (idx >= 0 ? idx + 1 : 1) % versions.length
+    onSelect(versions[nextIdx].version)
   }
 
   return (
-    <button
-      type="button"
-      className={cn(
-        'inline-flex items-center justify-center rounded-lg w-16 h-16 relative',
-        'bg-charcoal-700 border border-charcoal-600',
-        selected === 'v2' ? 'text-emerald-400/70 hover:text-emerald-400' : 'text-smoke-400 hover:text-smoke-300',
-        'hover:border-flame-400/30 transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-        className,
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        className={cn(
+          'inline-flex items-center justify-center rounded-lg w-16 h-16 relative',
+          'bg-charcoal-700 border',
+          isOwned
+            ? 'border-emerald-400/60 text-emerald-400/80 hover:text-emerald-400 hover:border-emerald-400'
+            : 'border-charcoal-600 text-flame-400/70 hover:text-flame-400 hover:border-flame-400/30',
+          'transition-colors',
+          'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+          className,
+        )}
+        onClick={cycleNext}
+        title={`${current.tooltip}. Click to switch.`}
+        aria-label={`Chord version: ${current.label}`}
+        data-testid="chord-version-toggle"
+      >
+        <div className="flex flex-col items-center gap-0.5">
+          <Guitar size={24} />
+          <span className="text-[10px] font-bold leading-none">{current.label}</span>
+        </div>
+      </button>
+      {isOwned && onDelete && (
+        <button
+          type="button"
+          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className="absolute -bottom-2 -right-2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-red-500/90 text-white hover:bg-red-500 transition-colors shadow-md"
+          aria-label="Delete your chord version"
+          data-testid="chord-version-delete"
+        >
+          <Trash2 size={16} />
+        </button>
       )}
-      onClick={cycleNext}
-      title={`${current.tooltip}. Click to switch.`}
-      aria-label={`Chord version: ${current.short}`}
-      data-testid="chord-version-toggle"
-    >
-      <div className="flex flex-col items-center gap-0.5">
-        <Guitar size={24} />
-        <span className="text-[10px] font-bold leading-none">{current.short}</span>
-      </div>
-    </button>
+    </div>
   )
 }

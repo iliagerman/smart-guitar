@@ -1,5 +1,24 @@
 import { api } from '../config/api'
-import type { Song, SongDetail, SongSection, SearchResult } from '../types/song'
+import type { ChordEntry, LyricsSegment, Song, SongDetail, SongSection, SearchResult } from '../types/song'
+
+interface SaveUserChordsPayload {
+  name: string
+  description: string
+  capo: number
+  chords: ChordEntry[]
+  lyrics?: LyricsSegment[] | null
+}
+
+export interface SaveUserChordsResponse {
+  detail: SongDetail
+  saved: boolean
+  duplicate_of: string | null
+}
+
+interface ChordVersionVoteResponse {
+  version_key: string
+  vote_score: number
+}
 
 export type PaginatedResponse<T> = {
   items: T[]
@@ -47,5 +66,19 @@ export const songsApi = {
         `/api/v1/songs/${songId}/regenerate`,
         { targets },
       )
+      .then((r) => r.data),
+
+  saveChords: (songId: string, data: SaveUserChordsPayload) =>
+    api.put<SaveUserChordsResponse>(`/api/v1/songs/${songId}/chords`, data).then((r) => r.data),
+
+  deleteChords: (songId: string) =>
+    api.delete<SongDetail>(`/api/v1/songs/${songId}/chords`).then((r) => r.data),
+
+  voteChordVersion: (songId: string, versionKey: string, vote: number) =>
+    api
+      .post<ChordVersionVoteResponse>(`/api/v1/songs/${songId}/chord-votes`, {
+        version_key: versionKey,
+        vote,
+      })
       .then((r) => r.data),
 }

@@ -132,6 +132,18 @@ class SubscriptionRecord(BaseModel):
     canceled_at: Optional[datetime] = None
 
 
+class ChordVoteRecord(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    created_at: datetime
+
+    song_id: uuid.UUID
+    version_key: str
+    user_id: uuid.UUID
+    vote: int
+
+
 class AnalyticsEventRecord(BaseModel):
     model_config = {"from_attributes": True}
 

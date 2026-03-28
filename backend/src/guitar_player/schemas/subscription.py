@@ -28,6 +28,7 @@ class SubscriptionStatusResponse(BaseModel):
     subscription: Optional[SubscriptionDetail] = None
     has_seen_onboarding: bool = False
     is_admin: bool = False
+    onboarding_song_id: str | None = None
 
 
 class PriceDetail(BaseModel):
