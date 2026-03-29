@@ -26,6 +26,7 @@ import { useDeleteChords } from '../../hooks/use-delete-chords'
 import { trackCustomEvent } from '@/lib/meta-pixel'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { transposeChordLabel } from '@/lib/chord-utils'
+import { simplifyChords, transposeForCapo } from '@/lib/chord-simplifier'
 import { SongHeader } from './SongHeader'
 import { PlayerControls } from './PlayerControls'
 import { SongContent } from './SongContent'
@@ -195,13 +196,22 @@ export function SongDetailPage() {
     return baseChords
   }, [detail, selectedChordOptionIndex, variantOptions, baseChords])
 
+  const chordDisplayMode = usePlaybackStore((s) => s.chordDisplayMode)
+  const chordCapoFret = usePlaybackStore((s) => s.chordCapoFret)
+
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
-    return activeChords.map((c) => ({
+    let chords = activeChords
+    if (chordDisplayMode === 'beginner') {
+      chords = simplifyChords(chords)
+    } else if (chordDisplayMode === 'capo' && chordCapoFret > 0) {
+      chords = transposeForCapo(chords, chordCapoFret)
+    }
+    return chords.map((c) => ({
       ...c,
       chord: transposeChordLabel(c.chord, transposeSemitones, { preferSharps: true }),
     }))
-  }, [activeChords, transposeSemitones])
+  }, [activeChords, transposeSemitones, chordDisplayMode, chordCapoFret])
 
   const chordNamesForMap = useMemo(() => {
     const source = isEditMode ? editingChords : displayChords
@@ -357,12 +367,13 @@ export function SongDetailPage() {
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
             allVersions={allVersions}
-            variantOptions={variantOptions}
+            activeChords={activeChords}
             selectedVersionIndex={selectedVersionIndex}
             chordNamesForMap={chordNamesForMap}
             representativeStrumPattern={representativeStrumPattern}
             sectionStrumPatterns={sectionStrumPatterns}
             userEmail={userEmail}
+            chordsUpgrading={chordsUpgrading}
             onTogglePlay={handleTogglePlay}
             onSeek={seek}
             onToggleFavorite={handleToggleFavorite}
@@ -393,7 +404,6 @@ export function SongDetailPage() {
         chordNamesForMap={chordNamesForMap}
         representativeStrumPattern={representativeStrumPattern}
         sectionStrumPatterns={sectionStrumPatterns}
-        chordsUpgrading={chordsUpgrading}
         chordsLoading={chordsLoading}
         onSeek={seek}
         onSaveChords={handleSaveChords}

@@ -26,12 +26,13 @@ interface PlayerControlsProps {
   isFavorited: boolean
   showAudioStatus: boolean
   allVersions: ChordOption[]
-  variantOptions: ChordOption[]
+  activeChords: { chord: string; start_time: number; end_time: number }[]
   selectedVersionIndex: number
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
   userEmail: string | null
+  chordsUpgrading: boolean
   onTogglePlay: () => void
   onSeek: (time: number) => void
   onToggleFavorite: () => void
@@ -74,12 +75,13 @@ export function PlayerControls({
   isFavorited,
   showAudioStatus,
   allVersions,
-  variantOptions,
+  activeChords,
   selectedVersionIndex,
   chordNamesForMap,
   representativeStrumPattern,
   sectionStrumPatterns,
   userEmail,
+  chordsUpgrading,
   onTogglePlay,
   onSeek,
   onToggleFavorite,
@@ -108,6 +110,7 @@ export function PlayerControls({
             representativeStrumPattern={representativeStrumPattern}
             sectionStrumPatterns={sectionStrumPatterns}
             userEmail={userEmail}
+            chordsUpgrading={chordsUpgrading}
             onToggleFavorite={onToggleFavorite}
             onEnterEditMode={onEnterEditMode}
             onSetVersionIndex={onSetVersionIndex}
@@ -118,10 +121,8 @@ export function PlayerControls({
         secondaryControls={
           <>
             <ChordOptionSelector
-              chordOptions={variantOptions}
+              activeChords={activeChords}
               hasTabs={hasTabs}
-              recommendedCapo={detail.recommended_capo}
-              chordSource={detail.chord_source}
             />
             <ChordDisplayControls />
             <PlaybackSpeedSelector />
@@ -149,6 +150,7 @@ interface PrimaryControlsProps {
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
   userEmail: string | null
+  chordsUpgrading: boolean
   onToggleFavorite: () => void
   onEnterEditMode: () => void
   onSetVersionIndex: (idx: number) => void
@@ -169,6 +171,7 @@ function PrimaryControls({
   representativeStrumPattern,
   sectionStrumPatterns,
   userEmail,
+  chordsUpgrading,
   onToggleFavorite,
   onEnterEditMode,
   onSetVersionIndex,
@@ -237,6 +240,7 @@ function PrimaryControls({
           versions={allVersions}
           selectedIndex={selectedVersionIndex}
           currentUserEmail={userEmail ?? undefined}
+          upgrading={chordsUpgrading}
           onSelect={onSetVersionIndex}
           onDelete={onDeleteChords}
         />

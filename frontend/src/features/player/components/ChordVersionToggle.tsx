@@ -8,6 +8,7 @@ interface ChordVersionToggleProps {
   versions: ChordOption[]
   selectedIndex: number
   currentUserEmail?: string
+  upgrading?: boolean
   onSelect: (index: number) => void
   onDelete?: () => void
 }
@@ -17,10 +18,12 @@ export function ChordVersionToggle({
   versions,
   selectedIndex,
   currentUserEmail,
+  upgrading,
   onSelect,
   onDelete,
 }: ChordVersionToggleProps) {
-  if (versions.length < 2) return null
+  // Show the toggle when upgrading (even with only 1 version) to display the pending V2
+  if (versions.length < 2 && !upgrading) return null
 
   const clampedIndex = Math.min(selectedIndex, versions.length - 1)
   const current = versions[clampedIndex] ?? versions[0]
@@ -33,7 +36,7 @@ export function ChordVersionToggle({
   }
 
   return (
-    <div className="relative inline-flex">
+    <div className="relative inline-flex gap-1.5">
       <button
         type="button"
         className={cn(
@@ -47,7 +50,7 @@ export function ChordVersionToggle({
           className,
         )}
         onClick={cycleNext}
-        title={`${current.name}. Click to switch.`}
+        title={`${current?.name ?? 'Chords'}. Click to switch.`}
         aria-label={`Version: ${label}`}
         data-testid="chord-version-toggle"
       >
@@ -69,6 +72,21 @@ export function ChordVersionToggle({
         >
           <Trash2 size={16} />
         </button>
+      )}
+      {upgrading && versions.length < 2 && (
+        <div
+          className="inline-flex items-center justify-center rounded-lg w-16 h-16 relative bg-charcoal-700 border border-charcoal-600 opacity-50 pointer-events-none"
+          aria-label="Gemini version loading"
+          data-testid="chord-version-upgrading"
+        >
+          <div className="flex flex-col items-center gap-0.5 text-flame-400/50">
+            <Guitar size={24} />
+            <span className="text-[10px] font-bold leading-none">V2</span>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
+          </div>
+        </div>
       )}
     </div>
   )

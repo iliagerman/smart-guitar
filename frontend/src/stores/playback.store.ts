@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 export type SheetMode = 'chords' | 'tabs'
+export type ChordDisplayMode = 'standard' | 'beginner' | 'capo'
 
 interface PlaybackState {
   currentSongId: string | null
@@ -14,6 +15,8 @@ interface PlaybackState {
   playbackRate: number
   sheetMode: SheetMode
   selectedChordOptionIndex: number | null
+  chordDisplayMode: ChordDisplayMode
+  chordCapoFret: number
   setCurrentSong: (songId: string) => void
   /** Toggle a stem on/off. Switches out of full-song mode when enabling a stem. */
   toggleStem: (stem: string) => void
@@ -27,6 +30,7 @@ interface PlaybackState {
   setPlaybackRate: (rate: number) => void
   setSheetMode: (mode: SheetMode) => void
   setSelectedChordOptionIndex: (index: number | null) => void
+  setChordDisplayMode: (mode: ChordDisplayMode, capoFret?: number) => void
   reset: () => void
 }
 
@@ -40,8 +44,10 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   playbackRate: 1,
   sheetMode: 'chords',
   selectedChordOptionIndex: null,
+  chordDisplayMode: 'standard',
+  chordCapoFret: 0,
   setCurrentSong: (songId) =>
-    set({ currentSongId: songId, currentTime: 0, isPlaying: false, sheetMode: 'chords', selectedChordOptionIndex: null }),
+    set({ currentSongId: songId, currentTime: 0, isPlaying: false, sheetMode: 'chords', selectedChordOptionIndex: null, chordDisplayMode: 'standard', chordCapoFret: 0 }),
   toggleStem: (stem) => {
     const { activeStems, isFullSong } = get()
     if (isFullSong) {
@@ -77,6 +83,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
     set({ playbackRate: Number.isFinite(rate) && rate > 0 ? rate : 1 }),
   setSheetMode: (mode) => set({ sheetMode: mode }),
   setSelectedChordOptionIndex: (index) => set({ selectedChordOptionIndex: index }),
+  setChordDisplayMode: (mode, capoFret) => set({ chordDisplayMode: mode, chordCapoFret: capoFret ?? 0 }),
   reset: () =>
     set({
       currentSongId: null,
@@ -88,5 +95,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
       playbackRate: 1,
       sheetMode: 'chords',
       selectedChordOptionIndex: null,
+      chordDisplayMode: 'standard',
+      chordCapoFret: 0,
     }),
 }))

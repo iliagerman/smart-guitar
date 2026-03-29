@@ -24,7 +24,6 @@ interface SongContentProps {
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
-  chordsUpgrading: boolean
   chordsLoading: boolean
   onSeek: (time: number) => void
   onSaveChords: () => void
@@ -51,7 +50,6 @@ export function SongContent({
   chordNamesForMap,
   representativeStrumPattern,
   sectionStrumPatterns,
-  chordsUpgrading,
   chordsLoading,
   onSeek,
   onSaveChords,
@@ -104,15 +102,6 @@ export function SongContent({
               <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
                 <CurrentChordPanel chords={displayChords} />
                 <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-                  {chordsUpgrading && (
-                    <div
-                      className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg bg-flame-400/10 border border-flame-400/20 text-smoke-300 text-sm"
-                      data-testid="chords-upgrading-banner"
-                    >
-                      <div className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-smoke-600 border-t-flame-400 shrink-0" />
-                      <span>Improving chords — a more accurate version should be available in 1-2 minutes</span>
-                    </div>
-                  )}
                   {chordsLoading && !hasChords ? (
                     <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
                       <div className="flex flex-col items-center gap-3">

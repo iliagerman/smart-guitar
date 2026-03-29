@@ -368,11 +368,20 @@ async def fetch_gemini_chords(song_id: uuid.UUID) -> None:
         audio_duration = float(song.duration_seconds or 300)
 
     t0 = time.monotonic()
+    tmp_audio: str | None = None
     try:
         from guitar_player.services.gemini_chord_service import detect_chords
         from guitar_player.services.chord_merger import build_chord_meta, clean_chords
 
-        audio_path = storage.resolve_service_path(audio_key)
+        resolved = storage.resolve_service_path(audio_key)
+        if os.path.isfile(resolved):
+            audio_path = resolved
+        else:
+            tmp_dir = tempfile.mkdtemp()
+            tmp_audio = os.path.join(tmp_dir, os.path.basename(audio_key))
+            storage.download_to_local(audio_key, tmp_audio)
+            audio_path = tmp_audio
+
         tutorial_context = _load_tutorial_context(storage, song_name)
 
         gemini_result = await detect_chords(audio_path, gemini_api_key, tutorial_context)
@@ -435,6 +444,13 @@ async def fetch_gemini_chords(song_id: uuid.UUID) -> None:
             logger.debug(
                 "Failed to persist web_chords_failed for %s", song_id, exc_info=True,
             )
+    finally:
+        if tmp_audio:
+            try:
+                os.unlink(tmp_audio)
+                os.rmdir(os.path.dirname(tmp_audio))
+            except OSError:
+                pass
 
 
 def _load_tutorial_context(

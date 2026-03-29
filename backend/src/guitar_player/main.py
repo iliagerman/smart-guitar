@@ -197,6 +197,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             exc_info=True,
         )
 
+    # One-time reset: clear web_chords_failed for all songs so Gemini retries
+    # them after the S3 upload bug was fixed.
+    try:
+        async with session_factory() as session:
+            from sqlalchemy import update as sql_update
+            from guitar_player.models.song import Song
+
+            result = await session.execute(
+                sql_update(Song)
+                .where(Song.web_chords_failed.is_(True))
+                .values(web_chords_failed=False)
+            )
+            await session.commit()
+            if result.rowcount:
+                logger.info(
+                    "Reset web_chords_failed for %d songs on startup",
+                    result.rowcount,
+                )
+    except Exception:
+        logger.warning(
+            "Failed to reset web_chords_failed on startup", exc_info=True,
+        )
+
     # Local/dev mode: sync local_bucket → DB
     # NOTE: we intentionally do NOT auto-seed the predefined dummy catalog on startup.
     # Use `just seed-db` or `POST /api/v1/admin/seed/populate` instead.

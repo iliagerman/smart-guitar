@@ -1,84 +1,87 @@
+import { useMemo } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
-import { useParams } from 'react-router-dom'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
-import { type ChordOption } from '@/types/song'
-import { ChordVersionVote } from './ChordVersionVote'
+import { findBestCapoFrets } from '@/lib/chord-simplifier'
+import type { ChordEntry } from '@/types/song'
 
 interface ChordOptionSelectorProps {
-  chordOptions: ChordOption[]
+  activeChords: ChordEntry[]
   hasTabs?: boolean
-  recommendedCapo?: number | null
-  chordSource?: string | null
 }
 
 interface OptionEntry {
   key: string
   label: string
-  capo: number
-  versionKey?: string | null
-  voteScore?: number
   apply: () => void
 }
 
-export function ChordOptionSelector({ chordOptions, hasTabs = false, recommendedCapo, chordSource }: ChordOptionSelectorProps) {
-  const { songId } = useParams<{ songId: string }>()
-  const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
-  const setSelectedChordOptionIndex = usePlaybackStore((s) => s.setSelectedChordOptionIndex)
+export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOptionSelectorProps) {
+  const chordDisplayMode = usePlaybackStore((s) => s.chordDisplayMode)
+  const chordCapoFret = usePlaybackStore((s) => s.chordCapoFret)
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const setSheetMode = usePlaybackStore((s) => s.setSheetMode)
+  const setChordDisplayMode = usePlaybackStore((s) => s.setChordDisplayMode)
 
-  // Filter hidden versions (10+ downvotes)
-  const visibleOptions = chordOptions.filter((o) => !o.hidden)
+  const bestCapoFrets = useMemo(
+    () => (activeChords.length > 0 ? findBestCapoFrets(activeChords) : []),
+    [activeChords],
+  )
 
-  if (visibleOptions.length === 0 && !hasTabs) return null
-
-  // Build cycle list — primary chords labeled by source
-  const primaryLabel = chordSource === 'gemini' ? 'Chords (V2)' : chordSource === 'autochord' ? 'Chords (V1)' : 'Standard'
-  const entries: OptionEntry[] = [
-    {
-      key: 'standard',
-      label: primaryLabel,
-      capo: recommendedCapo ?? 0,
-      apply: () => {
-        setSheetMode('chords')
-        setSelectedChordOptionIndex(null)
+  const entries = useMemo(() => {
+    const list: OptionEntry[] = [
+      {
+        key: 'standard',
+        label: 'Chords',
+        apply: () => {
+          setSheetMode('chords')
+          setChordDisplayMode('standard')
+        },
       },
-    },
-    ...visibleOptions.map((option, index) => ({
-      key: String(index),
-      label: option.name,
-      capo: option.capo,
-      versionKey: option.version_key,
-      voteScore: option.vote_score,
-      apply: () => {
-        setSheetMode('chords')
-        setSelectedChordOptionIndex(index)
+      {
+        key: 'beginner',
+        label: 'Beginner',
+        apply: () => {
+          setSheetMode('chords')
+          setChordDisplayMode('beginner')
+        },
       },
-    })),
-  ]
+    ]
 
-  // Add tabs option when tabs are available
-  if (hasTabs) {
-    entries.push({
-      key: 'tabs',
-      label: 'Tabs',
-      capo: 0,
-      apply: () => {
-        setSheetMode('tabs')
-        setSelectedChordOptionIndex(null)
-      },
-    })
-  }
+    for (const { fret } of bestCapoFrets) {
+      list.push({
+        key: `capo-${fret}`,
+        label: `Capo ${fret}`,
+        apply: () => {
+          setSheetMode('chords')
+          setChordDisplayMode('capo', fret)
+        },
+      })
+    }
 
-  // Find current index
+    if (hasTabs) {
+      list.push({
+        key: 'tabs',
+        label: 'Tabs',
+        apply: () => {
+          setSheetMode('tabs')
+          setChordDisplayMode('standard')
+        },
+      })
+    }
+
+    return list
+  }, [bestCapoFrets, hasTabs, setSheetMode, setChordDisplayMode])
+
+  if (entries.length < 2) return null
+
   const currentKey =
     sheetMode === 'tabs'
       ? 'tabs'
-      : selectedChordOptionIndex !== null
-        ? String(selectedChordOptionIndex)
-        : 'standard'
+      : chordDisplayMode === 'capo'
+        ? `capo-${chordCapoFret}`
+        : chordDisplayMode
 
   const currentIdx = entries.findIndex((e) => e.key === currentKey)
   const current = entries[currentIdx >= 0 ? currentIdx : 0]
@@ -99,27 +102,12 @@ export function ChordOptionSelector({ chordOptions, hasTabs = false, recommended
           'outline-none focus:ring-1 focus:ring-flame-400/40',
         )}
         onClick={cycleNext}
-        title={`Chords: ${current.label}. Click to cycle.`}
+        title={`${current.label}. Click to cycle.`}
         aria-label={`Chord option: ${current.label}`}
       >
         <SlidersHorizontal size={16} className="text-smoke-300" />
         <span className="truncate">{current.label}</span>
       </button>
-      {current.versionKey && songId && (
-        <ChordVersionVote
-          songId={songId}
-          versionKey={current.versionKey}
-          voteScore={current.voteScore ?? 0}
-        />
-      )}
-      {(current.capo > 0 || (recommendedCapo && recommendedCapo > 0)) && (
-        <span
-          className="bg-flame-400/20 text-flame-400 text-xs px-1.5 py-0.5 rounded"
-          data-testid="chord-capo-badge"
-        >
-          Capo {current.capo > 0 ? current.capo : recommendedCapo}
-        </span>
-      )}
     </div>
   )
 }
