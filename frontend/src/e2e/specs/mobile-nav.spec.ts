@@ -13,7 +13,7 @@ test.describe('Mobile Navigation', () => {
     await page.getByTestId('nav-favorites').click()
     await expect(page.getByTestId('favorites-page')).toBeVisible()
 
-    await page.getByTestId('nav-profile').click()
+    await page.getByTestId('nav-settings').click()
     await expect(page.getByTestId('profile-page')).toBeVisible()
 
     await page.getByTestId('nav-search').click()

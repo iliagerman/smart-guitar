@@ -17,9 +17,31 @@ async function setAuthState(page: Page) {
   })
 }
 
+// Mock subscription API so SubscriptionGuard renders children
+// instead of hitting the real backend with fake tokens
+async function mockSubscriptionApi(page: Page) {
+  await page.route('**/api/v1/subscription/status', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        has_access: true,
+        trial_ends_at: null,
+        trial_active: false,
+        subscription: null,
+        has_seen_onboarding: true,
+        is_admin: false,
+        onboarding_song_id: null,
+      }),
+    })
+  })
+}
+
 export const test = base.extend<{ authenticatedPage: Page }>({
   authenticatedPage: async ({ page }, runWithPage) => {
     await setAuthState(page)
+    await mockSubscriptionApi(page)
     await runWithPage(page)
   },
 })

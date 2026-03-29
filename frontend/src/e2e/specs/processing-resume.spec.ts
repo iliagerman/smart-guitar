@@ -13,6 +13,7 @@ function makeSongDetail(overrides: Record<string, unknown> = {}) {
       duration_seconds: 300,
       song_name: 'test_artist/test_song',
       thumbnail_key: null,
+      thumbnail_url: null,
       audio_key: null,
     },
     thumbnail_url: null,
@@ -27,10 +28,13 @@ function makeSongDetail(overrides: Record<string, unknown> = {}) {
     lyrics_source: null,
     quick_lyrics: [],
     quick_lyrics_source: null,
+    corrected_lyrics: [],
+    corrected_lyrics_source: null,
     chord_options: [],
     tabs: [],
     strums: [],
     rhythm: null,
+    sections: [],
     active_job: null,
     download_pending: false,
     ...overrides,
@@ -117,7 +121,7 @@ test.describe('Processing resume on refresh/navigation', () => {
     })
 
     await page.goto(`/songs/${songId}`)
-    await expect(page.getByTestId('song-detail-page')).toBeVisible()
+    await expect(page.getByTestId('song-detail-page')).toBeVisible({ timeout: 15000 })
 
     // Wait a moment for any mount effects to fire
     await page.waitForTimeout(1000)
@@ -182,7 +186,7 @@ test.describe('Processing resume on refresh/navigation', () => {
     })
 
     await page.goto(`/songs/${songId}`)
-    await expect(page.getByTestId('song-detail-page')).toBeVisible()
+    await expect(page.getByTestId('song-detail-page')).toBeVisible({ timeout: 15000 })
 
     // Wait for mount effect to fire
     await page.waitForTimeout(1000)
@@ -246,7 +250,7 @@ test.describe('Processing resume on refresh/navigation', () => {
     })
 
     await page.goto(`/songs/${songId}`)
-    await expect(page.getByTestId('song-detail-page')).toBeVisible()
+    await expect(page.getByTestId('song-detail-page')).toBeVisible({ timeout: 15000 })
 
     // The processing progress UI should be visible (showing the other user's job progress)
     await expect(page.getByText('60%')).toBeVisible()

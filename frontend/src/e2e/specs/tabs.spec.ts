@@ -31,6 +31,7 @@ test.describe('Tabs (UI contract)', () => {
                         duration_seconds: 480,
                         song_name: 'led_zeppelin/stairway_to_heaven',
                         thumbnail_key: null,
+                        thumbnail_url: null,
                         audio_key: null,
                     },
                     thumbnail_url: null,
@@ -39,6 +40,11 @@ test.describe('Tabs (UI contract)', () => {
                     stem_types: [],
                     chords: [],
                     lyrics: [{ start: 0, end: 1, text: 'hello', words: [] }],
+                    lyrics_source: null,
+                    quick_lyrics: [],
+                    quick_lyrics_source: null,
+                    corrected_lyrics: [],
+                    corrected_lyrics_source: null,
                     chord_options: [],
                     // Forward-compat: backend may include additional fields like `tabs`.
                     tabs: [
@@ -51,6 +57,11 @@ test.describe('Tabs (UI contract)', () => {
                             confidence: 0.9,
                         },
                     ],
+                    strums: [],
+                    rhythm: null,
+                    sections: [],
+                    active_job: null,
+                    download_pending: false,
                 }),
             })
         })
