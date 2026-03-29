@@ -2,8 +2,7 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 from pydantic import BaseModel
 
@@ -17,9 +16,9 @@ class SearchRequest(BaseModel):
 class SearchResult(BaseModel):
     youtube_id: str
     title: str
-    artist: Optional[str] = None
-    duration_seconds: Optional[int] = None
-    thumbnail_url: Optional[str] = None
+    artist: str | None = None
+    duration_seconds: int | None = None
+    thumbnail_url: str | None = None
 
 
 class SearchResponse(BaseModel):
@@ -32,18 +31,18 @@ class DownloadRequest(BaseModel):
 
 class SongResponse(BaseModel):
     id: uuid.UUID
-    youtube_id: Optional[str] = None
+    youtube_id: str | None = None
     title: str
-    artist: Optional[str] = None
-    duration_seconds: Optional[int] = None
+    artist: str | None = None
+    duration_seconds: int | None = None
     song_name: str
-    thumbnail_key: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    audio_key: Optional[str] = None
-    genre: Optional[str] = None
+    thumbnail_key: str | None = None
+    thumbnail_url: str | None = None
+    audio_key: str | None = None
+    genre: str | None = None
     play_count: int = 0
     like_count: int = 0
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -54,14 +53,14 @@ class StemType(BaseModel):
 
 
 class StemUrls(BaseModel):
-    vocals: Optional[str] = None
-    drums: Optional[str] = None
-    bass: Optional[str] = None
-    guitar: Optional[str] = None
-    piano: Optional[str] = None
-    other: Optional[str] = None
-    guitar_removed: Optional[str] = None
-    vocals_guitar: Optional[str] = None
+    vocals: str | None = None
+    drums: str | None = None
+    bass: str | None = None
+    guitar: str | None = None
+    piano: str | None = None
+    other: str | None = None
+    guitar_removed: str | None = None
+    vocals_guitar: str | None = None
 
 
 class ChordEntry(BaseModel):
@@ -126,49 +125,50 @@ class SongSection(BaseModel):
     start_time: float
     end_time: float
     strum_pattern: list[str] = []  # e.g. ["down", "down", "up", "down", "up"]
-    songsterr_pattern: Optional[list[str]] = None
-    llm_pattern: Optional[list[str]] = None
+    songsterr_pattern: list[str] | None = None
+    llm_pattern: list[str] | None = None
     llm_generated: bool = False
 
 
 class SongDetailResponse(BaseModel):
     song: SongResponse
-    thumbnail_url: Optional[str] = None
-    audio_url: Optional[str] = None
+    thumbnail_url: str | None = None
+    audio_url: str | None = None
     stems: StemUrls = StemUrls()
     stem_types: list[StemType] = []
     chords: list[ChordEntry] = []
     chord_options: list[ChordOption] = []
     lyrics: list[LyricsSegment] = []
-    lyrics_source: Optional[str] = None
+    lyrics_source: str | None = None
     quick_lyrics: list[LyricsSegment] = []
-    quick_lyrics_source: Optional[str] = None
+    quick_lyrics_source: str | None = None
     corrected_lyrics: list[LyricsSegment] = []
-    corrected_lyrics_source: Optional[str] = None
+    corrected_lyrics_source: str | None = None
     ver1_lyrics: list[LyricsSegment] = []
-    ver1_lyrics_source: Optional[str] = None
+    ver1_lyrics_source: str | None = None
     ver2_lyrics: list[LyricsSegment] = []
-    ver2_lyrics_source: Optional[str] = None
+    ver2_lyrics_source: str | None = None
     ver3_lyrics: list[LyricsSegment] = []
-    ver3_lyrics_source: Optional[str] = None
+    ver3_lyrics_source: str | None = None
     ver4_lyrics: list[LyricsSegment] = []
-    ver4_lyrics_source: Optional[str] = None
+    ver4_lyrics_source: str | None = None
     tabs: list[TabNote] = []
-    tabs_source: Optional[str] = None  # "songsterr" | "detected"
+    tabs_source: str | None = None  # "songsterr" | "detected"
     strums: list[StrumEvent] = []
-    rhythm: Optional[RhythmInfo] = None
+    rhythm: RhythmInfo | None = None
     sections: list[SongSection] = []
-    source_bpm: Optional[float] = None
-    time_signature: Optional[list[int]] = None  # e.g. [3, 4] for 3/4 time
-    strum_notes: Optional[str] = None  # Playing instructions from Tavily+LLM
-    tutorial_url: Optional[str] = None  # YouTube tutorial link (best match)
+    source_bpm: float | None = None
+    time_signature: list[int] | None = None  # e.g. [3, 4] for 3/4 time
+    strum_notes: str | None = None  # Playing instructions from Tavily+LLM
+    tutorial_url: str | None = None  # YouTube tutorial link (best match)
     tutorial_links: list[dict] = []  # All tutorial links [{"url": str, "title": str}]
-    songsterr_status: Optional[str] = None  # null=pending, "ready", "failed", "unavailable"
-    chord_source: Optional[str] = None  # "gemini" | "autochord"
-    recommended_capo: Optional[int] = None  # from chord_meta.json
-    song_key: Optional[str] = None  # e.g. "Em", "G"
+    songsterr_status: str | None = None  # null=pending, "ready", "failed", "unavailable"
+    chord_source: str | None = None  # "gemini" | "autochord"
+    recommended_capo: int | None = None  # from chord_meta.json
+    song_key: str | None = None  # e.g. "Em", "G"
     web_chords_failed: bool = False
-    active_job: Optional[ActiveJobInfo] = None
+    web_chords_pending: bool = False
+    active_job: ActiveJobInfo | None = None
     download_pending: bool = False
 
 
@@ -181,11 +181,11 @@ class EnrichedSearchResult(BaseModel):
     youtube_id: str
     title: str
     link: str
-    thumbnail_url: Optional[str] = None
-    duration_seconds: Optional[int] = None
-    view_count: Optional[int] = None
+    thumbnail_url: str | None = None
+    duration_seconds: int | None = None
+    view_count: int | None = None
     exists_locally: bool = False
-    song_id: Optional[uuid.UUID] = None
+    song_id: uuid.UUID | None = None
 
 
 class EnrichedSearchResponse(BaseModel):
@@ -194,7 +194,7 @@ class EnrichedSearchResponse(BaseModel):
 
 class SelectSongRequest(BaseModel):
     song_name: str
-    youtube_id: Optional[str] = None
+    youtube_id: str | None = None
 
 
 class PaginatedSongsResponse(BaseModel):
@@ -213,14 +213,14 @@ class GenreListResponse(BaseModel):
     genres: list[GenreCount]
 
 
-class FeedbackRating(str, Enum):
+class FeedbackRating(StrEnum):
     thumbs_up = "thumbs_up"
     thumbs_down = "thumbs_down"
 
 
 class SongFeedbackRequest(BaseModel):
     rating: FeedbackRating
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class SaveUserChordsRequest(BaseModel):

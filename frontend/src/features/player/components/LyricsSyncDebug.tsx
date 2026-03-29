@@ -1,5 +1,6 @@
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { cn } from '@/lib/cn'
 import type { LyricsSegment } from '@/types/song'
 
 interface LyricsSyncDebugProps {
@@ -77,19 +78,21 @@ export function LyricsSyncDebug({
   )
 }
 
+interface DebugRowProps {
+  label: string
+  value: string
+  highlight?: boolean
+}
+
 function Row({
   label,
   value,
   highlight,
-}: {
-  label: string
-  value: string
-  highlight?: boolean
-}) {
+}: DebugRowProps) {
   return (
     <div className="flex justify-between gap-2">
       <span className="text-smoke-500 shrink-0">{label}</span>
-      <span className={`text-right truncate ${highlight ? 'text-flame-400' : ''}`}>
+      <span className={cn('text-right truncate', highlight && 'text-flame-400')}>
         {value}
       </span>
     </div>

@@ -6,6 +6,7 @@ import logging
 import re
 
 import boto3
+import httpx
 from pydantic import BaseModel
 
 from guitar_player.config import Settings
@@ -49,6 +50,13 @@ class StrumPatternResult(BaseModel):
     bpm: int = 0
     notes: str = ""  # any extra notes like "accent beat 1"
     tutorial_links: list[TutorialLink] = []  # populated from Tavily, not LLM
+
+
+class TavilySearchResult(BaseModel):
+    """Tavily web search result for strum pattern lookup."""
+
+    content: str
+    tutorial_links: list[TutorialLink] = []
 
 
 class LyricsCleanupResult(BaseModel):
@@ -153,6 +161,17 @@ def _tutorial_search_suffix(title: str, artist: str) -> str:
     return english_terms
 
 
+def _append_retry_feedback(
+    messages: list[dict], raw_text: str, error: Exception, correction: str,
+) -> None:
+    """Append assistant response + error correction to an LLM conversation."""
+    messages.append({"role": "assistant", "content": [{"text": raw_text}]})
+    messages.append({
+        "role": "user",
+        "content": [{"text": f"Your response could not be parsed: {error}\n\n{correction}"}],
+    })
+
+
 class LlmService:
     def __init__(self, settings: Settings) -> None:
         self._model_id = settings.llm_models.name_parsing
@@ -219,35 +238,12 @@ class LlmService:
                     genre=parsed.genre.lower().strip(),
                 )
             except Exception as e:
-                logger.warning(
-                    "LLM parse attempt %d/%d failed: %s",
-                    attempt + 1,
-                    MAX_LLM_RETRIES,
-                    e,
-                )
+                logger.warning("LLM parse attempt %d/%d failed: %s", attempt + 1, MAX_LLM_RETRIES, e)
                 if attempt < MAX_LLM_RETRIES - 1:
-                    # Feed the error back so the LLM can correct itself
-                    messages.append(
-                        {"role": "assistant", "content": [{"text": raw_text}]}
-                    )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "text": (
-                                        f"Your response could not be parsed: {e}\n\n"
-                                        'Please return ONLY a JSON object with "artist", "song", '
-                                        'and "genre" string fields containing the actual values '
-                                        "extracted from the video title. Do NOT return a JSON schema "
-                                        "or type definitions. "
-                                        'Example: {"artist": "eagles", "song": "hotel california", '
-                                        '"genre": "rock"}'
-                                    )
-                                }
-                            ],
-                        },
-                    )
+                    _append_retry_feedback(messages, raw_text, e, (
+                        'Return ONLY a JSON object with "artist", "song", "genre" fields. '
+                        'Example: {"artist": "eagles", "song": "hotel california", "genre": "rock"}'
+                    ))
                 else:
                     raise
 
@@ -258,11 +254,11 @@ class LlmService:
         return await asyncio.to_thread(self._parse_sync, video_title)
 
     def _parse_search_results_sync(
-        self, search_results: list[dict]
+        self, search_results: list[BaseModel],
     ) -> list[ParsedSearchItem]:
         """Send all search results to LLM in one batch call, get back parsed items."""
         titles_block = "\n".join(
-            f"{i + 1}. {r.get('title', '')}" for i, r in enumerate(search_results)
+            f"{i + 1}. {getattr(r, 'title', '')}" for i, r in enumerate(search_results)
         )
 
         prompt = (
@@ -311,41 +307,19 @@ class LlmService:
                     for item in parsed
                 ]
             except Exception as e:
-                logger.warning(
-                    "LLM batch parse attempt %d/%d failed: %s",
-                    attempt + 1,
-                    MAX_LLM_RETRIES,
-                    e,
-                )
+                logger.warning("LLM batch parse attempt %d/%d failed: %s", attempt + 1, MAX_LLM_RETRIES, e)
                 if attempt < MAX_LLM_RETRIES - 1:
-                    messages.append(
-                        {"role": "assistant", "content": [{"text": raw_text}]}
-                    )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "text": (
-                                        f"Your response could not be parsed: {e}\n\n"
-                                        "Please return ONLY a JSON array of objects, each with "
-                                        '"artist", "song", and "genre" string fields containing '
-                                        "the actual values extracted from the video titles. Do NOT "
-                                        "return JSON schema definitions or type descriptions. "
-                                        'Example: [{"artist": "eagles", "song": "hotel california", '
-                                        '"genre": "rock"}]'
-                                    )
-                                }
-                            ],
-                        },
-                    )
+                    _append_retry_feedback(messages, raw_text, e, (
+                        'Return ONLY a JSON array of objects with "artist", "song", "genre" fields. '
+                        'Example: [{"artist": "eagles", "song": "hotel california", "genre": "rock"}]'
+                    ))
                 else:
                     raise
 
         raise RuntimeError("Unreachable")
 
     async def parse_search_results(
-        self, search_results: list[dict]
+        self, search_results: list[BaseModel],
     ) -> list[ParsedSearchItem]:
         """Parse a batch of YouTube search results into artist/song via Bedrock LLM."""
         return await asyncio.to_thread(self._parse_search_results_sync, search_results)
@@ -398,31 +372,12 @@ class LlmService:
                 # Clamp to valid range
                 return max(0, min(parsed.first_lyrics_index, check_count))
             except Exception as e:
-                logger.warning(
-                    "LLM lyrics cleanup attempt %d/%d failed: %s",
-                    attempt + 1,
-                    MAX_LLM_RETRIES,
-                    e,
-                )
+                logger.warning("LLM lyrics cleanup attempt %d/%d failed: %s", attempt + 1, MAX_LLM_RETRIES, e)
                 if attempt < MAX_LLM_RETRIES - 1:
-                    messages.append(
-                        {"role": "assistant", "content": [{"text": raw_text}]}
-                    )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "text": (
-                                        f"Your response could not be parsed: {e}\n\n"
-                                        "Please return ONLY a JSON object with a "
-                                        '"first_lyrics_index" integer field. '
-                                        'Example: {"first_lyrics_index": 3}'
-                                    )
-                                }
-                            ],
-                        },
-                    )
+                    _append_retry_feedback(messages, raw_text, e, (
+                        'Return ONLY a JSON object with "first_lyrics_index" integer field. '
+                        'Example: {"first_lyrics_index": 3}'
+                    ))
                 else:
                     raise
 
@@ -436,6 +391,32 @@ class LlmService:
 
     # ---- Lyrics source merging ----
 
+    @staticmethod
+    def _validate_segment_mappings(
+        parsed: list[LyricsSegmentMapping], expected: int, max_regular_index: int,
+    ) -> None:
+        """Validate LLM-produced segment mappings for correctness."""
+        if len(parsed) != expected:
+            raise ValueError(f"Expected {expected} mappings, got {len(parsed)}")
+
+        for idx, mapping in enumerate(parsed):
+            if mapping.quick_index != idx:
+                raise ValueError(f"Expected quick_index {idx}, got {mapping.quick_index}")
+            if mapping.regular_start_index < 0 or mapping.regular_end_index < 0:
+                raise ValueError("Regular segment indices must be non-negative")
+            if mapping.regular_start_index > mapping.regular_end_index:
+                raise ValueError("regular_start_index cannot be greater than regular_end_index")
+            if mapping.regular_end_index > max_regular_index:
+                raise ValueError(
+                    f"Regular segment index out of range: {mapping.regular_end_index} > {max_regular_index}"
+                )
+            if idx > 0:
+                prev = parsed[idx - 1]
+                if mapping.regular_start_index < prev.regular_start_index:
+                    raise ValueError("Mappings are not monotonic in regular_start_index")
+                if mapping.regular_end_index < prev.regular_end_index:
+                    raise ValueError("Mappings are not monotonic in regular_end_index")
+
     def _align_lyrics_segments_sync(
         self,
         quick_segments: list[dict],
@@ -443,19 +424,15 @@ class LlmService:
     ) -> list[LyricsSegmentMapping]:
         """Map quick lyric segments to regular lyric timing segments via Bedrock."""
         quick_block = "\n".join(
-            (
-                f"Q{segment['index']}: text={segment['text']!r}; "
-                f"words={segment.get('words', [])}; count={segment.get('word_count', 0)}"
-            )
-            for segment in quick_segments
+            f"Q{s['index']}: text={s['text']!r}; "
+            f"words={s.get('words', [])}; count={s.get('word_count', 0)}"
+            for s in quick_segments
         )
         regular_block = "\n".join(
-            (
-                f"R{segment['index']}: {segment['start']:.3f}-{segment['end']:.3f}; "
-                f"text={segment['text']!r}; words={segment.get('words', [])}; "
-                f"count={segment.get('word_count', 0)}"
-            )
-            for segment in regular_segments
+            f"R{s['index']}: {s['start']:.3f}-{s['end']:.3f}; "
+            f"text={s['text']!r}; words={s.get('words', [])}; "
+            f"count={s.get('word_count', 0)}"
+            for s in regular_segments
         )
 
         prompt = (
@@ -501,67 +478,17 @@ class LlmService:
                     raise ValueError(f"No JSON array found in LLM response: {raw_text}")
 
                 raw_list = json.loads(json_match.group())
-                parsed = [
-                    LyricsSegmentMapping.model_validate(item) for item in raw_list
-                ]
-
-                if len(parsed) != expected:
-                    raise ValueError(f"Expected {expected} mappings, got {len(parsed)}")
-
-                for idx, mapping in enumerate(parsed):
-                    if mapping.quick_index != idx:
-                        raise ValueError(
-                            f"Expected quick_index {idx}, got {mapping.quick_index}"
-                        )
-                    if mapping.regular_start_index < 0 or mapping.regular_end_index < 0:
-                        raise ValueError("Regular segment indices must be non-negative")
-                    if mapping.regular_start_index > mapping.regular_end_index:
-                        raise ValueError(
-                            "regular_start_index cannot be greater than regular_end_index"
-                        )
-                    if mapping.regular_end_index > max_regular_index:
-                        raise ValueError(
-                            f"Regular segment index out of range: {mapping.regular_end_index} > {max_regular_index}"
-                        )
-                    if idx > 0:
-                        prev = parsed[idx - 1]
-                        if mapping.regular_start_index < prev.regular_start_index:
-                            raise ValueError(
-                                "Mappings are not monotonic in regular_start_index"
-                            )
-                        if mapping.regular_end_index < prev.regular_end_index:
-                            raise ValueError(
-                                "Mappings are not monotonic in regular_end_index"
-                            )
-
+                parsed = [LyricsSegmentMapping.model_validate(item) for item in raw_list]
+                self._validate_segment_mappings(parsed, expected, max_regular_index)
                 return parsed
             except Exception as e:
-                logger.warning(
-                    "LLM lyrics segment alignment attempt %d/%d failed: %s",
-                    attempt + 1,
-                    MAX_LLM_RETRIES,
-                    e,
-                )
+                logger.warning("LLM alignment attempt %d/%d failed: %s", attempt + 1, MAX_LLM_RETRIES, e)
                 if attempt < MAX_LLM_RETRIES - 1:
-                    messages.append(
-                        {"role": "assistant", "content": [{"text": raw_text}]}
-                    )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "text": (
-                                        f"Your response could not be parsed or validated: {e}\n\n"
-                                        f"Return ONLY a JSON array of exactly {expected} mapping objects. "
-                                        "Each object must contain quick_index, regular_start_index, "
-                                        "regular_end_index, and confidence. quick_index must match the "
-                                        "quick segment index in order, and regular indices must stay monotonic."
-                                    )
-                                }
-                            ],
-                        },
-                    )
+                    _append_retry_feedback(messages, raw_text, e, (
+                        f"Return ONLY a JSON array of exactly {expected} mapping objects with "
+                        "quick_index, regular_start_index, regular_end_index, confidence. "
+                        "quick_index must match in order, regular indices must stay monotonic."
+                    ))
                 else:
                     raise
 
@@ -641,13 +568,8 @@ class LlmService:
     @staticmethod
     def _search_strum_pattern(
         artist: str, title: str, tavily_api_key: str,
-    ) -> dict | None:
-        """Search the web for strumming pattern info via Tavily.
-
-        Returns dict with 'content' (text for LLM) and 'tutorial_links' (YouTube/tutorial URLs).
-        """
-        import httpx
-
+    ) -> TavilySearchResult | None:
+        """Search the web for strumming pattern info via Tavily."""
         query = f'{title} {artist} {_tutorial_search_suffix(title, artist)}'
         try:
             resp = httpx.post(
@@ -673,106 +595,93 @@ class LlmService:
         if not results and not answer:
             return None
 
-        # Combine Tavily answer + search result content for the LLM
         snippets: list[str] = []
         if answer:
             snippets.append(f"Tavily AI Answer:\n{answer}")
 
-        # Extract tutorial links (YouTube, lesson sites)
-        tutorial_links: list[dict[str, str]] = []
+        _TUTORIAL_DOMAINS = ["youtube.com", "youtu.be", "justinguitar.com", "guitartricks.com"]
+        tutorial_links: list[TutorialLink] = []
         for r in results[:5]:
             source = r.get("url", "")
             content = r.get("content", "")
             title_text = r.get("title", "")
             if content:
                 snippets.append(f"Source: {source}\n{content}")
-            if source and any(
-                domain in source for domain in
-                ["youtube.com", "youtu.be", "justinguitar.com", "guitartricks.com"]
-            ):
-                tutorial_links.append({
-                    "url": source,
-                    "title": title_text or content[:80] if content else source,
-                })
+            if source and any(domain in source for domain in _TUTORIAL_DOMAINS):
+                tutorial_links.append(TutorialLink(
+                    url=source,
+                    title=title_text or content[:80] if content else source,
+                ))
 
         combined = "\n\n---\n\n".join(snippets)
         logger.info(
             "Tavily: found %d results, %d tutorials for %r by %r (%d chars)",
             len(results), len(tutorial_links), title, artist, len(combined),
         )
-        return {"content": combined, "tutorial_links": tutorial_links}
+        return TavilySearchResult(content=combined, tutorial_links=tutorial_links)
+
+    @staticmethod
+    def _build_strum_prompt(
+        artist: str, title: str, search_context: str,
+        time_signature: tuple[int, int] | None,
+    ) -> str:
+        """Build the LLM prompt for strumming pattern extraction."""
+        time_sig_line = ""
+        if time_signature:
+            time_sig_line = f"- The song is in {time_signature[0]}/{time_signature[1]} time.\n"
+
+        common_rules = (
+            "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
+            "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
+            "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: "
+            "1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
+            f"{time_sig_line}"
+        )
+
+        if search_context:
+            return (
+                f"{search_context}"
+                f'extract the strumming pattern for "{title}" by {artist}.\n\n'
+                f"Rules:\n{common_rules}"
+                "- IMPORTANT: Extract ALL distinct patterns from the search results.\n"
+                "  If there is a basic/simple pattern AND an expanded/full pattern, list BOTH.\n"
+                "  If different parts use different patterns, list EACH as a separate section.\n"
+                "- Include the approximate BPM from the search results.\n"
+                "- In the 'notes' field, include playing instructions: time signature, rhythm feel, "
+                "accent patterns, tempo tips, chord voicing suggestions.\n"
+            )
+
+        return (
+            f'What is the standard strumming pattern for "{title}" by {artist}?\n\n'
+            "Return the beginner/standard pattern as commonly taught on guitar tutorial sites.\n\n"
+            f"Rules:\n{common_rules}"
+            "- If different parts use different patterns, list EACH as a separate section.\n"
+            "- If the whole song uses one pattern, use section name 'Song'.\n"
+            "- Include the approximate BPM.\n"
+            "- IMPORTANT: If you're not sure, return an empty sections array. Do NOT guess.\n"
+        )
 
     def _lookup_strum_patterns_sync(
         self, artist: str, title: str,
         time_signature: tuple[int, int] | None = None,
         tavily_api_key: str | None = None,
     ) -> StrumPatternResult | None:
-        """Look up strumming pattern via web search + LLM parsing.
-
-        1. Search the web for strumming pattern info (Tavily)
-        2. Feed search results to the LLM for structured extraction
-        Falls back to pure LLM knowledge if search fails.
-        """
-        time_sig_line = ""
-        if time_signature:
-            time_sig_line = f"- The song is in {time_signature[0]}/{time_signature[1]} time.\n"
-
-        # Step 1: Search the web for strumming pattern info
+        """Look up strumming pattern via web search + LLM parsing."""
         search_context = ""
-        self._last_tutorial_links: list[dict[str, str]] = []
+        self._last_tutorial_links: list[TutorialLink] = []
         if tavily_api_key:
             search_result = self._search_strum_pattern(artist, title, tavily_api_key)
             if search_result:
-                self._last_tutorial_links = search_result.get("tutorial_links", [])
-                web_content = search_result["content"]
+                self._last_tutorial_links = search_result.tutorial_links
                 search_context = (
                     "I found the following information about this song's strumming pattern "
                     "from guitar tutorial websites. Use this to extract the pattern:\n\n"
-                    f"{web_content}\n\n"
+                    f"{search_result.content}\n\n"
                     "Based on the above search results, "
                 )
 
-        # Step 2: Build the prompt
-        if search_context:
-            prompt = (
-                f"{search_context}"
-                f'extract the strumming pattern for "{title}" by {artist}.\n\n'
-                "Rules:\n"
-                "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
-                "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
-                "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
-                f"{time_sig_line}"
-                "- IMPORTANT: Extract ALL distinct patterns from the search results.\n"
-                "  If there is a basic/simple pattern AND an expanded/full pattern, list BOTH as separate sections.\n"
-                "  If different parts of the song use different patterns "
-                "(e.g. verse vs chorus, or different chord groups), list EACH as a separate section.\n"
-                "  Use descriptive section names like 'Basic Pattern', 'Expanded Pattern', "
-                "'Verse', 'Chorus', 'G & D chords', etc.\n"
-                "- Include the approximate BPM from the search results.\n"
-                "- In the 'notes' field, include useful playing instructions: time signature, "
-                "rhythm feel (e.g. waltz, shuffle, swing), accent patterns, "
-                "tempo tips, chord voicing suggestions, and any other helpful info from the search results.\n"
-            )
-        else:
-            prompt = (
-                f'What is the standard strumming pattern for "{title}" by {artist}?\n\n'
-                "Return the beginner/standard pattern as commonly taught on guitar tutorial sites.\n\n"
-                "Rules:\n"
-                "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
-                "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
-                "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
-                f"{time_sig_line}"
-                "- If different parts use different patterns (verse vs chorus, or different chord groups), "
-                "list EACH as a separate section with descriptive names.\n"
-                "- If the whole song uses one pattern, use section name 'Song'.\n"
-                "- Include the approximate BPM.\n"
-                "- IMPORTANT: If you're not sure about this specific song, return an empty sections array.\n"
-                "  Do NOT guess — only return patterns you're confident about.\n"
-            )
-
-        messages: list[dict] = [
-            {"role": "user", "content": [{"text": prompt}]},
-        ]
+        prompt = self._build_strum_prompt(artist, title, search_context, time_signature)
+        messages: list[dict] = [{"role": "user", "content": [{"text": prompt}]}]
 
         for attempt in range(MAX_LLM_RETRIES):
             try:
@@ -781,38 +690,23 @@ class LlmService:
                     messages=messages,
                     toolConfig=self._STRUM_TOOL_SCHEMA,
                 )
-
-                # Extract tool_use block from response
                 for block in response["output"]["message"]["content"]:
-                    if block.get("toolUse"):
-                        tool_input = block["toolUse"]["input"]
-                        result = StrumPatternResult.model_validate(tool_input)
-                        # Attach tutorial links from Tavily search
-                        result.tutorial_links = [
-                            TutorialLink(**link) for link in self._last_tutorial_links
-                        ]
-                        if result.sections:
-                            logger.info(
-                                "LLM strum lookup: got %d sections for %r by %r (web_search=%s)",
-                                len(result.sections), title, artist,
-                                bool(search_context),
-                            )
-                            return result
-
+                    if not block.get("toolUse"):
+                        continue
+                    result = StrumPatternResult.model_validate(block["toolUse"]["input"])
+                    result.tutorial_links = list(self._last_tutorial_links)
+                    if result.sections:
                         logger.info(
-                            "LLM strum lookup: empty sections for %r by %r",
-                            title, artist,
+                            "LLM strum lookup: got %d sections for %r by %r (web_search=%s)",
+                            len(result.sections), title, artist, bool(search_context),
                         )
-                        return None
+                        return result
+                    logger.info("LLM strum lookup: empty sections for %r by %r", title, artist)
+                    return None
 
-                logger.warning(
-                    "LLM strum lookup: no tool_use in response (attempt %d)", attempt,
-                )
-
+                logger.warning("LLM strum lookup: no tool_use in response (attempt %d)", attempt)
             except Exception as e:
-                logger.warning(
-                    "LLM strum lookup failed (attempt %d): %s", attempt, e,
-                )
+                logger.warning("LLM strum lookup failed (attempt %d): %s", attempt, e)
 
         return None
 

@@ -1,6 +1,10 @@
 import { useAnalyticsFilterStore } from '@/stores/analytics-filter.store'
 
-export function UserFilterSelect({ emails }: { emails: string[] }) {
+interface UserFilterSelectProps {
+    emails: string[]
+}
+
+export function UserFilterSelect({ emails }: UserFilterSelectProps) {
     const userEmail = useAnalyticsFilterStore((s) => s.userEmail)
     const setUserEmail = useAnalyticsFilterStore((s) => s.setUserEmail)
 
@@ -14,6 +18,7 @@ export function UserFilterSelect({ emails }: { emails: string[] }) {
                     onChange={(e) => setUserEmail(e.target.value)}
                     placeholder="All users"
                     className="rounded-lg border border-charcoal-700 bg-charcoal-950 px-3 py-2 text-sm text-smoke-100 outline-none transition-colors focus:border-flame-400/40"
+                    data-testid="user-filter-select-input"
                 />
             </label>
             <datalist id="analytics-user-emails">

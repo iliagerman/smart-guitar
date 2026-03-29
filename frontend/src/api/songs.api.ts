@@ -1,4 +1,5 @@
 import { api } from '../config/api'
+import type { MessageResponse, PaginatedResponse } from '../types/api'
 import type { ChordEntry, LyricsSegment, Song, SongDetail, SongSection, SearchResult } from '../types/song'
 
 interface SaveUserChordsPayload {
@@ -20,11 +21,10 @@ interface ChordVersionVoteResponse {
   vote_score: number
 }
 
-export type PaginatedResponse<T> = {
-  items: T[]
-  total: number
-  offset: number
-  limit: number
+interface RegenerateResponse {
+  enqueued: string[]
+  skipped: string[]
+  errors: string[]
 }
 
 export const songsApi = {
@@ -52,17 +52,17 @@ export const songsApi = {
     api.get<SongDetail>(`/api/v1/songs/${songId}`).then((r) => r.data),
 
   recordPlay: (songId: string) =>
-    api.post(`/api/v1/songs/${songId}/play`).then((r) => r.data),
+    api.post<MessageResponse>(`/api/v1/songs/${songId}/play`).then((r) => r.data),
 
   submitFeedback: (songId: string, rating: 'thumbs_up' | 'thumbs_down', comment?: string) =>
-    api.post(`/api/v1/songs/${songId}/feedback`, { rating, comment }),
+    api.post<MessageResponse>(`/api/v1/songs/${songId}/feedback`, { rating, comment }).then((r) => r.data),
 
   generateAiStrumPatterns: (songId: string) =>
     api.post<SongSection[]>(`/api/v1/songs/${songId}/strum-patterns/ai`).then((r) => r.data),
 
   regenerate: (songId: string, targets: string[]) =>
     api
-      .post<{ enqueued: string[]; skipped: string[]; errors: string[] }>(
+      .post<RegenerateResponse>(
         `/api/v1/songs/${songId}/regenerate`,
         { targets },
       )

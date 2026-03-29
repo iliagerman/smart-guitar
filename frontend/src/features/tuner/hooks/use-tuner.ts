@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { PitchDetector } from 'pitchy'
 import {
   type GuitarString,
@@ -9,16 +9,17 @@ import {
   centsFromTarget,
   shiftTuning,
 } from '../lib/tuning'
+import { useTunerState } from './use-tuner-state'
 
 const CLARITY_THRESHOLD = 0.85
 const FFT_SIZE = 8192
-const HOLD_MS = 600 // keep last note visible for this long after signal drops
+const HOLD_MS = 600
 const SMOOTHING_WINDOW_SIZE = 9
 const MIN_DETECTABLE_FREQUENCY = 70
 const MAX_DETECTABLE_FREQUENCY = 400
-const MIN_RMS_THRESHOLD = 0.008 // ignore signal below this RMS level
-const OUTLIER_CENTS_THRESHOLD = 80 // reject readings that jump more than this from the median
-const MIN_CONSECUTIVE_GOOD = 2 // require N consecutive good reads before updating display
+const MIN_RMS_THRESHOLD = 0.008
+const OUTLIER_CENTS_THRESHOLD = 80
+const MIN_CONSECUTIVE_GOOD = 2
 
 function roundToTenth(value: number) {
   return Math.round(value * 10) / 10
@@ -60,12 +61,10 @@ function computeRms(buffer: Float32Array): number {
 }
 
 function smoothPitch(history: number[], nextPitch: number) {
-  // Reject outlier: if we have history, check the new reading isn't wildly different
   if (history.length >= 3) {
     const currentMedian = median(history)
     const deviation = Math.abs(1200 * Math.log2(nextPitch / currentMedian))
     if (deviation > OUTLIER_CENTS_THRESHOLD) {
-      // Don't add this reading — it's likely noise
       return currentMedian
     }
   }
@@ -96,19 +95,11 @@ export interface TunerState {
 }
 
 export function useTuner(): TunerState {
-  const [isListening, setIsListening] = useState(false)
-  const [permissionDenied, setPermissionDenied] = useState(false)
-  const [detectedNote, setDetectedNote] = useState<DetectedNote | null>(null)
-  const [detectedFrequency, setDetectedFrequency] = useState<number | null>(null)
-  const [cents, setCents] = useState(0)
-  const [clarity, setClarity] = useState(0)
-  const [nearestString, setNearestString] = useState<GuitarString | null>(null)
-  const [selectedString, setSelectedString] = useState<GuitarString | null>(null)
-  const [semitoneOffset, setSemitoneOffset] = useState(0)
+  const [state, actions] = useTunerState()
 
   const activeTuning = useMemo(
-    () => shiftTuning(STANDARD_TUNING, semitoneOffset),
-    [semitoneOffset]
+    () => shiftTuning(STANDARD_TUNING, state.semitoneOffset),
+    [state.semitoneOffset]
   )
 
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -143,16 +134,10 @@ export function useTuner(): TunerState {
       audioContextRef.current = null
     }
     pitchHistoryRef.current = []
-    setIsListening(false)
-    setDetectedNote(null)
-    setDetectedFrequency(null)
-    setNearestString(null)
-    setCents(0)
-    setClarity(0)
-  }, [])
+    actions.stopListening()
+  }, [actions])
 
   const start = useCallback(async () => {
-    // Prevent double-start
     if (isRunningRef.current) return
 
     try {
@@ -166,7 +151,6 @@ export function useTuner(): TunerState {
 
       const audioContext = new AudioContext()
 
-      // iOS Safari requires explicit resume from user gesture
       if (audioContext.state === 'suspended') {
         await audioContext.resume()
       }
@@ -190,53 +174,43 @@ export function useTuner(): TunerState {
       highpass.connect(lowpass)
       lowpass.connect(analyser)
 
-      // Store refs
       streamRef.current = stream
       audioContextRef.current = audioContext
       sourceRef.current = source
       analyserRef.current = analyser
       isRunningRef.current = true
 
-      setIsListening(true)
-      setPermissionDenied(false)
+      actions.startListening()
       pitchHistoryRef.current = []
 
-      // Start detection loop — all resources captured directly, not via refs
       const buffer = new Float32Array(analyser.fftSize)
       const detector = PitchDetector.forFloat32Array(analyser.fftSize)
       detector.minVolumeDecibels = -25
 
       let lastGoodTime = 0
       let consecutiveGood = 0
-      let pendingNote: DetectedNote | null = null
-      let pendingFrequency = 0
-      let pendingNearest: GuitarString | null = null
 
       const loop = () => {
         if (!isRunningRef.current) return
 
         analyser.getFloatTimeDomainData(buffer)
 
-        // Volume gate: ignore signal below minimum RMS threshold
         const rms = computeRms(buffer)
         if (rms < MIN_RMS_THRESHOLD) {
           const now = performance.now()
           if (now - lastGoodTime > HOLD_MS) {
             pitchHistoryRef.current = []
             consecutiveGood = 0
-            setDetectedNote(null)
-            setDetectedFrequency(null)
-            setNearestString(null)
-            setCents(0)
+            actions.clearDetection()
           }
-          setClarity(0)
+          actions.setClarity(0)
           rafRef.current = requestAnimationFrame(loop)
           return
         }
 
         const [pitch, clar] = detector.findPitch(buffer, audioContext.sampleRate)
 
-        setClarity(clar)
+        actions.setClarity(clar)
 
         const now = performance.now()
 
@@ -252,26 +226,16 @@ export function useTuner(): TunerState {
           const note = findNearestNote(stablePitch)
           const nearest = findNearestString(stablePitch, activeTuningRef.current)
 
-          pendingNote = note
-          pendingFrequency = roundToTenth(stablePitch)
-          pendingNearest = nearest
           consecutiveGood++
 
-          // Only update display after N consecutive good readings
           if (consecutiveGood >= MIN_CONSECUTIVE_GOOD) {
-            setDetectedNote(pendingNote)
-            setDetectedFrequency(pendingFrequency)
-            setNearestString(pendingNearest)
-            setCents(note.cents)
+            actions.updateDetection(note, roundToTenth(stablePitch), nearest, note.cents)
           }
         } else {
           consecutiveGood = 0
           if (now - lastGoodTime > HOLD_MS) {
             pitchHistoryRef.current = []
-            setDetectedNote(null)
-            setDetectedFrequency(null)
-            setNearestString(null)
-            setCents(0)
+            actions.clearDetection()
           }
         }
 
@@ -281,26 +245,21 @@ export function useTuner(): TunerState {
       rafRef.current = requestAnimationFrame(loop)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
-        setPermissionDenied(true)
+        actions.permissionDenied()
       }
       stopInternal()
     }
-  }, [stopInternal])
-
-  const selectString = useCallback((s: GuitarString | null) => {
-    setSelectedString(s)
-  }, [])
+  }, [stopInternal, actions])
 
   useEffect(() => {
-    selectedStringRef.current = selectedString
-  }, [selectedString])
+    selectedStringRef.current = state.selectedString
+  }, [state.selectedString])
 
   useEffect(() => {
     activeTuningRef.current = activeTuning
-    // Update selected string to match new tuning frequencies
-    if (selectedString) {
-      const updated = activeTuning.find((s) => s.stringNumber === selectedString.stringNumber)
-      if (updated) setSelectedString(updated)
+    if (state.selectedString) {
+      const updated = activeTuning.find((s) => s.stringNumber === state.selectedString!.stringNumber)
+      if (updated) actions.selectString(updated)
     }
   }, [activeTuning]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -317,24 +276,24 @@ export function useTuner(): TunerState {
 
   // Recompute cents when selectedString changes (manual mode)
   const effectiveCents =
-    selectedString && detectedFrequency
-      ? centsFromTarget(detectedFrequency, selectedString.frequency)
-      : cents
+    state.selectedString && state.detectedFrequency
+      ? centsFromTarget(state.detectedFrequency, state.selectedString.frequency)
+      : state.cents
 
   return {
-    isListening,
-    permissionDenied,
-    detectedNote,
-    detectedFrequency,
+    isListening: state.isListening,
+    permissionDenied: state.permissionDenied,
+    detectedNote: state.detectedNote,
+    detectedFrequency: state.detectedFrequency,
     cents: effectiveCents,
-    clarity,
-    nearestString,
-    selectedString,
-    semitoneOffset,
+    clarity: state.clarity,
+    nearestString: state.nearestString,
+    selectedString: state.selectedString,
+    semitoneOffset: state.semitoneOffset,
     activeTuning,
     start,
     stop: stopInternal,
-    selectString,
-    setSemitoneOffset,
+    selectString: actions.selectString,
+    setSemitoneOffset: actions.setSemitoneOffset,
   }
 }

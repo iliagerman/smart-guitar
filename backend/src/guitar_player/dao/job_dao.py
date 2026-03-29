@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,8 +55,8 @@ class JobDAO(BaseDAO[Job, JobRecord]):
         self,
         job_id: uuid.UUID,
         status: str,
-        results: Optional[list] = None,
-        error_message: Optional[str] = None,
+        results: list | None = None,
+        error_message: str | None = None,
     ) -> JobRecord | None:
         kwargs: dict = {"status": status}
         if results is not None:

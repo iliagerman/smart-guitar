@@ -228,7 +228,14 @@ function computeBaseFret(frets: ChordShape['frets']): number {
     return min
 }
 
-export function ChordDiagram({ chord }: { chord: string }) {
+interface ChordDiagramProps {
+    chord: string
+}
+
+/**
+ * Renders a guitar chord fingering diagram showing fret positions for a given chord.
+ */
+export function ChordDiagram({ chord }: ChordDiagramProps) {
     const shape = getShape(chord)
 
     if (!shape) {
@@ -241,7 +248,7 @@ export function ChordDiagram({ chord }: { chord: string }) {
     const strings = ['E', 'A', 'D', 'G', 'B', 'e'] as const
 
     return (
-        <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3">
+        <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3" aria-label={`${formatChordName(chord)} chord diagram`}>
             <div className="flex items-baseline justify-between gap-2">
                 <div className="text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatChordName(chord)}</div>
                 {baseFret > 1 && <div className="text-xs text-smoke-500">fret {baseFret}</div>}
@@ -308,6 +315,29 @@ export function ChordDiagram({ chord }: { chord: string }) {
     )
 }
 
+interface TutorialLink {
+    url: string
+    title: string
+}
+
+interface ChordMapProps {
+    chords: string[]
+    representativePattern?: StrumSymbol[]
+    sectionPatterns?: SectionStrumPattern[]
+    bpm?: number
+    strumNotes?: string | null
+    tutorialUrl?: string | null
+    tutorialLinks?: TutorialLink[]
+    strumLoading?: boolean
+    showHeader?: boolean
+    songKey?: string | null
+    className?: string
+    onOpenTutorial?: () => void
+}
+
+/**
+ * Displays a grid of chord diagrams with optional strum pattern and tutorial links.
+ */
 export function ChordMap({
     chords,
     sectionPatterns,
@@ -320,20 +350,7 @@ export function ChordMap({
     songKey,
     className,
     onOpenTutorial,
-}: {
-    chords: string[]
-    representativePattern?: StrumSymbol[]
-    sectionPatterns?: SectionStrumPattern[]
-    bpm?: number
-    strumNotes?: string | null
-    tutorialUrl?: string | null
-    tutorialLinks?: { url: string; title: string }[]
-    strumLoading?: boolean
-    showHeader?: boolean
-    songKey?: string | null
-    className?: string
-    onOpenTutorial?: () => void
-}) {
+}: ChordMapProps) {
     const unique = useMemo(() => {
         const seen = new Set<string>()
         const out: string[] = []

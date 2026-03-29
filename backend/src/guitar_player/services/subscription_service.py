@@ -4,7 +4,6 @@ Kept intact for potential re-enablement. Implements the same interface
 as AllPayProvider so the dependency factory can swap between them.
 """
 
-import asyncio
 import hashlib
 import hmac
 import logging
@@ -388,3 +387,20 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return None
+
+
+class OnboardingService:
+    """Manages user onboarding state (seen/reset)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._user_dao = UserDAO(session)
+
+    async def mark_seen(self, user_sub: str, user_email: str) -> None:
+        """Mark the onboarding as seen for the given user."""
+        db_user = await self._user_dao.get_or_create(user_sub, user_email)
+        await self._user_dao.update_by_id(db_user.id, has_seen_onboarding=True)
+
+    async def reset(self, user_sub: str, user_email: str) -> None:
+        """Reset the onboarding flag for the given user."""
+        db_user = await self._user_dao.get_or_create(user_sub, user_email)
+        await self._user_dao.update_by_id(db_user.id, has_seen_onboarding=False)

@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { useRegister } from '../hooks/use-register'
+import { useGoogleSignIn } from '../hooks/use-google-signin'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
-import { signInWithRedirect } from 'aws-amplify/auth'
-import { env } from '@/config/env'
 import { trackEvent } from '@/lib/meta-pixel'
 
 function getErrorDetail(error: unknown): string | null {
@@ -18,32 +17,9 @@ export function RegisterForm() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [mismatchError, setMismatchError] = useState('')
-  const [googleError, setGoogleError] = useState<string | null>(null)
-  const [googlePending, setGooglePending] = useState(false)
   const register = useRegister()
   const navigate = useNavigate()
-
-  const handleGoogleSignUp = async () => {
-    setGoogleError(null)
-
-    if (!env.cognitoUserPoolId || !env.cognitoClientId || !env.cognitoDomain) {
-      setGoogleError('Google sign-up is not configured for this environment.')
-      return
-    }
-
-    try {
-      setGooglePending(true)
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-'))
-        .forEach(k => localStorage.removeItem(k))
-      trackEvent('CompleteRegistration', { method: 'google' })
-      await signInWithRedirect({ provider: 'Google' })
-    } catch (err) {
-      setGooglePending(false)
-      const msg = err instanceof Error ? err.message : String(err)
-      setGoogleError(`Google sign-up failed: ${msg}`)
-    }
-  }
+  const { googleError, googlePending, handleGoogleSignIn } = useGoogleSignIn()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,7 +51,7 @@ export function RegisterForm() {
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="register-email"
         required
       />
@@ -86,7 +62,7 @@ export function RegisterForm() {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="register-password"
         required
       />
@@ -97,7 +73,7 @@ export function RegisterForm() {
         placeholder="Confirm password"
         value={confirmPassword}
         onChange={(e) => { setConfirmPassword(e.target.value); setMismatchError('') }}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="register-confirm-password"
         required
       />
@@ -123,7 +99,7 @@ export function RegisterForm() {
       </div>
       <button
         type="button"
-        onClick={handleGoogleSignUp}
+        onClick={() => handleGoogleSignIn(trackEvent, 'CompleteRegistration')}
         disabled={googlePending}
         className="w-full py-3 bg-charcoal-700 border border-charcoal-600 text-smoke-100 font-semibold rounded-lg flex items-center justify-center gap-3 hover:border-smoke-500 transition-colors"
         data-testid="google-signup"
@@ -134,7 +110,7 @@ export function RegisterForm() {
           <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
           <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
         </svg>
-        {googlePending ? 'Redirecting…' : 'Sign up with Google'}
+        {googlePending ? 'Redirecting...' : 'Sign up with Google'}
       </button>
       {googleError && (
         <p className="text-red-500 text-sm text-center" data-testid="google-signup-error">
@@ -143,7 +119,7 @@ export function RegisterForm() {
       )}
       <p className="text-center text-smoke-400 text-sm mt-4">
         Already have an account?{' '}
-        <Link to={ROUTES.LOGIN} className="text-flame-400 hover:text-flame-500 transition-colors">
+        <Link to={ROUTES.LOGIN} className="text-flame-400 hover:text-flame-500 transition-colors" data-testid="login-link">
           Sign in
         </Link>
       </p>

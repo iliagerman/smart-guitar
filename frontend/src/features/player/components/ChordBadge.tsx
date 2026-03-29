@@ -8,13 +8,17 @@ interface ChordBadgeProps {
   onClick?: () => void
 }
 
+/**
+ * Compact chord name badge used in chord timelines and selectors.
+ */
 export const ChordBadge = forwardRef<HTMLButtonElement, ChordBadgeProps>(
-  ({ chord, isActive, onClick }, ref) => {
+  function ChordBadge({ chord, isActive, onClick }, ref) {
     if (chord === 'N') return null
 
     return (
       <button
         ref={ref}
+        type="button"
         onClick={onClick}
         className={cn(
           'px-2 py-1 rounded text-xs font-mono whitespace-nowrap transition-all flex-shrink-0 border',
@@ -23,11 +27,11 @@ export const ChordBadge = forwardRef<HTMLButtonElement, ChordBadgeProps>(
             : 'bg-charcoal-700 border-charcoal-600 hover:border-flame-400/30',
           getChordColor(chord, 'dark')
         )}
+        aria-label={`Chord ${chord}`}
+        data-testid="chord-badge"
       >
         {chord}
       </button>
     )
   }
 )
-
-ChordBadge.displayName = 'ChordBadge'

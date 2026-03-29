@@ -28,6 +28,7 @@ export function DateRangePicker() {
                                 ? 'border-flame-400/40 bg-flame-400/15 text-smoke-100'
                                 : 'border-charcoal-700 text-smoke-300 hover:border-flame-400/20 hover:bg-flame-400/10 hover:text-smoke-100',
                         )}
+                        data-testid={`date-range-preset-${key}-button`}
                     >
                         {label}
                     </button>
@@ -41,6 +42,7 @@ export function DateRangePicker() {
                         value={startDate}
                         onChange={(e) => setCustomRange(e.target.value, endDate)}
                         className="rounded-lg border border-charcoal-700 bg-charcoal-950 px-3 py-2 text-sm text-smoke-100 outline-none transition-colors focus:border-flame-400/40"
+                        data-testid="date-range-start-input"
                     />
                 </label>
                 <label className="flex flex-col gap-1 text-sm text-smoke-300">
@@ -50,6 +52,7 @@ export function DateRangePicker() {
                         value={endDate}
                         onChange={(e) => setCustomRange(startDate, e.target.value)}
                         className="rounded-lg border border-charcoal-700 bg-charcoal-950 px-3 py-2 text-sm text-smoke-100 outline-none transition-colors focus:border-flame-400/40"
+                        data-testid="date-range-end-input"
                     />
                 </label>
             </div>

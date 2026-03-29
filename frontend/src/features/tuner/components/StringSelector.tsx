@@ -30,6 +30,8 @@ export function StringSelector({
               ? 'bg-flame-400/15 border-flame-400/40 text-flame-400'
               : 'border-charcoal-700 text-smoke-500 hover:border-charcoal-600 hover:text-smoke-300'
           )}
+          aria-label="Auto-detect string"
+          data-testid="string-auto-button"
         >
           Auto
         </button>
@@ -52,6 +54,9 @@ export function StringSelector({
                     ? 'bg-flame-400/10 border-flame-400/20 text-smoke-200'
                     : 'border-charcoal-700 text-smoke-500 hover:border-charcoal-600 hover:text-smoke-300'
               )}
+              aria-label={`Select string ${str.stringNumber} (${str.note})`}
+              aria-pressed={isSelected}
+              data-testid={`string-${str.stringNumber}-button`}
             >
               <div className="text-base leading-none">{str.note}</div>
               <div className="text-[10px] leading-none text-smoke-600 mt-0.5">

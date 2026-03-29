@@ -8,7 +8,7 @@ import { InstallPrompt } from './components/shared/InstallPrompt'
 import { JobWatcher } from './components/shared/JobWatcher'
 import { VisualViewportVars } from './components/layout/VisualViewportVars'
 
-export default function App() {
+export function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

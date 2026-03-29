@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
@@ -25,16 +24,16 @@ class Job(UUIDMixin, TimestampMixin, Base):
     # Stored so the UI can render a progress bar and resume after refresh.
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Human-readable stage string, e.g. "queued", "separating", "recognizing_chords".
-    stage: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    descriptions: Mapped[Optional[list]] = mapped_column(
+    stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    descriptions: Mapped[list | None] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )
-    mode: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    results: Mapped[Optional[list]] = mapped_column(
+    mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    results: Mapped[list | None] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

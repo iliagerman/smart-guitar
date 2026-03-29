@@ -31,3 +31,8 @@ export interface Prices {
 export interface CheckoutData {
   payment_url: string
 }
+
+export interface CancelSubscriptionResponse {
+  message: string
+  effective_date: string | null
+}

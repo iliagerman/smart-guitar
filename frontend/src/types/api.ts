@@ -5,6 +5,10 @@ export interface PaginatedResponse<T> {
   limit: number
 }
 
+export interface MessageResponse {
+  message: string
+}
+
 export interface ErrorResponse {
   detail: string
 }

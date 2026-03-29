@@ -4,8 +4,7 @@ import { LegalFooter } from '@/components/layout/LegalFooter'
 export function RegisterPage() {
   return (
     <div
-      className="relative flex flex-col overflow-y-auto bg-charcoal-950 px-4"
-      style={{ height: 'var(--vv-height)' }}
+      className="relative flex flex-col overflow-y-auto bg-charcoal-950 px-4 h-(--vv-height)"
       data-testid="register-page"
     >
       <video

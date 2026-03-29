@@ -19,7 +19,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-type ErrorDetailResponse = {
+interface ErrorDetailResponse {
   detail?: unknown
 }
 

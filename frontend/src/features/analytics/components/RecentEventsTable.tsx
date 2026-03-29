@@ -10,7 +10,11 @@ function formatDateTime(value: string) {
     }).format(new Date(value))
 }
 
-export function RecentEventsTable({ events }: { events: RecentEvent[] }) {
+interface RecentEventsTableProps {
+    events: RecentEvent[]
+}
+
+export function RecentEventsTable({ events }: RecentEventsTableProps) {
     return (
         <section className="rounded-2xl border border-charcoal-800 bg-charcoal-900/70 p-4">
             <div className="mb-4">

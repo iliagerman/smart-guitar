@@ -1,7 +1,7 @@
 """Schemas for the admin service endpoints."""
 
 import uuid
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -58,7 +58,7 @@ class AdminDropSongsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class SanityCheckStatus(str, Enum):
+class SanityCheckStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -81,3 +81,10 @@ class SanityResponse(BaseModel):
     song_name: str | None = None
     checks: list[SanityCheckResult] = Field(default_factory=list)
     total_duration_ms: float = 0.0
+
+
+class AdminDownloadCompleteResponse(BaseModel):
+    """Response for the download-complete endpoint."""
+
+    ok: bool = True
+    job_id: str

@@ -27,6 +27,7 @@ export function FilterInput({ value, onChange, placeholder = 'Filter...', classN
           onClick={() => onChange('')}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-smoke-300 transition-colors"
           aria-label="Clear filter"
+          data-testid="filter-input-clear-button"
         >
           <X size={16} />
         </button>

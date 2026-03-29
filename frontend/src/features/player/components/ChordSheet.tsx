@@ -4,6 +4,7 @@ import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { isElementVisible, scrollIntoContainerView } from '../lib/scroll-to-center'
+import { ChordSheetLine } from './ChordSheetLine'
 import { getChordColor, formatChordName } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -21,10 +22,6 @@ interface ChordSheetProps {
   onChordDrop?: (globalIndex: number, newStartTime: number) => void
   onWordClick?: (startTime: number) => void
   onWordRename?: (segmentIndex: number, wordIndex: number, newText: string) => void
-}
-
-function estimateChordLabelWidth(chordName: string) {
-  return formatChordName(chordName).length + 1
 }
 
 const LOOK_AHEAD_WORDS = 20
@@ -55,6 +52,25 @@ function computeLookAheadWord(
 }
 
 
+interface ChordLabelChord {
+  chord: string
+  start_time: number
+  end_time: number
+}
+
+interface ChordLabelProps {
+  chord: ChordLabelChord
+  isActive: boolean
+  isRtl: boolean
+  onClick: () => void
+  isEditMode?: boolean
+  isSelected?: boolean
+  onRename?: (newName: string) => void
+  onDelete?: () => void
+  globalIndex?: number
+  onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
+}
+
 function ChordLabel({
   chord,
   isActive,
@@ -66,18 +82,7 @@ function ChordLabel({
   onDelete,
   globalIndex,
   onDragStart,
-}: {
-  chord: { chord: string; start_time: number; end_time: number }
-  isActive: boolean
-  isRtl: boolean
-  onClick: () => void
-  isEditMode?: boolean
-  isSelected?: boolean
-  onRename?: (newName: string) => void
-  onDelete?: () => void
-  globalIndex?: number
-  onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
-}) {
+}: ChordLabelProps) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(chord.chord)
 
@@ -165,17 +170,19 @@ function ChordLabel({
   )
 }
 
+interface EditableWordProps {
+  word: string
+  segmentIndex: number
+  wordIndex: number
+  onRename: (segmentIndex: number, wordIndex: number, newText: string) => void
+}
+
 function EditableWord({
   word,
   segmentIndex,
   wordIndex,
   onRename,
-}: {
-  word: string
-  segmentIndex: number
-  wordIndex: number
-  onRename: (segmentIndex: number, wordIndex: number, newText: string) => void
-}) {
+}: EditableWordProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [value, setValue] = useState(word)
 
@@ -347,6 +354,43 @@ export function ChordSheet({
     }
   }
 
+  const renderChordLabel = useCallback(
+    ({ chord, ci, gci, isChordActive, isRtl: rtl }: {
+      chord: { chord: string; start_time: number; end_time: number }
+      ci: number
+      gci: number
+      isChordActive: boolean
+      isRtl: boolean
+    }) => (
+      <ChordLabel
+        key={ci}
+        chord={chord}
+        isActive={isChordActive}
+        isRtl={rtl}
+        isEditMode={isEditMode}
+        isSelected={isEditMode && gci === selectedChordIndex}
+        globalIndex={gci}
+        onClick={() => handleChordClick(chord.start_time, gci)}
+        onRename={isEditMode ? (name) => onChordRename?.(gci, name) : undefined}
+        onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
+        onDragStart={isEditMode ? handleDragStart(gci) : undefined}
+      />
+    ),
+    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart]
+  )
+
+  const renderEditableWord = useCallback(
+    ({ word, segmentIndex, wordIndex }: { word: string; segmentIndex: number; wordIndex: number }) => (
+      <EditableWord
+        word={word}
+        segmentIndex={segmentIndex}
+        wordIndex={wordIndex}
+        onRename={onWordRename!}
+      />
+    ),
+    [onWordRename]
+  )
+
   if (lines.length === 0) return null
 
   return (
@@ -360,175 +404,34 @@ export function ChordSheet({
       )}
       data-testid="chord-sheet"
     >
-      {lines.map((line, li) => {
-        const isActive = li === activeLineIndex
-        const isInstrumental = line.segmentIndex === -1
-        const isRtl = line.direction === 'rtl'
-
-        return (
-          <div
-            key={li}
-            ref={isActive ? activeLineRef : undefined}
-            className={cn(
-              'px-3 py-1 rounded-sm',
-              isInstrumental && 'mt-4 mb-2',
-              !isEditMode && isActive && showHighlight && 'chord-sheet-line-active',
-              isRtl ? 'chord-sheet-rtl text-right' : 'chord-sheet-ltr text-left'
-            )}
-            dir={line.direction}
-          >
-            {isInstrumental ? (
-              <div className="flex flex-wrap gap-x-5 gap-y-3">
-                <span className="text-smoke-500 italic text-xs w-full">
-                  [Instrumental]
-                </span>
-                {line.chords.map((chord, ci) => {
-                  const gci = globalChordIndexMap.get(chord) ?? ci
-                  const isChordActive = !isEditMode && isActive && showHighlight && ci === activeChordIndex
-                  return (
-                    <ChordLabel
-                      key={ci}
-                      chord={chord}
-                      isActive={isChordActive}
-                      isRtl={false}
-                      isEditMode={isEditMode}
-                      isSelected={isEditMode && gci === selectedChordIndex}
-                      globalIndex={gci}
-                      onClick={() => handleChordClick(chord.start_time, gci)}
-                      onRename={isEditMode ? (name) => onChordRename?.(gci, name) : undefined}
-                      onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
-                      onDragStart={isEditMode ? handleDragStart(gci) : undefined}
-                    />
-                  )
-                })}
-              </div>
-            ) : (
-              <div className={cn('leading-normal', !isEditMode && (!isActive || !showHighlight) && 'text-smoke-500')}>
-                {line.words.length > 0 ? (
-                  (() => {
-                    let currentOffset = 0
-                    return line.words.map((word, wi) => {
-                      const isActiveWord = !isEditMode && isActive && showHighlight && wi === activeWordIndex
-                      const isLookAheadWord = lookAheadWord?.lineIndex === li && lookAheadWord?.wordIndex === wi
-                      const nextOffset = currentOffset + word.word.length + 1
-                      const isLastWord = wi === line.words.length - 1
-                      const wordChords = line.chords.filter((chord) =>
-                        chord.charOffset >= currentOffset &&
-                        (isLastWord ? true : chord.charOffset < nextOffset)
-                      )
-                      const reservedWidthCh = Math.max(
-                        word.word.length + 1,
-                        wordChords.reduce((total, chord) => total + estimateChordLabelWidth(chord.chord), 0)
-                      )
-                      currentOffset = nextOffset
-
-                      return (
-                        <div
-                          key={wi}
-                          ref={isActiveWord ? activeWordRef : isLookAheadWord ? lookAheadWordRef : undefined}
-                          className="inline-flex flex-col align-top gap-1 px-1 pb-1"
-                          style={{ minWidth: `${reservedWidthCh}ch` }}
-                        >
-                          <div
-                            className={cn(
-                              'min-h-7 flex flex-wrap gap-1',
-                              isRtl ? 'justify-end' : 'justify-start',
-                              isEditMode && wordChords.length === 0 && 'cursor-pointer hover:bg-flame-400/5 rounded',
-                            )}
-                            onClick={isEditMode && wordChords.length === 0 ? () => onWordClick?.(word.start) : undefined}
-                            onDragOver={isEditMode ? handleWordDragOver : undefined}
-                            onDrop={isEditMode ? handleWordDrop(word.start) : undefined}
-                            title={isEditMode && wordChords.length === 0 ? `Click to add chord at ${word.start.toFixed(2)}s` : undefined}
-                          >
-                            {wordChords.map((chord, ci) => {
-                              const gci = globalChordIndexMap.get(chord) ?? line.chords.indexOf(chord)
-                              const isChordActive = !isEditMode && isActive && showHighlight && line.chords.indexOf(chord) === activeChordIndex
-                              return (
-                                <ChordLabel
-                                  key={ci}
-                                  chord={chord}
-                                  isActive={isChordActive}
-                                  isRtl={isRtl}
-                                  isEditMode={isEditMode}
-                                  isSelected={isEditMode && gci === selectedChordIndex}
-                                  globalIndex={gci}
-                                  onClick={() => handleChordClick(chord.start_time, gci)}
-                                  onRename={isEditMode ? (name) => onChordRename?.(gci, name) : undefined}
-                                  onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
-                                  onDragStart={isEditMode ? handleDragStart(gci) : undefined}
-                                />
-                              )
-                            })}
-                          </div>
-
-                          {isEditMode && onWordRename ? (
-                            <span className="rounded px-0.5">
-                              <EditableWord
-                                word={word.word}
-                                segmentIndex={line.segmentIndex}
-                                wordIndex={wi}
-                                onRename={onWordRename}
-                              />
-                            </span>
-                          ) : (
-                            <span
-                              className={cn(
-                                'cursor-pointer rounded px-0.5',
-                                isActiveWord
-                                  ? 'bg-flame-400 text-charcoal-950 font-semibold'
-                                  : isActive
-                                    ? 'text-smoke-100'
-                                    : 'hover:text-smoke-300'
-                              )}
-                              onClick={() => handleWordClick(word.start)}
-                              title={`${word.start.toFixed(2)}s – ${word.end.toFixed(2)}s`}
-                            >
-                              {word.word}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })
-                  })()
-                ) : (
-                  <div className="flex flex-col">
-                    <div className="min-h-8 flex flex-wrap items-end gap-2">
-                      {line.chords.map((chord, ci) => {
-                        const gci = globalChordIndexMap.get(chord) ?? ci
-                        const isChordActive = !isEditMode && isActive && showHighlight && ci === activeChordIndex
-                        return (
-                          <ChordLabel
-                            key={ci}
-                            chord={chord}
-                            isActive={isChordActive}
-                            isRtl={isRtl}
-                            isEditMode={isEditMode}
-                            isSelected={isEditMode && gci === selectedChordIndex}
-                            globalIndex={gci}
-                            onClick={() => handleChordClick(chord.start_time, gci)}
-                            onRename={isEditMode ? (name) => onChordRename?.(gci, name) : undefined}
-                            onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
-                            onDragStart={isEditMode ? handleDragStart(gci) : undefined}
-                          />
-                        )
-                      })}
-                    </div>
-                    <span
-                      className={cn(
-                        'cursor-pointer',
-                        !isEditMode && isActive && showHighlight ? 'text-smoke-100' : ''
-                      )}
-                      onClick={() => handleWordClick(line.startTime)}
-                    >
-                      {line.text}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {lines.map((line, li) => (
+        <ChordSheetLine
+          key={li}
+          line={line}
+          lineIndex={li}
+          isActive={li === activeLineIndex}
+          showHighlight={showHighlight}
+          isEditMode={isEditMode}
+          activeWordIndex={activeWordIndex}
+          activeChordIndex={activeChordIndex}
+          selectedChordIndex={selectedChordIndex}
+          globalChordIndexMap={globalChordIndexMap}
+          lookAheadWord={lookAheadWord}
+          activeLineRef={activeLineRef}
+          activeWordRef={activeWordRef}
+          lookAheadWordRef={lookAheadWordRef}
+          onChordClick={handleChordClick}
+          onWordClick={handleWordClick}
+          onChordRename={onChordRename}
+          onChordDelete={onChordDelete}
+          onDragStart={handleDragStart}
+          onWordDragOver={isEditMode ? handleWordDragOver : undefined}
+          onWordDrop={handleWordDrop}
+          onWordRename={onWordRename}
+          renderChordLabel={renderChordLabel}
+          renderEditableWord={onWordRename ? renderEditableWord : undefined}
+        />
+      ))}
     </div>
   )
 }

@@ -49,7 +49,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     try:
         job_id = uuid.UUID(str(raw))
     except Exception:
-        logger.error("Invalid job_id", extra={"event_type": "bad_event", "job_id": raw})
+        logger.exception("Invalid job_id", extra={"event_type": "bad_event", "job_id": raw})
         return {"ok": False, "error": "invalid_job_id"}
 
     logger.info(

@@ -93,6 +93,7 @@ export function InstallPrompt() {
               <button
                 onClick={install}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-fire-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fire-500 active:bg-fire-700"
+                data-testid="install-prompt-install-button"
               >
                 <Download className="h-3.5 w-3.5" />
                 Install
@@ -105,6 +106,7 @@ export function InstallPrompt() {
           onClick={dismiss}
           className="shrink-0 rounded-lg p-1 text-smoke-500 transition-colors hover:bg-charcoal-700 hover:text-smoke-300"
           aria-label="Dismiss install prompt"
+          data-testid="install-prompt-dismiss-button"
         >
           <X className="h-4 w-4" />
         </button>

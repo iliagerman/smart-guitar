@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +55,7 @@ class SongDAO(BaseDAO[Song, SongRecord]):
     async def search(
         self,
         query: str,
-        genre: Optional[str] = None,
+        genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[SongRecord], int]:
@@ -77,7 +77,7 @@ class SongDAO(BaseDAO[Song, SongRecord]):
 
     async def list_all_paginated(
         self,
-        genre: Optional[str] = None,
+        genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[SongRecord], int]:
@@ -104,7 +104,7 @@ class SongDAO(BaseDAO[Song, SongRecord]):
 
     async def list_top_by_favorites(
         self,
-        genre: Optional[str] = None,
+        genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[SongRecord], int]:
@@ -126,7 +126,7 @@ class SongDAO(BaseDAO[Song, SongRecord]):
 
     async def list_top_by_plays(
         self,
-        genre: Optional[str] = None,
+        genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[SongRecord], int]:
@@ -148,7 +148,7 @@ class SongDAO(BaseDAO[Song, SongRecord]):
 
     async def list_top_recent(
         self,
-        genre: Optional[str] = None,
+        genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[SongRecord], int]:

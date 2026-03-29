@@ -175,14 +175,80 @@ def _find_vocals_track_index(song_data: dict) -> int | None:
     return None
 
 
+def _calc_beat_duration(beat: dict, current_bpm: float) -> tuple[float, int]:
+    """Calculate beat duration in seconds. Returns (duration, beat_type)."""
+    beat_type = beat.get("type", 4)
+    if beat_type <= 0:
+        beat_type = 4
+
+    duration = (4.0 / beat_type) * (60.0 / current_bpm)
+
+    if beat.get("dotted"):
+        duration *= 1.5
+    elif beat.get("doubleDotted"):
+        duration *= 1.75
+
+    tuplet = beat.get("tuplet")
+    if tuplet and isinstance(tuplet, dict):
+        enters = tuplet.get("enters", 1)
+        times = tuplet.get("times", 1)
+        if enters > 0 and times > 0:
+            duration *= times / enters
+
+    return duration, beat_type
+
+
+def _extract_beat_notes(
+    beat: dict,
+    num_strings: int,
+    current_time: float,
+    beat_duration: float,
+    current_beat_pos: float,
+) -> tuple[list[SongsterrNote], int]:
+    """Extract fretted notes from a beat. Returns (notes, fretted_count)."""
+    beat_notes = beat.get("notes", [])
+    if not beat_notes or beat.get("rest"):
+        return [], 0
+
+    result: list[SongsterrNote] = []
+    fretted_count = 0
+    for note in beat_notes:
+        if note.get("rest") or "fret" not in note or "string" not in note:
+            continue
+        # Remap string: Songsterr 0=high E, we use 0=low E
+        mapped_string = (num_strings - 1) - note["string"]
+        fretted_count += 1
+        result.append(
+            SongsterrNote(
+                time_seconds=current_time,
+                duration_seconds=beat_duration,
+                string=mapped_string,
+                fret=note["fret"],
+                beat_position=current_beat_pos,
+            )
+        )
+    return result, fretted_count
+
+
+def _extract_strum_direction(beat: dict) -> str | None:
+    """Determine strum direction from a beat's brush/stroke data."""
+    brush = beat.get("brushStroke")
+    if brush and isinstance(brush, dict):
+        direction = brush.get("direction")
+        if direction in ("down", "up"):
+            return direction
+
+    if beat.get("upStroke"):
+        return "up"
+    if beat.get("downStroke"):
+        return "down"
+    return "down"  # default for fretted notes
+
+
 def _parse_tab_json(
     tab_data: dict, source_bpm: float, num_strings: int = 6,
 ) -> tuple[list[SongsterrStrum], list[SongsterrNote], list[SongsterrSection], tuple[int, int]]:
     """Parse Songsterr tab JSON to extract notes, strums, sections, and time signature.
-
-    The tab JSON has measures -> voices -> beats -> notes structure.
-    Each note has {fret, string}. Beats can have brushStroke direction.
-    Measures can have marker.text for section names.
 
     Returns (strums, notes, sections, dominant_time_signature).
     """
@@ -192,17 +258,11 @@ def _parse_tab_json(
     if not measures:
         return [], [], [], (4, 4)
 
-    # Get tempo changes from automations
     tempo_changes: dict[int, float] = {}
-    automations = tab_data.get("automations", {})
-    for tempo_entry in automations.get("tempo", []):
-        measure_idx = tempo_entry.get("measure", 0)
-        bpm = tempo_entry.get("bpm", source_bpm)
-        tempo_changes[measure_idx] = float(bpm)
+    for entry in tab_data.get("automations", {}).get("tempo", []):
+        tempo_changes[entry.get("measure", 0)] = float(entry.get("bpm", source_bpm))
 
-    # Collect time signatures to find the dominant one
     sig_counter: Counter[tuple[int, int]] = Counter()
-
     strums: list[SongsterrStrum] = []
     notes: list[SongsterrNote] = []
     sections: list[SongsterrSection] = []
@@ -211,20 +271,14 @@ def _parse_tab_json(
     current_bpm = source_bpm
 
     for measure_idx, measure in enumerate(measures):
-        # Check for tempo change
         if measure_idx in tempo_changes:
             current_bpm = tempo_changes[measure_idx]
 
-        # Check for section marker
         marker = measure.get("marker")
         if marker and isinstance(marker, dict) and marker.get("text"):
-            sections.append(
-                SongsterrSection(
-                    name=marker["text"],
-                    start_measure=measure_idx,
-                    start_time=current_time,
-                )
-            )
+            sections.append(SongsterrSection(
+                name=marker["text"], start_measure=measure_idx, start_time=current_time,
+            ))
 
         signature = measure.get("signature", [4, 4])
         beat_unit = signature[1] if len(signature) > 1 else 4
@@ -232,86 +286,27 @@ def _parse_tab_json(
 
         voices = measure.get("voices", [])
         if not voices:
-            # Empty measure — advance by measure duration
             beats_in_measure = signature[0] if signature else 4
-            measure_duration = (beats_in_measure * 60.0) / current_bpm * (4.0 / beat_unit)
-            current_time += measure_duration
+            current_time += (beats_in_measure * 60.0) / current_bpm * (4.0 / beat_unit)
             current_beat_pos += beats_in_measure
             continue
 
-        # Process first voice only
         voice = voices[0] if isinstance(voices[0], dict) else {"beats": voices[0]}
-        beats = voice.get("beats", [])
+        for beat in voice.get("beats", []):
+            beat_duration, beat_type = _calc_beat_duration(beat, current_bpm)
 
-        for beat in beats:
-            beat_notes = beat.get("notes", [])
-            beat_type = beat.get("type", 4)  # duration type: 1=whole, 2=half, 4=quarter, 8=eighth, etc.
+            beat_notes, fretted_count = _extract_beat_notes(
+                beat, num_strings, current_time, beat_duration, current_beat_pos,
+            )
+            notes.extend(beat_notes)
 
-            # Calculate beat duration in seconds
-            if beat_type <= 0:
-                beat_type = 4
-            beat_duration = (4.0 / beat_type) * (60.0 / current_bpm)
-
-            # Apply dotted
-            if beat.get("dotted"):
-                beat_duration *= 1.5
-            elif beat.get("doubleDotted"):
-                beat_duration *= 1.75
-
-            # Apply tuplet
-            tuplet = beat.get("tuplet")
-            if tuplet and isinstance(tuplet, dict):
-                enters = tuplet.get("enters", 1)
-                times = tuplet.get("times", 1)
-                if enters > 0 and times > 0:
-                    beat_duration *= times / enters
-
-            if beat_notes and not beat.get("rest"):
-                # Extract individual notes (fret/string)
-                fretted_notes_in_beat = []
-                for note in beat_notes:
-                    if note.get("rest"):
-                        continue
-                    if "fret" not in note or "string" not in note:
-                        continue
-                    # Remap string: Songsterr 0=high E, we use 0=low E
-                    raw_string = note["string"]
-                    mapped_string = (num_strings - 1) - raw_string
-                    fretted_notes_in_beat.append(note)
-                    notes.append(
-                        SongsterrNote(
-                            time_seconds=current_time,
-                            duration_seconds=beat_duration,
-                            string=mapped_string,
-                            fret=note["fret"],
-                            beat_position=current_beat_pos,
-                        )
-                    )
-
-                # Extract strum direction
-                if fretted_notes_in_beat:
-                    brush = beat.get("brushStroke")
-                    direction = None
-                    if brush and isinstance(brush, dict):
-                        direction = brush.get("direction")
-
-                    if not direction:
-                        if beat.get("upStroke"):
-                            direction = "up"
-                        elif beat.get("downStroke"):
-                            direction = "down"
-                        else:
-                            direction = "down"  # default
-
-                    if direction in ("down", "up"):
-                        strums.append(
-                            SongsterrStrum(
-                                time_seconds=current_time,
-                                direction=direction,
-                                num_strings=len(fretted_notes_in_beat),
-                                beat_position=current_beat_pos,
-                            )
-                        )
+            if fretted_count > 0:
+                direction = _extract_strum_direction(beat)
+                if direction in ("down", "up"):
+                    strums.append(SongsterrStrum(
+                        time_seconds=current_time, direction=direction,
+                        num_strings=fretted_count, beat_position=current_beat_pos,
+                    ))
 
             current_time += beat_duration
             current_beat_pos += 4.0 / beat_type
@@ -362,16 +357,89 @@ async def _download_track_json(
     return None
 
 
+def _find_best_match(
+    results: list[dict], artist: str, title: str, query: str,
+) -> dict | None:
+    """Find the best-matching Songsterr result by artist/title similarity."""
+    best_result = None
+    best_score = 0.0
+    for r in results:
+        score = _match_score(artist, title, r.get("artist", ""), r.get("title", ""))
+        if score > best_score:
+            best_score = score
+            best_result = r
+
+    if best_score < 1.0 or best_result is None:
+        logger.info("Songsterr: no good match for %r (best_score=%.2f)", query, best_score)
+        return None
+
+    logger.info(
+        "Songsterr: matched %r by %r (id=%d, score=%.2f)",
+        best_result.get("title", ""), best_result.get("artist", ""),
+        best_result["songId"], best_score,
+    )
+    return best_result
+
+
+async def _select_best_track(
+    client: httpx.AsyncClient, song_id: int, revision_id: int,
+    image: str | None, ranked_tracks: list[int],
+) -> tuple[dict | None, list[SongsterrStrum], list[SongsterrNote], list[SongsterrSection], tuple[int, int], float, list[int], int, int]:
+    """Try ranked guitar tracks, preferring one with mixed strum directions."""
+    best: dict | None = None
+    b_strums: list[SongsterrStrum] = []
+    b_notes: list[SongsterrNote] = []
+    b_sections: list[SongsterrSection] = []
+    b_sig: tuple[int, int] = (4, 4)
+    b_bpm, b_num = 120.0, 6
+    b_tuning: list[int] = []
+    b_idx = ranked_tracks[0]
+
+    for track_idx in ranked_tracks:
+        tab = await _download_track_json(client, song_id, revision_id, image, track_idx)
+        if not tab:
+            continue
+
+        bpm = 120.0
+        tempo_entries = tab.get("automations", {}).get("tempo", [])
+        if tempo_entries:
+            bpm = float(tempo_entries[0].get("bpm", 120))
+
+        tuning = list(reversed(tab.get("tuning", [64, 59, 55, 50, 45, 40])))
+        num = tab.get("strings", 6)
+        strums, notes, sections, sig = _parse_tab_json(tab, bpm, num)
+        has_ups = any(s.direction == "up" for s in strums)
+
+        if best is None or has_ups:
+            best, b_strums, b_notes, b_sections = tab, strums, notes, sections
+            b_sig, b_bpm, b_tuning, b_num, b_idx = sig, bpm, tuning, num, track_idx
+
+        if has_ups:
+            logger.info("Songsterr: track %d has mixed strum directions, using it", track_idx)
+            break
+
+    return best, b_strums, b_notes, b_sections, b_sig, b_bpm, b_tuning, b_num, b_idx
+
+
+async def _fetch_lyrics_text(
+    client: httpx.AsyncClient, tab_data: dict, track_idx: int,
+    song_id: int, revision_id: int, image: str | None,
+) -> str:
+    """Extract lyrics from the guitar track, falling back to the vocals track."""
+    text = _extract_lyrics(tab_data)
+    if not text and track_idx != 0:
+        vocals = await _download_track_json(client, song_id, revision_id, image, 0)
+        if vocals:
+            text = _extract_lyrics(vocals)
+    return text
+
+
 async def fetch_songsterr_data(
     artist: str,
     title: str,
     timeout_seconds: float = 15.0,
 ) -> SongsterrResult | None:
-    """Search Songsterr, download tab JSON, and extract full tab data.
-
-    Returns SongsterrResult with notes, strums, sections, and lyrics,
-    or None if not found.
-    """
+    """Search Songsterr, download tab JSON, and extract full tab data."""
     query = f"{artist} {title}"
     logger.info("Songsterr search: %r", query)
 
@@ -379,168 +447,60 @@ async def fetch_songsterr_data(
         async with httpx.AsyncClient(
             timeout=timeout_seconds, follow_redirects=True
         ) as client:
-            # Step 1: Search for the song
-            resp = await client.get(
-                _SONGSTERR_SEARCH_URL,
-                params={"pattern": query, "size": 10},
-            )
+            resp = await client.get(_SONGSTERR_SEARCH_URL, params={"pattern": query, "size": 10})
             resp.raise_for_status()
             results = resp.json()
-
             if not results:
                 logger.info("Songsterr: no results for %r", query)
                 return None
 
-            # Step 2: Find best match
-            best_result = None
-            best_score = 0.0
-            for r in results:
-                r_artist = r.get("artist", "")
-                r_title = r.get("title", "")
-                score = _match_score(artist, title, r_artist, r_title)
-                if score > best_score:
-                    best_score = score
-                    best_result = r
-
-            if best_score < 1.0 or best_result is None:
-                logger.info(
-                    "Songsterr: no good match for %r (best_score=%.2f)",
-                    query,
-                    best_score,
-                )
+            best_result = _find_best_match(results, artist, title, query)
+            if not best_result:
                 return None
 
             song_id = best_result["songId"]
-            matched_artist = best_result.get("artist", "")
-            matched_title = best_result.get("title", "")
-            logger.info(
-                "Songsterr: matched %r by %r (id=%d, score=%.2f)",
-                matched_title,
-                matched_artist,
-                song_id,
-                best_score,
-            )
-
-            # Find ranked guitar tracks to try
             ranked_tracks = _rank_guitar_track_indices(best_result)
             if not ranked_tracks:
                 logger.info("Songsterr: no guitar track found for song %d", song_id)
                 return None
 
-            # Step 3: Get metadata for revision ID and image hash
             meta_resp = await client.get(f"{_SONGSTERR_META_URL}/{song_id}")
             meta_resp.raise_for_status()
             meta = meta_resp.json()
-
             revision_id = meta.get("revisionId")
             image = meta.get("image")
-
             if not revision_id:
                 logger.info("Songsterr: no revision ID for song %d", song_id)
                 return None
 
-            # Step 4: Try ranked guitar tracks — prefer one with mixed strum directions
-            best_tab_data = None
-            best_strums: list[SongsterrStrum] = []
-            best_notes: list[SongsterrNote] = []
-            best_sections: list[SongsterrSection] = []
-            best_time_signature: tuple[int, int] = (4, 4)
-            best_source_bpm = 120.0
-            best_tuning: list[int] = []
-            best_num_strings = 6
-            best_track_idx = ranked_tracks[0]
-
-            for track_idx in ranked_tracks:
-                tab_data = await _download_track_json(
-                    client, song_id, revision_id, image, track_idx,
-                )
-                if not tab_data:
-                    continue
-
-                source_bpm = 120.0
-                tempo_entries = tab_data.get("automations", {}).get("tempo", [])
-                if tempo_entries:
-                    source_bpm = float(tempo_entries[0].get("bpm", 120))
-
-                raw_tuning = tab_data.get("tuning", [64, 59, 55, 50, 45, 40])
-                tuning = list(reversed(raw_tuning))
-                num_strings = tab_data.get("strings", 6)
-
-                strums, notes, sections, time_signature = _parse_tab_json(
-                    tab_data, source_bpm, num_strings,
-                )
-
-                has_ups = any(s.direction == "up" for s in strums)
-
-                # Keep first valid result as fallback
-                if best_tab_data is None:
-                    best_tab_data = tab_data
-                    best_strums = strums
-                    best_notes = notes
-                    best_sections = sections
-                    best_time_signature = time_signature
-                    best_source_bpm = source_bpm
-                    best_tuning = tuning
-                    best_num_strings = num_strings
-                    best_track_idx = track_idx
-
-                if has_ups:
-                    # This track has richer strum data — use it
-                    best_tab_data = tab_data
-                    best_strums = strums
-                    best_notes = notes
-                    best_sections = sections
-                    best_time_signature = time_signature
-                    best_source_bpm = source_bpm
-                    best_tuning = tuning
-                    best_num_strings = num_strings
-                    best_track_idx = track_idx
-                    logger.info(
-                        "Songsterr: track %d has mixed strum directions, using it",
-                        track_idx,
-                    )
-                    break
-
-            if best_tab_data is None:
-                logger.info(
-                    "Songsterr: could not download tab data for song %d", song_id
-                )
+            (tab_data, strums, notes, sections, time_sig, bpm,
+             tuning, num_strings, track_idx) = await _select_best_track(
+                client, song_id, revision_id, image, ranked_tracks,
+            )
+            if tab_data is None:
+                logger.info("Songsterr: could not download tab data for song %d", song_id)
                 return None
 
-            # Step 5: Fetch lyrics — try guitar track first, then track 0 (usually vocals)
-            lyrics_text = _extract_lyrics(best_tab_data)
-            if not lyrics_text and best_track_idx != 0:
-                vocals_data = await _download_track_json(
-                    client, song_id, revision_id, image, 0,
-                )
-                if vocals_data:
-                    lyrics_text = _extract_lyrics(vocals_data)
+            lyrics = await _fetch_lyrics_text(
+                client, tab_data, track_idx, song_id, revision_id, image,
+            )
+            matched_artist = best_result.get("artist", "")
+            matched_title = best_result.get("title", "")
 
             logger.info(
                 "Songsterr: extracted %d notes, %d strums, %d sections "
                 "(bpm=%.1f, time_sig=%s, %d down, %d up) for %r by %r",
-                len(best_notes),
-                len(best_strums),
-                len(best_sections),
-                best_source_bpm,
-                f"{best_time_signature[0]}/{best_time_signature[1]}",
-                sum(1 for s in best_strums if s.direction == "down"),
-                sum(1 for s in best_strums if s.direction == "up"),
-                matched_title,
-                matched_artist,
+                len(notes), len(strums), len(sections), bpm,
+                f"{time_sig[0]}/{time_sig[1]}",
+                sum(1 for s in strums if s.direction == "down"),
+                sum(1 for s in strums if s.direction == "up"),
+                matched_title, matched_artist,
             )
 
             return SongsterrResult(
-                source_bpm=best_source_bpm,
-                strums=best_strums,
-                notes=best_notes,
-                sections=best_sections,
-                tuning=best_tuning,
-                lyrics_text=lyrics_text,
-                matched_artist=matched_artist,
-                matched_title=matched_title,
-                num_strings=best_num_strings,
-                time_signature=best_time_signature,
+                source_bpm=bpm, strums=strums, notes=notes, sections=sections,
+                tuning=tuning, lyrics_text=lyrics, matched_artist=matched_artist,
+                matched_title=matched_title, num_strings=num_strings, time_signature=time_sig,
             )
 
     except httpx.HTTPStatusError as e:

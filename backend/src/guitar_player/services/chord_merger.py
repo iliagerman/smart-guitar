@@ -7,7 +7,21 @@ This module combines the best of both.
 
 import logging
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
+
+
+class ChordMeta(BaseModel):
+    """Chord metadata stored as chord_meta.json."""
+
+    capo: int | None = None
+    key: str | None = None
+    bpm: int | None = None
+    tuning: str | None = None
+    time_signature: str | None = None
+    notes: str | None = None
+    source: str = "gemini"
 
 # Minimum chord duration — entries shorter than this are noise.
 _MIN_CHORD_DURATION = 1.0
@@ -218,20 +232,13 @@ def build_chord_meta(
     tuning: str = "Standard",
     time_signature: str = "4/4",
     notes: str = "",
-) -> dict:
-    """Build chord metadata dict for storage as chord_meta.json."""
-    meta: dict = {}
-    if capo:
-        meta["capo"] = capo
-    if key:
-        meta["key"] = key
-    if bpm:
-        meta["bpm"] = bpm
-    if tuning and tuning != "Standard":
-        meta["tuning"] = tuning
-    if time_signature and time_signature != "4/4":
-        meta["time_signature"] = time_signature
-    if notes:
-        meta["notes"] = notes
-    meta["source"] = "gemini"
-    return meta
+) -> ChordMeta:
+    """Build chord metadata for storage as chord_meta.json."""
+    return ChordMeta(
+        capo=capo if capo else None,
+        key=key if key else None,
+        bpm=bpm if bpm else None,
+        tuning=tuning if tuning and tuning != "Standard" else None,
+        time_signature=time_signature if time_signature and time_signature != "4/4" else None,
+        notes=notes if notes else None,
+    )

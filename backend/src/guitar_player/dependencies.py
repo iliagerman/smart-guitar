@@ -24,7 +24,7 @@ from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 
 # Storage singleton lives in app_state to avoid circular imports.
-from guitar_player.app_state import get_storage, set_storage
+from guitar_player.app_state import get_storage
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -78,17 +78,21 @@ def get_youtube_service(
 ) -> YoutubeService:
     global _youtube_service
     if _youtube_service is None:
+        from guitar_player.services.youtube_service import YouTubeServiceConfig  # circular import
+
         _youtube_service = YoutubeService(
-            proxy=settings.youtube.proxy,
-            cookies_file=settings.youtube.cookies_file,
-            use_cookies_for_public_videos=settings.youtube.use_cookies_for_public_videos,
-            max_duration_seconds=settings.youtube.max_duration_seconds,
-            po_token_provider_enabled=settings.youtube.po_token_provider_enabled,
-            po_token_provider_base_url=settings.youtube.po_token_provider_base_url,
-            po_token_provider_disable_innertube=settings.youtube.po_token_provider_disable_innertube,
-            sleep_requests_seconds=settings.youtube.sleep_requests_seconds,
-            sleep_interval_seconds=settings.youtube.sleep_interval_seconds,
-            max_sleep_interval_seconds=settings.youtube.max_sleep_interval_seconds,
+            YouTubeServiceConfig(
+                proxy=settings.youtube.proxy,
+                cookies_file=settings.youtube.cookies_file,
+                use_cookies_for_public_videos=settings.youtube.use_cookies_for_public_videos,
+                max_duration_seconds=settings.youtube.max_duration_seconds,
+                po_token_provider_enabled=settings.youtube.po_token_provider_enabled,
+                po_token_provider_base_url=settings.youtube.po_token_provider_base_url,
+                po_token_provider_disable_innertube=settings.youtube.po_token_provider_disable_innertube,
+                sleep_requests_seconds=settings.youtube.sleep_requests_seconds,
+                sleep_interval_seconds=settings.youtube.sleep_interval_seconds,
+                max_sleep_interval_seconds=settings.youtube.max_sleep_interval_seconds,
+            )
         )
     return _youtube_service
 

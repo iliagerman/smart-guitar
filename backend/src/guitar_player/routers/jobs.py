@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from guitar_player.auth.dependencies import get_current_user
@@ -11,9 +11,8 @@ from guitar_player.auth.schemas import CurrentUser
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
-from guitar_player.dependencies import get_job_service, get_processing_service
 from guitar_player.database import safe_session
-from guitar_player.dependencies import get_storage
+from guitar_player.dependencies import get_job_service, get_processing_service, get_storage
 from guitar_player.schemas.job import CreateJobRequest, JobResponse
 from guitar_player.services.analytics_helpers import (
     analytics_identity_from_user,
@@ -70,7 +69,6 @@ async def get_job_status_url(
     In prod (S3 backend), this is a presigned S3 GET URL to job_status.json.
     In local dev (LocalStorage), this is a backend URL that serves the manifest.
     """
-
     storage = get_storage()
 
     async with safe_session() as session:
@@ -80,19 +78,23 @@ async def get_job_status_url(
         db_user = await user_dao.get_by_cognito_sub(user.sub)
         job = await job_dao.get_by_id(job_id)
         if not db_user or not job or job.user_id != db_user.id:
-            # Hide whether the job exists.
-            return JSONResponse(status_code=404, content={"detail": "Job not found"})
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Job not found"},
+            )
 
-        # Resolve song_name (manifest lives under song prefix).
         song_dao = SongDAO(session)
         song = await song_dao.get_by_id(job.song_id)
         if not song or not song.song_name:
-            return JSONResponse(status_code=404, content={"detail": "Song not found"})
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Song not found"},
+            )
 
         key = _job_status_manifest_key(song.song_name, job_id)
 
-    # S3Storage.get_url returns a presigned S3 URL; LocalStorage.get_url returns a file path
-    # which is not reachable from the browser. For local, return a backend URL instead.
+    # S3Storage.get_url returns a presigned URL; LocalStorage returns a file path
+    # unreachable from the browser. For local, return a backend URL instead.
     storage_url = storage.get_url(key)
     if storage_url.startswith("/") or storage_url.startswith("file:"):
         url = str(request.url_for("get_job_status_manifest", job_id=str(job_id)))
@@ -100,7 +102,7 @@ async def get_job_status_url(
         url = storage_url
 
     return JSONResponse(
-        status_code=200,
+        status_code=status.HTTP_200_OK,
         content={
             "job_id": str(job_id),
             "manifest_key": key,
@@ -119,7 +121,6 @@ async def get_job_status_manifest(
     This endpoint exists primarily for local dev (LocalStorage). In prod, clients
     should use the presigned S3 URL returned by /status-url.
     """
-
     storage = get_storage()
 
     async with safe_session() as session:
@@ -129,27 +130,36 @@ async def get_job_status_manifest(
         db_user = await user_dao.get_by_cognito_sub(user.sub)
         job = await job_dao.get_by_id(job_id)
         if not db_user or not job or job.user_id != db_user.id:
-            return JSONResponse(status_code=404, content={"detail": "Job not found"})
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Job not found"},
+            )
 
         song_dao = SongDAO(session)
         song = await song_dao.get_by_id(job.song_id)
         if not song or not song.song_name:
-            return JSONResponse(status_code=404, content={"detail": "Song not found"})
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": "Song not found"},
+            )
 
         key = _job_status_manifest_key(song.song_name, job_id)
 
     try:
         data = storage.read_json(key)
     except FileNotFoundError:
-        return JSONResponse(status_code=404, content={"detail": "Manifest not found"})
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Manifest not found"},
+        )
     except Exception as e:
         logger.warning("Failed to read status manifest for %s: %s", job_id, e)
         return JSONResponse(
-            status_code=500, content={"detail": "Failed to read manifest"}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Failed to read manifest"},
         )
 
-    # Ensure valid JSON response.
-    return JSONResponse(status_code=200, content=data)
+    return JSONResponse(status_code=status.HTTP_200_OK, content=data)
 
 
 @router.get("/{job_id}", response_model=JobResponse)

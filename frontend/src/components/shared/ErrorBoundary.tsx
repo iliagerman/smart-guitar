@@ -1,18 +1,18 @@
 import { Component, type ReactNode } from 'react'
 
-interface Props {
+interface ErrorBoundaryProps {
   children: ReactNode
   fallback?: ReactNode
 }
 
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false }
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false }
 
-  static getDerivedStateFromError(): State {
+  static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true }
   }
 
@@ -25,6 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => this.setState({ hasError: false })}
               className="px-4 py-2 bg-flame-400 text-charcoal-950 rounded-lg font-semibold hover:bg-flame-500 transition-colors"
+              data-testid="error-boundary-retry-button"
             >
               Try again
             </button>

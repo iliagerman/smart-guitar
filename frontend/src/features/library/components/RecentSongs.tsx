@@ -6,7 +6,11 @@ import { Skeleton } from '@/components/shared/Skeleton'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import type { Song } from '@/types/song'
 
-function RecentSongCard({ song }: { song: Song }) {
+interface RecentSongCardProps {
+  song: Song
+}
+
+function RecentSongCard({ song }: RecentSongCardProps) {
   const thumbnailUrl = getThumbnailUrl(song)
   const [imgFailed, setImgFailed] = useState(false)
 
@@ -14,8 +18,9 @@ function RecentSongCard({ song }: { song: Song }) {
     <Link
       to={songDetailPath(song.id)}
       className="shrink-0 w-28 group"
+      data-testid={`recent-song-${song.id}`}
     >
-      <div className="relative w-28 h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-all">
+      <div className="relative w-28 h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-colors">
         {thumbnailUrl && !imgFailed ? (
           <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
         ) : (

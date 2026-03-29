@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from guitar_player.routers.auth import router as auth_router
+from guitar_player.schemas.auth import CognitoRegisterResult
 from guitar_player.services.cognito_auth_service import CognitoAuthService
 from guitar_player.services.telegram_service import TelegramService
 
@@ -30,11 +31,11 @@ def _make_app() -> FastAPI:
 @pytest.fixture
 def mock_cognito() -> MagicMock:
     svc = MagicMock(spec=CognitoAuthService)
-    svc.register.return_value = {
-        "user_sub": "sub-123",
-        "user_confirmed": False,
-        "code_delivery": None,
-    }
+    svc.register.return_value = CognitoRegisterResult(
+        user_sub="sub-123",
+        user_confirmed=False,
+        code_delivery=None,
+    )
     svc.confirm.return_value = None
     return svc
 

@@ -21,7 +21,7 @@ Secrets are located in two places depending on runtime:
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 from urllib.parse import urlparse
 
 import yaml
@@ -40,7 +40,7 @@ class AppConfig(BaseModel):
 
 
 class DbConfig(BaseModel):
-    url: Optional[str] = None
+    url: str | None = None
     pool_size: int = 5
     max_overflow: int = 10
     echo: bool = False
@@ -49,25 +49,25 @@ class DbConfig(BaseModel):
 class AwsConfig(BaseModel):
     region: str = "us-east-1"
     use_iam_role: bool = True
-    access_key: Optional[str] = None
-    secret_key: Optional[str] = None
+    access_key: str | None = None
+    secret_key: str | None = None
 
 
 class AwsLambdasConfig(BaseModel):
-    job_orchestrator: Optional[str] = None
-    vocals_guitar_stitch: Optional[str] = None
-    stale_job_sweeper: Optional[str] = None
+    job_orchestrator: str | None = None
+    vocals_guitar_stitch: str | None = None
+    stale_job_sweeper: str | None = None
 
 
 class StorageConfig(BaseModel):
     backend: Literal["local", "s3"] = "local"
-    base_path: Optional[str] = None
-    bucket: Optional[str] = None
+    base_path: str | None = None
+    bucket: str | None = None
 
 
 class CognitoConfig(BaseModel):
-    user_pool_id: Optional[str] = None
-    client_id: Optional[str] = None
+    user_pool_id: str | None = None
+    client_id: str | None = None
     region: str = "us-east-1"
 
 
@@ -94,16 +94,16 @@ class ServicesConfig(BaseModel):
 
 class OpenAIConfig(BaseModel):
     # Prefer env var in all environments.
-    api_key: Optional[str] = None
+    api_key: str | None = None
     # Default transcription model. "whisper-1" supports word timestamps via verbose_json.
     transcription_model: str = "whisper-1"
     # If you know the language, setting it improves accuracy.
-    transcription_language: Optional[str] = None
+    transcription_language: str | None = None
 
 
 class YoutubeConfig(BaseModel):
-    proxy: Optional[str] = None
-    cookies_file: Optional[str] = None
+    proxy: str | None = None
+    cookies_file: str | None = None
     # When false, cookies are not used for public video metadata/download requests
     # by default. They are only retried when YouTube explicitly requires auth.
     use_cookies_for_public_videos: bool = False
@@ -127,13 +127,13 @@ class YoutubeConfig(BaseModel):
     # SQS queue URL for offloading YouTube downloads to the homeserver.
     # When set, download_song() publishes a fire-and-forget SQS message
     # instead of downloading directly. None = download in-process (local dev).
-    youtube_download_queue_url: Optional[str] = None
+    youtube_download_queue_url: str | None = None
 
 
 class AdminConfig(BaseModel):
     # Shared secret for the dedicated admin service endpoints.
     # Loaded from secrets.yml: admin.api-key
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
     # Whether to run the startup-wide admin scan.
     # Default is disabled; admin can be invoked on-demand via API/script.
@@ -142,22 +142,22 @@ class AdminConfig(BaseModel):
 
 class PaddleConfig(BaseModel):
     enabled: bool = False
-    api_key: Optional[str] = None
-    product: Optional[str] = None
-    price_monthly: Optional[str] = None
-    price_yearly: Optional[str] = None
-    webhook_secret: Optional[str] = None
+    api_key: str | None = None
+    product: str | None = None
+    price_monthly: str | None = None
+    price_yearly: str | None = None
+    webhook_secret: str | None = None
     environment: Literal["sandbox", "production"] = "sandbox"
-    client_token: Optional[str] = None
+    client_token: str | None = None
 
 
 class AllPayConfig(BaseModel):
     enabled: bool = False
-    login: Optional[str] = None
-    api_key: Optional[str] = None
+    login: str | None = None
+    api_key: str | None = None
     api_base: str = "https://allpay.to/app/"
-    webhook_url: Optional[str] = None
-    success_url: Optional[str] = None
+    webhook_url: str | None = None
+    success_url: str | None = None
     currency: str = "USD"
     price_monthly: int = 600  # cents
     price_monthly_display: str = "6.00"
@@ -167,19 +167,19 @@ class AllPayConfig(BaseModel):
 
 
 class TelegramConfig(BaseModel):
-    bot_token: Optional[str] = None
-    events_chat_id: Optional[str] = None
-    errors_chat_id: Optional[str] = None
-    feedback_chat_id: Optional[str] = None
+    bot_token: str | None = None
+    events_chat_id: str | None = None
+    errors_chat_id: str | None = None
+    feedback_chat_id: str | None = None
     enabled: bool = False
 
 
 class TavilyConfig(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class GeminiConfig(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class ExternalStrumsConfig(BaseModel):

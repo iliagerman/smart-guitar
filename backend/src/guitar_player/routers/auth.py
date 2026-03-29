@@ -1,13 +1,13 @@
-"""Auth endpoints — registration, confirmation, login, token refresh."""
+"""Auth endpoints -- registration, confirmation, login, token refresh."""
 
 import logging
 import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-
-from guitar_player.config import get_settings
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from jose import jwt as jose_jwt
 
+from guitar_player.config import get_settings
+from guitar_player.dependencies import get_cognito_auth_service, get_telegram_service
 from guitar_player.schemas.auth import (
     ConfirmRequest,
     ConfirmResponse,
@@ -20,36 +20,38 @@ from guitar_player.schemas.auth import (
     ResendCodeRequest,
     ResendCodeResponse,
 )
+from guitar_player.services.analytics_helpers import track_event
 from guitar_player.services.cognito_auth_service import (
     CognitoAuthError,
     CognitoAuthService,
 )
-from guitar_player.services.analytics_helpers import track_event
 from guitar_player.services.telegram_service import TelegramService
-from guitar_player.dependencies import get_cognito_auth_service, get_telegram_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Cognito error code → HTTP status
 _ERROR_STATUS_MAP: dict[str, int] = {
-    "UsernameExistsException": 409,
-    "InvalidPasswordException": 400,
-    "InvalidParameterException": 400,
-    "NotAuthorizedException": 401,
-    "UserNotConfirmedException": 403,
-    "UserNotFoundException": 404,
-    "TooManyRequestsException": 429,
+    "UsernameExistsException": status.HTTP_409_CONFLICT,
+    "InvalidPasswordException": status.HTTP_400_BAD_REQUEST,
+    "InvalidParameterException": status.HTTP_400_BAD_REQUEST,
+    "NotAuthorizedException": status.HTTP_401_UNAUTHORIZED,
+    "UserNotConfirmedException": status.HTTP_403_FORBIDDEN,
+    "UserNotFoundException": status.HTTP_404_NOT_FOUND,
+    "TooManyRequestsException": status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
 
 def _cognito_to_http(exc: CognitoAuthError) -> HTTPException:
-    status = _ERROR_STATUS_MAP.get(exc.code, 500)
-    return HTTPException(status_code=status, detail=exc.message)
+    http_status = _ERROR_STATUS_MAP.get(exc.code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return HTTPException(status_code=http_status, detail=exc.message)
 
 
-@router.post("/register", response_model=RegisterResponse, status_code=201)
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def register(
     body: RegisterRequest,
     background_tasks: BackgroundTasks,
@@ -70,8 +72,8 @@ async def register(
             extra={"email": body.email, "event_type": "user_registered"},
         )
         return RegisterResponse(
-            user_sub=result["user_sub"],
-            user_confirmed=result["user_confirmed"],
+            user_sub=result.user_sub,
+            user_confirmed=result.user_confirmed,
             message="User registered. Check email for confirmation code.",
         )
     except CognitoAuthError as exc:
@@ -158,7 +160,12 @@ def login(
             user_email=body.email,
             properties={"method": "email_password"},
         )
-        return LoginResponse(**tokens)
+        return LoginResponse(
+            access_token=tokens.access_token,
+            id_token=tokens.id_token,
+            refresh_token=tokens.refresh_token,
+            expires_in=tokens.expires_in,
+        )
     except CognitoAuthError as exc:
         raise _cognito_to_http(exc)
 
@@ -170,7 +177,6 @@ def refresh(
 ) -> RefreshResponse:
     settings = get_settings()
     if settings.environment == "local" and os.environ.get("SKIP_AUTH") == "1":
-        # Decode email from the existing token if available
         fake_token = jose_jwt.encode(
             {"sub": "local-dev-user", "email": "dev@local.test"},
             "dev-secret",
@@ -183,6 +189,10 @@ def refresh(
         )
     try:
         tokens = auth_service.refresh_tokens(body.refresh_token)
-        return RefreshResponse(**tokens)
+        return RefreshResponse(
+            access_token=tokens.access_token,
+            id_token=tokens.id_token,
+            expires_in=tokens.expires_in,
+        )
     except CognitoAuthError as exc:
         raise _cognito_to_http(exc)

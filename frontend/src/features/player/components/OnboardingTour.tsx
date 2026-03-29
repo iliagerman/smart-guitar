@@ -226,6 +226,8 @@ export function OnboardingTour() {
             type="button"
             onClick={dismiss}
             className="text-xs text-smoke-500 hover:text-smoke-300 transition-colors"
+            aria-label="Skip tour"
+            data-testid="tour-skip-button"
           >
             Skip
           </button>
@@ -236,6 +238,7 @@ export function OnboardingTour() {
                 type="button"
                 onClick={handleBack}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-charcoal-600 text-smoke-300 hover:bg-charcoal-700 transition-colors"
+                data-testid="tour-back-button"
               >
                 Back
               </button>
@@ -244,6 +247,7 @@ export function OnboardingTour() {
               type="button"
               onClick={handleNext}
               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-flame-400 text-charcoal-900 hover:bg-flame-300 transition-colors"
+              data-testid="tour-next-button"
             >
               {isLast ? 'Done' : 'Next'}
             </button>

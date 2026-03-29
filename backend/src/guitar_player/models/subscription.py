@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,13 +26,13 @@ class Subscription(UUIDMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
     plan_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    current_period_start: Mapped[Optional[datetime]] = mapped_column(
+    current_period_start: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    current_period_end: Mapped[Optional[datetime]] = mapped_column(
+    current_period_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    canceled_at: Mapped[Optional[datetime]] = mapped_column(
+    canceled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

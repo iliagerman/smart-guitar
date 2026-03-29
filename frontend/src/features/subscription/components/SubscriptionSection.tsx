@@ -69,6 +69,7 @@ export function SubscriptionSection() {
             <button
               onClick={() => setShowPaywall(true)}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
+              data-testid="subscription-subscribe-button"
             >
               Subscribe Now
             </button>
@@ -105,6 +106,7 @@ export function SubscriptionSection() {
               <button
                 onClick={() => setShowCancelConfirm(true)}
                 className="w-full py-2.5 bg-charcoal-700 border border-charcoal-600 text-smoke-300 rounded-lg text-sm hover:border-red-500 hover:text-red-500 transition-colors"
+                data-testid="subscription-cancel-button"
               >
                 Cancel Subscription
               </button>
@@ -124,12 +126,14 @@ export function SubscriptionSection() {
                     onClick={() => cancelMutation.mutate()}
                     disabled={cancelMutation.isPending}
                     className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                    data-testid="subscription-confirm-cancel-button"
                   >
                     {cancelMutation.isPending ? 'Canceling...' : 'Yes, Cancel'}
                   </button>
                   <button
                     onClick={() => setShowCancelConfirm(false)}
                     className="flex-1 py-2 bg-charcoal-700 text-smoke-300 rounded-lg text-sm hover:bg-charcoal-600 transition-colors"
+                    data-testid="subscription-keep-button"
                   >
                     Keep Subscription
                   </button>
@@ -145,6 +149,7 @@ export function SubscriptionSection() {
             <button
               onClick={() => setShowPaywall(true)}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
+              data-testid="subscription-subscribe-no-trial-button"
             >
               Subscribe Now
             </button>

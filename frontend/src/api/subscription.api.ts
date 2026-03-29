@@ -1,5 +1,6 @@
 import { api } from '../config/api'
-import type { SubscriptionStatus, Prices, CheckoutData } from '../types/subscription'
+import type { MessageResponse } from '../types/api'
+import type { SubscriptionStatus, Prices, CheckoutData, CancelSubscriptionResponse } from '../types/subscription'
 
 export const subscriptionApi = {
   getStatus: () =>
@@ -15,12 +16,12 @@ export const subscriptionApi = {
 
   cancel: () =>
     api
-      .post<{ message: string; effective_date: string | null }>('/api/v1/subscription/cancel')
+      .post<CancelSubscriptionResponse>('/api/v1/subscription/cancel')
       .then((r) => r.data),
 
   markOnboardingSeen: () =>
-    api.post('/api/v1/subscription/onboarding-seen').then((r) => r.data),
+    api.post<MessageResponse>('/api/v1/subscription/onboarding-seen').then((r) => r.data),
 
   resetOnboarding: () =>
-    api.post('/api/v1/subscription/onboarding-reset').then((r) => r.data),
+    api.post<MessageResponse>('/api/v1/subscription/onboarding-reset').then((r) => r.data),
 }

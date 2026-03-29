@@ -20,8 +20,12 @@ from guitar_player.request_context import RequestContextFilter
 from guitar_player.database import close_db, init_db
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
-from guitar_player.dependencies import set_storage
-from guitar_player.exceptions import AlreadyExistsError, BadRequestError, NotFoundError
+from guitar_player.app_state import set_storage
+from guitar_player.exceptions import (
+    AlreadyExistsError,
+    BadRequestError,
+    NotFoundError,
+)
 from guitar_player.routers import (
     admin,
     analytics,

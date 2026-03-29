@@ -21,7 +21,11 @@ function buildTrendData(trends: EventTrend[]) {
     return Array.from(map.values()).sort((a, b) => String(a.bucket_start).localeCompare(String(b.bucket_start)))
 }
 
-export function EventTrendsChart({ trends }: { trends: EventTrend[] }) {
+interface EventTrendsChartProps {
+    trends: EventTrend[]
+}
+
+export function EventTrendsChart({ trends }: EventTrendsChartProps) {
     const eventTypes = trends.map((trend) => trend.event_type)
     const data = buildTrendData(trends)
 

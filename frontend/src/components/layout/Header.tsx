@@ -30,6 +30,7 @@ export function Header() {
         <Link
           to={ROUTES.PROFILE}
           className="p-2 rounded-full text-smoke-400 hover:text-flame-400 transition-colors"
+          aria-label="Profile settings"
           data-testid="profile-link"
         >
           <User size={20} />

@@ -1,5 +1,7 @@
 """Pydantic schemas for auth endpoints."""
 
+from typing import Any
+
 from pydantic import BaseModel, EmailStr
 
 
@@ -53,3 +55,37 @@ class RefreshResponse(BaseModel):
     id_token: str
     expires_in: int
     token_type: str = "Bearer"
+
+
+# -- Cognito service response models --
+
+
+class CognitoRegisterResult(BaseModel):
+    """Result of a Cognito sign-up call."""
+
+    user_sub: str
+    user_confirmed: bool
+    code_delivery: dict[str, Any] | None = None
+
+
+class CognitoTokenResult(BaseModel):
+    """Tokens returned by Cognito login."""
+
+    access_token: str
+    id_token: str
+    refresh_token: str
+    expires_in: int
+
+
+class CognitoRefreshResult(BaseModel):
+    """Tokens returned by Cognito token refresh (no new refresh_token)."""
+
+    access_token: str
+    id_token: str
+    expires_in: int
+
+
+class CognitoCodeDeliveryResult(BaseModel):
+    """Result of resending a confirmation code."""
+
+    code_delivery: dict[str, Any] | None = None

@@ -11,11 +11,13 @@ import os
 import socket
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
 
 import httpx
+from pydantic import BaseModel
 import yt_dlp  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
 import yt_dlp.extractor.youtube.pot._provider as _pot_provider  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
 from yt_dlp.utils import DownloadError  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
@@ -31,6 +33,44 @@ from guitar_player.utils.youtube_filters import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class YouTubeSearchResult(BaseModel):
+    """A single YouTube search result with metadata."""
+
+    youtube_id: str
+    title: str
+    artist: str | None = None
+    duration_seconds: int | float | None = None
+    thumbnail_url: str | None = None
+    view_count: int | None = None
+
+
+class YouTubeVideoMeta(BaseModel):
+    """Metadata extracted during a YouTube video download."""
+
+    youtube_id: str
+    title: str
+    artist: str | None = None
+    duration_seconds: int | float | None = None
+    thumbnail_url: str | None = None
+
+
+@dataclass
+class YouTubeServiceConfig:
+    """Configuration for YoutubeService, grouping related init parameters."""
+
+    proxy: str | None = None
+    cookies_file: str | None = None
+    use_cookies_for_public_videos: bool = False
+    max_duration_seconds: int = 600
+    po_token_provider_enabled: bool = False
+    po_token_provider_base_url: str = "http://127.0.0.1:4416"
+    po_token_provider_disable_innertube: bool = False
+    sleep_requests_seconds: float = 0.75
+    sleep_interval_seconds: float = 8.0
+    max_sleep_interval_seconds: float = 15.0
+
 
 # yt-dlp's plugin system re-registers providers on every YoutubeDL() instantiation,
 # causing noisy "already registered" AssertionErrors. Patch to skip silently.
@@ -89,32 +129,21 @@ def _redact_file_path(path: str) -> str:
 
 
 class YoutubeService:
-    def __init__(
-        self,
-        proxy: str | None = None,
-        *,
-        cookies_file: str | None = None,
-        use_cookies_for_public_videos: bool = False,
-        max_duration_seconds: int = 600,
-        po_token_provider_enabled: bool = False,
-        po_token_provider_base_url: str = "http://127.0.0.1:4416",
-        po_token_provider_disable_innertube: bool = False,
-        sleep_requests_seconds: float = 0.75,
-        sleep_interval_seconds: float = 8.0,
-        max_sleep_interval_seconds: float = 15.0,
-    ) -> None:
-        self._proxy = proxy
+    def __init__(self, config: YouTubeServiceConfig | None = None) -> None:
+        if config is None:
+            config = YouTubeServiceConfig()
+        self._proxy = config.proxy
         self._cookies_file = (
-            str(Path(cookies_file).expanduser()) if cookies_file else None
+            str(Path(config.cookies_file).expanduser()) if config.cookies_file else None
         )
-        self._use_cookies_for_public_videos = use_cookies_for_public_videos
-        self._max_duration_seconds = max_duration_seconds
-        self._po_token_provider_enabled = po_token_provider_enabled
-        self._po_token_provider_base_url = po_token_provider_base_url
-        self._po_token_provider_disable_innertube = po_token_provider_disable_innertube
-        self._sleep_requests_seconds = sleep_requests_seconds
-        self._sleep_interval_seconds = sleep_interval_seconds
-        self._max_sleep_interval_seconds = max_sleep_interval_seconds
+        self._use_cookies_for_public_videos = config.use_cookies_for_public_videos
+        self._max_duration_seconds = config.max_duration_seconds
+        self._po_token_provider_enabled = config.po_token_provider_enabled
+        self._po_token_provider_base_url = config.po_token_provider_base_url
+        self._po_token_provider_disable_innertube = config.po_token_provider_disable_innertube
+        self._sleep_requests_seconds = config.sleep_requests_seconds
+        self._sleep_interval_seconds = config.sleep_interval_seconds
+        self._max_sleep_interval_seconds = config.max_sleep_interval_seconds
 
         self._po_provider_checked = False
         self._po_provider_reachable = False
@@ -123,12 +152,12 @@ class YoutubeService:
 
         logger.info(
             "YoutubeService init: proxy=%s cookies=%s cookie_mode=%s po_provider=%s base_url=%s disable_innertube=%s",
-            _redact_proxy(proxy) if proxy else "none",
+            _redact_proxy(config.proxy) if config.proxy else "none",
             _redact_file_path(self._cookies_file) if self._cookies_file else "none",
-            "public" if use_cookies_for_public_videos else "auth-only",
-            po_token_provider_enabled,
-            po_token_provider_base_url,
-            po_token_provider_disable_innertube,
+            "public" if config.use_cookies_for_public_videos else "auth-only",
+            config.po_token_provider_enabled,
+            config.po_token_provider_base_url,
+            config.po_token_provider_disable_innertube,
         )
 
     def _check_cookies_available(self) -> None:
@@ -394,82 +423,37 @@ class YoutubeService:
 
         raise RuntimeError(f"yt-dlp search failed for {url}: {last_exc}") from last_exc
 
-    def _search_sync(self, query: str, max_results: int = 10) -> list[dict]:
-        """Search YouTube and return lightweight metadata.
-
-        Keyword searches are unproxied (they work fine and proxy adds cost).
-        Direct video-ID lookups use proxy + PO-token because YouTube applies
-        the same bot-check enforcement as downloads.
-        """
-        t0_search = time.monotonic()
-        if max_results <= 0:
-            return []
-
-        # Allow callers/UI to pass full YouTube URLs.
-        extracted_id = extract_youtube_id_from_url(query)
-        if extracted_id:
-            query = extracted_id
-
-        is_video_id = _looks_like_youtube_id(query)
-
-        # Policy: prefer official uploads for keyword searches.
-        if not is_video_id:
-            query = ensure_official_query(query)
-
-        # Video-ID lookups need the same protections as downloads.
-        use_proxy = is_video_id and bool(self._proxy)
-        ydl_opts: dict[str, Any] = {
-            **self._base_opts(
-                use_proxy=use_proxy,
-                include_cookies=self._use_cookies_for_public_videos,
-            ),
-            "extract_flat": not is_video_id,
-        }
-
-        if is_video_id:
-            # We only need metadata, so ignore format errors that the mweb
-            # player client can trigger (limited format lists).
-            ydl_opts["ignore_no_formats_error"] = True
-            if self._po_token_provider_enabled:
-                self._check_po_provider_reachable()
-            extractor_args = self._download_extractor_args()
-            if extractor_args:
-                ydl_opts["extractor_args"] = extractor_args
-
+    def _fetch_entries(
+        self, query: str, is_video_id: bool, ydl_opts: dict[str, Any], max_results: int,
+    ) -> list[Any]:
+        """Fetch raw entries from yt-dlp for either a video ID or keyword search."""
         if is_video_id:
             url = f"https://www.youtube.com/watch?v={query.strip()}"
-            entries, result = self._extract_video_info_with_retries(ydl_opts, url)
-        else:
-            # We filter out live-performance results, so we over-fetch to avoid
-            # returning fewer than requested.
-            fetch_n = min(max_results * 5, 50)
-            t0 = time.monotonic()
-            with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                result = ydl.extract_info(
-                    f"ytsearch{fetch_n}:{query}",
-                    download=False,
-                )
-                entries = result.get("entries", []) if result else []
-            logger.info(
-                "TIMING keyword search took %.1fs [query=%s]",
-                time.monotonic() - t0,
-                query,
-            )
+            entries, _result = self._extract_video_info_with_retries(ydl_opts, url)
+            return entries
 
-        results: list[dict] = []
+        fetch_n = min(max_results * 5, 50)
+        t0 = time.monotonic()
+        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+            result = ydl.extract_info(f"ytsearch{fetch_n}:{query}", download=False)
+            entries = result.get("entries", []) if result else []
+        logger.info("TIMING keyword search took %.1fs [query=%s]", time.monotonic() - t0, query)
+        return entries
+
+    def _filter_entries(
+        self, entries: list[Any], is_video_id: bool, max_results: int,
+    ) -> list[YouTubeSearchResult]:
+        """Filter yt-dlp entries by policy rules and convert to typed results."""
+        results: list[YouTubeSearchResult] = []
         for entry in entries:
             if not entry:
                 continue
             entry = cast(dict[str, Any], entry)
             title = entry.get("title") or ""
 
-            # Policy: skip live concerts/shows for keyword searches.
-            # (Video-ID lookups are left unfiltered so callers can still inspect
-            # metadata and decide what to do.)
             if not is_video_id and is_probable_live_performance_title(title):
                 continue
 
-            # Policy: skip videos longer than the configured max duration.
             duration = entry.get("duration")
             if (
                 not is_video_id
@@ -479,31 +463,71 @@ class YoutubeService:
             ):
                 continue
 
-            youtube_id = entry.get("id") or ""
-            results.append(
-                {
-                    "youtube_id": youtube_id,
-                    "title": title,
-                    "artist": entry.get("uploader") or entry.get("channel"),
-                    "duration_seconds": entry.get("duration"),
-                    "thumbnail_url": self._extract_thumbnail_url(entry),
-                    "view_count": entry.get("view_count"),
-                }
-            )
-
+            results.append(self._build_search_result(entry))
             if not is_video_id and len(results) >= max_results:
                 break
+        return results
+
+    def _search_sync(self, query: str, max_results: int = 10) -> list[YouTubeSearchResult]:
+        """Search YouTube and return lightweight metadata."""
+        t0_search = time.monotonic()
+        if max_results <= 0:
+            return []
+
+        extracted_id = extract_youtube_id_from_url(query)
+        if extracted_id:
+            query = extracted_id
+
+        is_video_id = _looks_like_youtube_id(query)
+        if not is_video_id:
+            query = ensure_official_query(query)
+
+        use_proxy = is_video_id and bool(self._proxy)
+        ydl_opts: dict[str, Any] = {
+            **self._base_opts(use_proxy=use_proxy, include_cookies=self._use_cookies_for_public_videos),
+            "extract_flat": not is_video_id,
+        }
+
+        if is_video_id:
+            ydl_opts["ignore_no_formats_error"] = True
+            if self._po_token_provider_enabled:
+                self._check_po_provider_reachable()
+            extractor_args = self._download_extractor_args()
+            if extractor_args:
+                ydl_opts["extractor_args"] = extractor_args
+
+        entries = self._fetch_entries(query, is_video_id, ydl_opts, max_results)
+        results = self._filter_entries(entries, is_video_id, max_results)
 
         logger.info(
             "TIMING _search_sync total %.1fs [query=%s, is_video_id=%s, results=%d]",
-            time.monotonic() - t0_search,
-            query,
-            is_video_id,
-            len(results),
+            time.monotonic() - t0_search, query, is_video_id, len(results),
         )
         return results
 
-    async def search(self, query: str, max_results: int = 10) -> list[dict]:
+    def _build_search_result(self, entry: dict[str, Any]) -> YouTubeSearchResult:
+        """Build a typed search result from a yt-dlp entry dict."""
+        return YouTubeSearchResult(
+            youtube_id=entry.get("id") or "",
+            title=entry.get("title") or "",
+            artist=entry.get("uploader") or entry.get("channel"),
+            duration_seconds=entry.get("duration"),
+            thumbnail_url=self._extract_thumbnail_url(entry),
+            view_count=entry.get("view_count"),
+        )
+
+    def _build_video_meta(self, youtube_id: str, info: dict[str, Any]) -> YouTubeVideoMeta:
+        """Build typed download metadata from a yt-dlp info dict."""
+        return YouTubeVideoMeta(
+            youtube_id=youtube_id,
+            title=info.get("title") or youtube_id,
+            artist=info.get("uploader") or info.get("channel"),
+            duration_seconds=info.get("duration"),
+            thumbnail_url=self._extract_thumbnail_url(info),
+        )
+
+    async def search(self, query: str, max_results: int = 10) -> list[YouTubeSearchResult]:
+        """Search YouTube and return typed results."""
         return await asyncio.to_thread(self._search_sync, query, max_results)
 
     async def fetch_title(self, youtube_id: str) -> str | None:
@@ -541,271 +565,243 @@ class YoutubeService:
             )
             return None
 
+    def _run_preflight_check(self, youtube_id: str, url: str) -> None:
+        """Verify video metadata before downloading; raises on live performances."""
+        t0 = time.monotonic()
+        preflight_opts: dict[str, Any] = {
+            **self._base_opts(
+                use_proxy=bool(self._proxy),
+                include_cookies=self._use_cookies_for_public_videos,
+            ),
+            "extract_flat": False,
+            "skip_download": True,
+            "ignore_no_formats_error": True,
+        }
+
+        try:
+            _entries, preflight = self._extract_video_info_with_retries(
+                preflight_opts, url
+            )
+            preflight_d = cast(dict[str, Any], preflight) if preflight else {}
+            preflight_title = cast(str, preflight_d.get("title") or "")
+        except YoutubeAuthenticationRequiredError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "YouTube metadata preflight failed for %s; refusing download: %s",
+                youtube_id, exc,
+            )
+            raise BadRequestError(
+                "Could not verify YouTube video metadata; please try again."
+            ) from exc
+        finally:
+            logger.info(
+                "TIMING preflight metadata took %.1fs [yt=%s]",
+                time.monotonic() - t0, youtube_id,
+            )
+
+        if not preflight_title:
+            raise BadRequestError(
+                "Could not verify YouTube video title; please try again."
+            )
+        if is_probable_live_performance_title(preflight_title):
+            raise BadRequestError(
+                f"Refusing to download probable live performance: {preflight_title}"
+            )
+
+    @staticmethod
+    def _find_downloaded_mp3(output_dir: str) -> str | None:
+        """Return the most recently modified MP3 in *output_dir*, or None."""
+        audio_files = [
+            os.path.join(output_dir, f)
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".mp3")
+        ]
+        if not audio_files:
+            return None
+        audio_files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return audio_files[0]
+
+    def _collect_download_result(
+        self, youtube_id: str, info: Any, output_dir: str,
+    ) -> tuple[str, str, YouTubeVideoMeta]:
+        """Build the download result tuple from yt-dlp info."""
+        if not info:
+            raise RuntimeError(f"yt-dlp returned no info for {youtube_id}")
+
+        info_d = cast(dict[str, Any], info)
+        title = info_d.get("title") or youtube_id
+        song_name = _sanitize_song_name(cast(str, title))
+        meta = self._build_video_meta(youtube_id, info_d)
+
+        audio_path = self._find_downloaded_mp3(output_dir)
+        if audio_path:
+            return audio_path, song_name, meta
+        raise FileNotFoundError(f"Downloaded audio not found in {output_dir}")
+
+    def _download_opts(self, output_dir: str, use_proxy: bool) -> dict[str, Any]:
+        """Build yt-dlp options for an audio download."""
+        ydl_opts: dict[str, Any] = {
+            **self._base_opts(
+                use_proxy=use_proxy,
+                include_cookies=self._use_cookies_for_public_videos,
+            ),
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+            "sleep_requests": self._sleep_requests_seconds,
+            "sleep_interval": self._sleep_interval_seconds,
+            "max_sleep_interval": self._max_sleep_interval_seconds,
+            "retries": 10,
+            "fragment_retries": 10,
+            "extractor_retries": 3,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }
+            ],
+        }
+        extractor_args = self._download_extractor_args()
+        if extractor_args:
+            ydl_opts["extractor_args"] = extractor_args
+        return ydl_opts
+
+    def _download_with_bot_retries(
+        self, ydl_opts: dict[str, Any], url: str, youtube_id: str, label: str,
+    ) -> Any:
+        """Run yt-dlp download with bot-check retry logic. Returns info dict."""
+        outer_attempts = 3 if self._po_token_provider_enabled else 2
+        last_exc: Exception | None = None
+
+        for idx in range(outer_attempts):
+            try:
+                t0 = time.monotonic()
+                with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                logger.info(
+                    "TIMING extract_info(download=True) attempt %d took %.1fs [yt=%s, %s]",
+                    idx + 1, time.monotonic() - t0, youtube_id, label,
+                )
+                return info
+            except DownloadError as exc:
+                logger.info(
+                    "TIMING extract_info(download=True) attempt %d failed after %.1fs [yt=%s, %s]: %s",
+                    idx + 1, time.monotonic() - t0, youtube_id, label, exc,
+                )
+                last_exc = exc
+                if self._is_probable_youtube_auth_error(exc):
+                    cookiefile = self._yt_dlp_cookiefile()
+                    if cookiefile and not ydl_opts.get("cookiefile"):
+                        logger.warning(
+                            "YouTube auth required for %s (%s) — retrying with cookies",
+                            youtube_id, label,
+                        )
+                        ydl_opts["cookiefile"] = cookiefile
+                        continue
+                    raise YoutubeAuthenticationRequiredError(
+                        self._youtube_auth_error_message()
+                    ) from exc
+                if idx < outer_attempts - 1 and self._is_probable_youtube_bot_check(exc):
+                    sleep_s = min(60.0, 5.0 * (2**idx))
+                    logger.warning(
+                        "yt-dlp blocked for %s (%s), sleeping %.1fs then retrying: %s",
+                        youtube_id, label, sleep_s, exc,
+                    )
+                    time.sleep(sleep_s)
+                    continue
+                raise
+
+        raise RuntimeError(f"yt-dlp download failed for {youtube_id}: {last_exc}") from last_exc
+
+    def _try_download_without_cookies(
+        self, ydl_opts: dict[str, Any], url: str, youtube_id: str, output_dir: str,
+    ) -> tuple[str, str, YouTubeVideoMeta] | None:
+        """Retry download after stripping cookies (they may be expired)."""
+        ydl_opts.pop("cookiefile", None)
+        try:
+            with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
+                info = ydl.extract_info(url, download=True)
+            if info:
+                return self._collect_download_result(youtube_id, info, output_dir)
+        except DownloadError:
+            pass
+        return None
+
     def _download_sync(
-        self, youtube_id: str, output_dir: str, *, skip_preflight: bool = False
-    ) -> tuple[str, str, dict[str, Any]]:
-        """Download OGG Vorbis audio for a YouTube video.
+        self, youtube_id: str, output_dir: str, *, skip_preflight: bool = False,
+    ) -> tuple[str, str, YouTubeVideoMeta]:
+        """Download MP3 audio for a YouTube video.
 
-        Returns (local_ogg_path, song_name, metadata) where metadata contains
-        title, artist, duration_seconds, and thumbnail_url extracted during download.
-
-        When *skip_preflight* is True the live-performance title check is
-        skipped (caller already validated).
+        Returns (local_mp3_path, song_name, metadata).
         """
         t0_total = time.monotonic()
         url = f"https://www.youtube.com/watch?v={youtube_id}"
-
         proxy_redacted = _redact_proxy(self._proxy) if self._proxy else "none"
+
         if self._po_token_provider_enabled:
             t0 = time.monotonic()
             self._check_po_provider_reachable()
             logger.info(
                 "TIMING po_provider_reachable_check took %.1fs [yt=%s]",
-                time.monotonic() - t0,
-                youtube_id,
+                time.monotonic() - t0, youtube_id,
             )
 
         if skip_preflight:
-            logger.info(
-                "Skipping preflight metadata check for %s (caller validated)",
-                youtube_id,
-            )
+            logger.info("Skipping preflight for %s (caller validated)", youtube_id)
         else:
-            # Policy: refuse probable live performance/concert recordings.
-            # Fail closed: if we cannot verify metadata, do not download.
-            # Skip format resolution and PO-token/mweb extractor args —
-            # we only need the title, so a lightweight metadata fetch is
-            # enough and avoids minutes of innertube round-trips.
-            t0 = time.monotonic()
-            preflight_opts: dict[str, Any] = {
-                **self._base_opts(
-                    use_proxy=bool(self._proxy),
-                    include_cookies=self._use_cookies_for_public_videos,
-                ),
-                "extract_flat": False,
-                "skip_download": True,
-                "ignore_no_formats_error": True,
-            }
+            self._run_preflight_check(youtube_id, url)
 
-            try:
-                _entries, preflight = self._extract_video_info_with_retries(
-                    preflight_opts, url
-                )
-                preflight_d = cast(dict[str, Any], preflight) if preflight else {}
-                preflight_title = cast(str, preflight_d.get("title") or "")
-            except YoutubeAuthenticationRequiredError:
-                raise
-            except Exception as exc:
-                logger.warning(
-                    "YouTube metadata preflight failed for %s; refusing download: %s",
-                    youtube_id,
-                    exc,
-                )
-                raise BadRequestError(
-                    "Could not verify YouTube video metadata; please try again."
-                ) from exc
-            finally:
-                logger.info(
-                    "TIMING preflight metadata took %.1fs [yt=%s]",
-                    time.monotonic() - t0,
-                    youtube_id,
-                )
-
-            if not preflight_title:
-                raise BadRequestError(
-                    "Could not verify YouTube video title; please try again."
-                )
-
-            if is_probable_live_performance_title(preflight_title):
-                raise BadRequestError(
-                    f"Refusing to download probable live performance: {preflight_title}"
-                )
-
-        # Attempt with proxy, then without on hard blocks.
-        attempts = [True, False] if self._proxy else [False]
+        proxy_attempts = [True, False] if self._proxy else [False]
         last_exc: Exception | None = None
 
-        for use_proxy in attempts:
+        for use_proxy in proxy_attempts:
             label = f"proxy={proxy_redacted}" if use_proxy else "direct"
             logger.info(
                 "yt-dlp download start %s (%s, cookies=%s)",
-                youtube_id,
-                label,
+                youtube_id, label,
                 "on" if self._use_cookies_for_public_videos else "off",
             )
-
-            ydl_opts: dict[str, Any] = {
-                **self._base_opts(
-                    use_proxy=use_proxy,
-                    include_cookies=self._use_cookies_for_public_videos,
-                ),
-                "format": "bestaudio/best",
-                "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
-                # Reduce rate-limit / bot-check likelihood
-                "sleep_requests": self._sleep_requests_seconds,
-                "sleep_interval": self._sleep_interval_seconds,
-                "max_sleep_interval": self._max_sleep_interval_seconds,
-                # Be more resilient on transient failures
-                "retries": 10,
-                "fragment_retries": 10,
-                "extractor_retries": 3,
-                "postprocessors": [
-                    {
-                        "key": "FFmpegExtractAudio",
-                        "preferredcodec": "mp3",
-                        "preferredquality": "192",
-                    }
-                ],
-            }
-
-            extractor_args = self._download_extractor_args()
-            if extractor_args:
-                ydl_opts["extractor_args"] = extractor_args
+            ydl_opts = self._download_opts(output_dir, use_proxy)
 
             try:
-                outer_attempts = 3 if self._po_token_provider_enabled else 2
-                info: Any = None
-                for outer_idx in range(outer_attempts):
-                    try:
-                        t0_dl = time.monotonic()
-                        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                            info = ydl.extract_info(url, download=True)
-                        logger.info(
-                            "TIMING extract_info(download=True) attempt %d took %.1fs [yt=%s, %s]",
-                            outer_idx + 1,
-                            time.monotonic() - t0_dl,
-                            youtube_id,
-                            label,
-                        )
-                        break
-                    except DownloadError as exc:
-                        logger.info(
-                            "TIMING extract_info(download=True) attempt %d failed after %.1fs [yt=%s, %s]: %s",
-                            outer_idx + 1,
-                            time.monotonic() - t0_dl,
-                            youtube_id,
-                            label,
-                            exc,
-                        )
-                        last_exc = exc
-                        if self._is_probable_youtube_auth_error(exc):
-                            cookiefile = self._yt_dlp_cookiefile()
-                            if cookiefile and not ydl_opts.get("cookiefile"):
-                                logger.warning(
-                                    "YouTube auth required for %s (%s) without cookies — retrying with cookies",
-                                    youtube_id,
-                                    label,
-                                )
-                                ydl_opts["cookiefile"] = cookiefile
-                                continue
-                            raise YoutubeAuthenticationRequiredError(
-                                self._youtube_auth_error_message()
-                            ) from exc
-                        is_block = self._is_probable_youtube_bot_check(exc)
-                        if outer_idx < outer_attempts - 1 and is_block:
-                            sleep_s = min(60.0, 5.0 * (2**outer_idx))
-                            logger.warning(
-                                "yt-dlp blocked for %s (%s), sleeping %.1fs then retrying: %s",
-                                youtube_id,
-                                label,
-                                sleep_s,
-                                exc,
-                            )
-                            time.sleep(sleep_s)
-                            continue
-                        raise
-
-                if not info:
-                    raise RuntimeError(f"yt-dlp returned no info for {youtube_id}")
-
-                info_d = cast(dict[str, Any], info)
-                title = info_d.get("title") or youtube_id
-                song_name = _sanitize_song_name(cast(str, title))
-
-                meta: dict[str, Any] = {
-                    "youtube_id": youtube_id,
-                    "title": title,
-                    "artist": info_d.get("uploader") or info_d.get("channel"),
-                    "duration_seconds": info_d.get("duration"),
-                    "thumbnail_url": self._extract_thumbnail_url(info_d),
-                }
-
-                audio_files = [
-                    os.path.join(output_dir, f)
-                    for f in os.listdir(output_dir)
-                    if f.lower().endswith(".mp3")
-                ]
-                if audio_files:
-                    audio_files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-                    logger.info(
-                        "TIMING _download_sync total %.1fs [yt=%s]",
-                        time.monotonic() - t0_total,
-                        youtube_id,
-                    )
-                    return audio_files[0], song_name, meta
-
-                raise FileNotFoundError(f"Downloaded audio not found in {output_dir}")
-
+                info = self._download_with_bot_retries(ydl_opts, url, youtube_id, label)
+                result = self._collect_download_result(youtube_id, info, output_dir)
+                logger.info(
+                    "TIMING _download_sync total %.1fs [yt=%s]",
+                    time.monotonic() - t0_total, youtube_id,
+                )
+                return result
             except DownloadError as exc:
                 last_exc = exc
                 if self._is_probable_youtube_auth_error(exc):
                     raise YoutubeAuthenticationRequiredError(
                         self._youtube_auth_error_message()
                     ) from exc
-                logger.warning(
-                    "yt-dlp DownloadError for %s (%s): %s", youtube_id, label, exc
-                )
-                # Expired/invalid cookies can cause YouTube to return no
-                # usable formats.  Retry without cookies before giving up.
+                logger.warning("yt-dlp DownloadError for %s (%s): %s", youtube_id, label, exc)
+
+                # Expired cookies can cause format-not-available errors
                 if self._is_format_not_available(exc) and ydl_opts.get("cookiefile"):
                     logger.warning(
-                        "Format not available with cookies for %s — retrying without cookies (cookies may be expired)",
-                        youtube_id,
+                        "Format not available with cookies for %s — retrying without", youtube_id,
                     )
-                    ydl_opts.pop("cookiefile", None)
-                    try:
-                        with yt_dlp.YoutubeDL(cast(Any, ydl_opts)) as ydl:
-                            info = ydl.extract_info(url, download=True)
-                        if info:
-                            info_d = cast(dict[str, Any], info)
-                            title = info_d.get("title") or youtube_id
-                            song_name = _sanitize_song_name(cast(str, title))
-                            meta = {
-                                "youtube_id": youtube_id,
-                                "title": title,
-                                "artist": info_d.get("uploader")
-                                or info_d.get("channel"),
-                                "duration_seconds": info_d.get("duration"),
-                                "thumbnail_url": self._extract_thumbnail_url(info_d),
-                            }
-                            audio_files = [
-                                os.path.join(output_dir, f)
-                                for f in os.listdir(output_dir)
-                                if f.lower().endswith(".mp3")
-                            ]
-                            if audio_files:
-                                audio_files.sort(
-                                    key=lambda p: os.path.getmtime(p), reverse=True
-                                )
-                                return audio_files[0], song_name, meta
-                    except DownloadError:
-                        pass  # fall through to existing retry logic
+                    fallback = self._try_download_without_cookies(
+                        ydl_opts, url, youtube_id, output_dir,
+                    )
+                    if fallback:
+                        return fallback
 
-                # If the proxy is blocked, try direct.
+                # If proxy is blocked, try direct
                 if use_proxy and (
                     "403" in str(exc)
                     or self._is_probable_youtube_bot_check(exc)
                     or self._is_probable_proxy_transport_error(exc)
                 ):
-                    logger.info(
-                        "Retrying %s without proxy after proxy failure…", youtube_id
-                    )
+                    logger.info("Retrying %s without proxy after proxy failure", youtube_id)
                     continue
                 break
 
-        logger.error(
-            "yt-dlp failed for %s after all attempts: %s", youtube_id, last_exc
-        )
+        logger.error("yt-dlp failed for %s after all attempts: %s", youtube_id, last_exc)
         raise RuntimeError(
             f"YouTube download failed for {youtube_id}: {last_exc}"
         ) from last_exc
@@ -816,7 +812,8 @@ class YoutubeService:
         output_dir: str | None = None,
         *,
         skip_preflight: bool = False,
-    ) -> tuple[str, str, dict[str, Any]]:
+    ) -> tuple[str, str, YouTubeVideoMeta]:
+        """Download audio and return (path, song_name, metadata)."""
         if output_dir is None:
             output_dir = tempfile.mkdtemp(prefix="yt_download_")
         return await asyncio.to_thread(

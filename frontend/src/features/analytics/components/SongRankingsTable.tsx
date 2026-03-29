@@ -1,7 +1,11 @@
 import type { SongRanking } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
 
-export function SongRankingsTable({ songs }: { songs: SongRanking[] }) {
+interface SongRankingsTableProps {
+    songs: SongRanking[]
+}
+
+export function SongRankingsTable({ songs }: SongRankingsTableProps) {
     return (
         <section className="rounded-2xl border border-charcoal-800 bg-charcoal-900/70 p-4">
             <div className="mb-4">

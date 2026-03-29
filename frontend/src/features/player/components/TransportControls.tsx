@@ -31,6 +31,13 @@ export function TransportControls({
     <div className="flex flex-col gap-2" data-testid="transport-controls">
       <div
         className="relative h-1.5 bg-charcoal-700 rounded-full cursor-pointer group"
+        role="slider"
+        aria-label="Playback progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress)}
+        tabIndex={0}
+        data-testid="transport-progress-bar"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect()
           const ratio = (e.clientX - rect.left) / rect.width
@@ -64,6 +71,7 @@ export function TransportControls({
             className="sm:hidden flex items-center gap-1.5 text-smoke-400 hover:text-smoke-200 mx-auto py-1 transition-colors"
             onClick={() => setShowSecondary(!showSecondary)}
             aria-label="Toggle secondary controls"
+            data-testid="transport-toggle-secondary"
           >
             <Settings2 size={20} />
             <ChevronDown size={16} className={cn('transition-transform', showSecondary && 'rotate-180')} />
@@ -82,13 +90,18 @@ export function TransportControls({
         <button
           onClick={() => onSeek(Math.max(0, currentTime - 10))}
           className="text-smoke-400 hover:text-smoke-100 transition-colors"
+          aria-label="Back 10 seconds"
           data-testid="player-skip-back"
         >
           <SkipBack size={24} />
         </button>
         <button
           onClick={onTogglePlay}
-          className={`w-14 h-14 rounded-full bg-flame-400 flex items-center justify-center text-charcoal-950 hover:bg-flame-500 transition-all ${isPlaying ? 'animate-flame-pulse' : ''}`}
+          className={cn(
+            'w-14 h-14 rounded-full bg-flame-400 flex items-center justify-center text-charcoal-950 hover:bg-flame-500 transition-all',
+            isPlaying && 'animate-flame-pulse',
+          )}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
           data-testid="player-play-button"
         >
           {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
@@ -96,6 +109,7 @@ export function TransportControls({
         <button
           onClick={() => onSeek(Math.min(duration, currentTime + 10))}
           className="text-smoke-400 hover:text-smoke-100 transition-colors"
+          aria-label="Forward 10 seconds"
           data-testid="player-skip-forward"
         >
           <SkipForward size={24} />

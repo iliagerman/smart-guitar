@@ -2,10 +2,9 @@ import { useState } from 'react'
 import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
 import { useLogin } from '../hooks/use-login'
+import { useGoogleSignIn } from '../hooks/use-google-signin'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
-import { signInWithRedirect } from 'aws-amplify/auth'
-import { env } from '@/config/env'
 import { authApi } from '@/api/auth.api'
 import { trackCustomEvent } from '@/lib/meta-pixel'
 
@@ -22,10 +21,9 @@ function isNotConfirmedError(error: unknown): boolean {
 export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [googleError, setGoogleError] = useState<string | null>(null)
-  const [googlePending, setGooglePending] = useState(false)
   const login = useLogin()
   const navigate = useNavigate()
+  const { googleError, googlePending, handleGoogleSignIn } = useGoogleSignIn()
   const resend = useMutation({
     mutationFn: () => authApi.resendCode(email.trim()),
     onSuccess: () => {
@@ -49,30 +47,6 @@ export function LoginForm() {
     )
   }
 
-  const handleGoogleSignIn = async () => {
-    setGoogleError(null)
-
-    if (!env.cognitoUserPoolId || !env.cognitoClientId || !env.cognitoDomain) {
-      setGoogleError('Google sign-in is not configured for this environment.')
-      return
-    }
-
-    try {
-      setGooglePending(true)
-      // Clear stale Amplify auth keys from localStorage (don't call signOut()
-      // because it redirects to Cognito logout endpoint with OAuth configured)
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-'))
-        .forEach(k => localStorage.removeItem(k))
-      trackCustomEvent('Login', { method: 'google' })
-      await signInWithRedirect({ provider: 'Google' })
-    } catch (err) {
-      setGooglePending(false)
-      const msg = err instanceof Error ? err.message : String(err)
-      setGoogleError(`Google sign-in failed: ${msg}`)
-    }
-  }
-
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full" data-testid="login-form">
       <input
@@ -82,7 +56,7 @@ export function LoginForm() {
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="login-email"
         required
       />
@@ -93,7 +67,7 @@ export function LoginForm() {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="login-password"
         required
       />
@@ -138,7 +112,7 @@ export function LoginForm() {
       </div>
       <button
         type="button"
-        onClick={handleGoogleSignIn}
+        onClick={() => handleGoogleSignIn(trackCustomEvent, 'Login')}
         disabled={googlePending}
         className="w-full py-3 bg-charcoal-700 border border-charcoal-600 text-smoke-100 font-semibold rounded-lg flex items-center justify-center gap-3 hover:border-smoke-500 transition-colors"
         data-testid="google-signin"
@@ -149,7 +123,7 @@ export function LoginForm() {
           <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
           <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
         </svg>
-        {googlePending ? 'Redirecting…' : 'Sign in with Google'}
+        {googlePending ? 'Redirecting...' : 'Sign in with Google'}
       </button>
       {googleError && (
         <p className="text-red-500 text-sm text-center" data-testid="google-signin-error">

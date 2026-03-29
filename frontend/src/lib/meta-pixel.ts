@@ -19,7 +19,9 @@ declare global {
 export function initMetaPixel(): void {
   if (typeof window.fbq === 'function') return
 
-  /* eslint-disable */
+  // Meta Pixel vendor bootstrap -- dynamic property assignment on a function
+  // object cannot be expressed without `any`. Suppressed intentionally.
+  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-expressions */
   ;(function (f: Window, b: Document, e: string, v: string) {
     const n: any = (f.fbq = function (...args: unknown[]) {
       n.callMethod ? n.callMethod(...args) : n.queue.push(args)
@@ -35,7 +37,7 @@ export function initMetaPixel(): void {
     const s = b.getElementsByTagName(e)[0]
     s.parentNode!.insertBefore(t, s)
   })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js')
-  /* eslint-enable */
+  /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-expressions */
 
   window.fbq!('init', PIXEL_ID)
   window.fbq!('track', 'PageView')

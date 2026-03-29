@@ -1,3 +1,5 @@
+import type { JobStatus } from './job'
+
 export interface Song {
   id: string
   youtube_id: string | null
@@ -88,7 +90,7 @@ export interface SongSection {
 
 export interface ActiveJobInfo {
   id: string
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  status: JobStatus
   progress: number
   stage: string | null
 }

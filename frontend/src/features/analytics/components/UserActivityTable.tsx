@@ -10,7 +10,11 @@ function formatDateTime(value: string) {
     }).format(new Date(value))
 }
 
-export function UserActivityTable({ users }: { users: UserActivity[] }) {
+interface UserActivityTableProps {
+    users: UserActivity[]
+}
+
+export function UserActivityTable({ users }: UserActivityTableProps) {
     return (
         <section className="rounded-2xl border border-charcoal-800 bg-charcoal-900/70 p-4">
             <div className="mb-4">

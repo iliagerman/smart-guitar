@@ -53,7 +53,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
         <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md rounded-2xl bg-charcoal-900 border border-charcoal-700 shadow-2xl overflow-hidden">
-          <Dialog.Close className="absolute top-4 right-4 text-smoke-500 hover:text-smoke-300 transition-colors z-10">
+          <Dialog.Close className="absolute top-4 right-4 text-smoke-500 hover:text-smoke-300 transition-colors z-10" aria-label="Close dialog" data-testid="paywall-close-button">
             <X size={18} />
           </Dialog.Close>
 
@@ -92,8 +92,9 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
                 <button
                   onClick={() => checkout.mutate('monthly')}
                   disabled={checkout.isPending || !monthly}
+                  data-testid="paywall-monthly-button"
                   className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border p-4 transition-all',
+                    'flex flex-col items-center gap-1.5 rounded-xl border p-4 transition-colors',
                     hasYearly
                       ? 'border-charcoal-600 hover:border-flame-400 hover:bg-charcoal-800'
                       : 'border-flame-400 hover:bg-charcoal-800',
@@ -111,8 +112,9 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
                   <button
                     onClick={() => checkout.mutate('yearly')}
                     disabled={checkout.isPending}
+                    data-testid="paywall-yearly-button"
                     className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-xl border-2 border-flame-400 p-4 transition-all relative',
+                      'flex flex-col items-center gap-1.5 rounded-xl border-2 border-flame-400 p-4 transition-colors relative',
                       'hover:bg-charcoal-800',
                       checkout.isPending && 'opacity-50 pointer-events-none',
                     )}

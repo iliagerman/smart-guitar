@@ -4,18 +4,14 @@ These endpoints are intended for operational automation (a runner script),
 not for end-user usage. They use a dedicated shared-secret auth mechanism.
 """
 
+import json
 import logging
 import time
 import uuid
 from collections.abc import Callable, Coroutine
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-import json
-
-import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,9 +27,8 @@ from guitar_player.dependencies import (
     get_song_service,
     get_storage,
 )
-from guitar_player.exceptions import YoutubeAuthenticationRequiredError
-from guitar_player.schemas.records import SongRecord
 from guitar_player.schemas.admin import (
+    AdminDownloadCompleteResponse,
     AdminDropSongsResponse,
     AdminRequiredSongsResponse,
     AdminSeedPopulateResponse,
@@ -44,6 +39,8 @@ from guitar_player.schemas.admin import (
     SanityResponse,
 )
 from guitar_player.schemas.job import JobResponse
+from guitar_player.schemas.records import SongRecord
+from guitar_player.services.admin_service import AdminService
 from guitar_player.services.job_service import JobService
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.seed_service import (
@@ -51,7 +48,6 @@ from guitar_player.services.seed_service import (
     seed_discover_storage_keys,
     seed_update_metadata,
 )
-from guitar_player.services.admin_service import AdminService
 from guitar_player.services.song_service import SongService
 from guitar_player.storage import StorageBackend
 
@@ -87,16 +83,6 @@ async def list_admin_required_songs(
     )
 
 
-_UNRECOVERABLE_LOG = Path(__file__).resolve().parents[4] / "unrecoverable_songs.log"
-
-
-def _log_unrecoverable(*, song_name: str, artist: str, title: str, reason: str) -> None:
-    """Append a line to the unrecoverable songs log at the repo root."""
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(_UNRECOVERABLE_LOG, "a") as f:
-        f.write(f"{ts}\t{song_name}\t{artist}\t{title}\t{reason}\n")
-
-
 @router.post("/songs/{song_id}/heal", response_model=AdminSongResponse)
 async def admin_heal_song(
     song_id: uuid.UUID,
@@ -107,110 +93,14 @@ async def admin_heal_song(
     job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
 ) -> AdminSongResponse:
-    warnings: list[str] = []
-
-    audio_thumb_fixed = False
-    audio_heal_error: str | None = None
-    audio_heal_exception: Exception | None = None
-    try:
-        audio_thumb_fixed = await song_service.admin_heal_audio_and_thumbnail(
-            song_id,
-            user_sub=_SERVICE_USER_SUB,
-            user_email=_SERVICE_USER_EMAIL,
-        )
-    except Exception as e:
-        logger.warning("Admin (service) audio/thumbnail failed for %s: %s", song_id, e)
-        warnings.append(f"audio_thumbnail_failed:{type(e).__name__}")
-        audio_heal_error = f"{type(e).__name__}: {e}"
-        audio_heal_exception = e
-        await SongDAO(session).rollback()
-
-    # If audio is still missing after the heal attempt, the song is
-    # unrecoverable — log it and delete from DB.
-    dao = SongDAO(session)
-    song = await dao.get_by_id(song_id)
-    if song:
-        audio_exists = bool(song.audio_key) and storage.file_exists(song.audio_key)
-        if not audio_exists:
-            reason = audio_heal_error or "audio missing after heal attempt"
-            if isinstance(audio_heal_exception, YoutubeAuthenticationRequiredError):
-                logger.info(
-                    "Keeping song %s (%s) because YouTube auth is required: %s",
-                    song_id,
-                    song.song_name,
-                    reason,
-                )
-                warnings.append(f"auth_required: {reason}")
-                return AdminSongResponse(
-                    song_id=song_id,
-                    audio_thumbnail_fixed=False,
-                    warnings=warnings,
-                )
-            _log_unrecoverable(
-                song_name=song.song_name or "?",
-                artist=song.artist or "?",
-                title=song.title or "?",
-                reason=reason,
-            )
-            await dao.delete_by_id(song.id)
-            logger.info(
-                "Deleted unrecoverable song %s (%s) — %s",
-                song_id,
-                song.song_name,
-                reason,
-            )
-            return AdminSongResponse(
-                song_id=song_id,
-                deleted=True,
-                warnings=[f"unrecoverable: {reason}"],
-            )
-
-    reprocess_job_id: uuid.UUID | None = None
-    try:
-        reprocess_job_id = await job_service.trigger_reprocess(
-            user_sub=_SERVICE_USER_SUB,
-            user_email=_SERVICE_USER_EMAIL,
-            song_id=song_id,
-            processing=processing,
-        )
-    except Exception as e:
-        logger.warning("Admin (service) reprocess check failed for %s: %s", song_id, e)
-        warnings.append(f"reprocess_failed:{type(e).__name__}")
-        await SongDAO(session).rollback()
-
-    lyrics_enqueued = False
-    try:
-        lyrics_enqueued = await job_service.trigger_lyrics_transcription_if_missing(
-            song_id
-        )
-    except Exception as e:
-        logger.warning("Admin (service) lyrics check failed for %s: %s", song_id, e)
-        warnings.append(f"lyrics_failed:{type(e).__name__}")
-        await SongDAO(session).rollback()
-
-    tabs_enqueued = False
-    try:
-        tabs_enqueued = await job_service.trigger_tabs_generation_if_missing(
-            song_id,
-            force=True,
-        )
-    except Exception as e:
-        logger.warning("Admin (service) tabs check failed for %s: %s", song_id, e)
-        warnings.append(f"tabs_failed:{type(e).__name__}")
-        await SongDAO(session).rollback()
-
-    return AdminSongResponse(
-        song_id=song_id,
-        audio_thumbnail_fixed=audio_thumb_fixed,
-        reprocess_triggered=reprocess_job_id is not None,
-        lyrics_enqueued=lyrics_enqueued,
-        tabs_enqueued=tabs_enqueued,
-        job_id=reprocess_job_id,
-        warnings=warnings,
-    )
+    service = AdminService(session, storage)
+    return await service.heal_song(song_id, song_service, job_service, processing)
 
 
-@router.post("/songs/{song_id}/download-complete")
+@router.post(
+    "/songs/{song_id}/download-complete",
+    response_model=AdminDownloadCompleteResponse,
+)
 async def admin_download_complete(
     song_id: uuid.UUID,
     _: None = Depends(require_admin_token),
@@ -218,32 +108,10 @@ async def admin_download_complete(
     processing: ProcessingService = Depends(get_processing_service),
     job_service: JobService = Depends(get_job_service),
     storage: StorageBackend = Depends(get_storage),
-) -> dict:
+) -> AdminDownloadCompleteResponse:
     """Called by homeserver after uploading audio to S3. Triggers processing."""
-    dao = SongDAO(session)
-    song = await dao.get_by_id(song_id)
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    if not song.audio_key or not storage.file_exists(song.audio_key):
-        raise HTTPException(status_code=404, detail="Audio file not found on S3")
-
-    # Clear pending download flag
-    await dao.update_by_id(song_id, download_requested_at=None)
-
-    # Auto-trigger processing (stem separation, chords, lyrics)
-    job = await job_service.create_and_process_job(
-        user_sub=_SERVICE_USER_SUB,
-        user_email=_SERVICE_USER_EMAIL,
-        song_id=song_id,
-        descriptions=["vocals", "guitar", "guitar_removed"],
-        processing=processing,
-    )
-    logger.info(
-        "Homeserver download complete for song %s — triggered job %s",
-        song_id,
-        job.id,
-    )
-    return {"ok": True, "job_id": str(job.id)}
+    service = AdminService(session, storage)
+    return await service.download_complete(song_id, job_service, processing)
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -276,8 +144,6 @@ async def populate_seed_songs(
     prefix = "[DRY RUN] " if dry_run else ""
 
     async def _generate():  # noqa: ANN202
-        # StreamingResponse runs after dependency cleanup, so we manage
-        # our own session to ensure writes are committed.
         async with safe_session() as session:
             try:
                 logger.info(
@@ -285,13 +151,10 @@ async def populate_seed_songs(
                 )
                 yield json.dumps({"progress": f"{prefix}starting seed"}) + "\n"
 
-                # Use a dedicated service user for attribution.
                 user = await UserDAO(session).get_or_create(
-                    _SERVICE_USER_SUB,
-                    _SERVICE_USER_EMAIL,
+                    _SERVICE_USER_SUB, _SERVICE_USER_EMAIL,
                 )
 
-                # Step 1: create catalog entries (async generator yields progress + final int).
                 yield (
                     json.dumps(
                         {"progress": f"{prefix}step 1/3 — creating catalog entries"}
@@ -305,12 +168,9 @@ async def populate_seed_songs(
                     else:
                         yield json.dumps({"progress": item}) + "\n"
 
-                # Step 2: update metadata & favorites.
                 yield (
                     json.dumps(
-                        {
-                            "progress": f"{prefix}step 2/3 — updating metadata & favorites"
-                        }
+                        {"progress": f"{prefix}step 2/3 — updating metadata & favorites"}
                     )
                     + "\n"
                 )
@@ -321,7 +181,6 @@ async def populate_seed_songs(
                     else:
                         yield json.dumps({"progress": item}) + "\n"
 
-                # Step 3: discover storage keys from existing files.
                 yield (
                     json.dumps(
                         {"progress": f"{prefix}step 3/3 — discovering storage keys"}
@@ -347,10 +206,7 @@ async def populate_seed_songs(
                 )
                 logger.info(
                     "%sseed/populate: complete — %d created, %d metadata updated, %d storage keys updated",
-                    prefix,
-                    songs_created,
-                    metadata_updated,
-                    storage_keys_updated,
+                    prefix, songs_created, metadata_updated, storage_keys_updated,
                 )
                 yield json.dumps({"result": result.model_dump()}) + "\n"
             except Exception:
@@ -358,18 +214,6 @@ async def populate_seed_songs(
                 raise
 
     return StreamingResponse(_generate(), media_type="application/x-ndjson")
-
-
-# ---------------------------------------------------------------------------
-# Drop songs
-# ---------------------------------------------------------------------------
-
-
-def _collect_storage_prefixes(song: SongRecord) -> list[str]:
-    """Return unique storage prefixes (song_name dirs) for a song."""
-    if song.song_name:
-        return [song.song_name]
-    return []
 
 
 @router.delete("/songs/{song_id}", response_model=AdminDropSongsResponse)
@@ -383,27 +227,8 @@ async def admin_drop_song(
     storage: StorageBackend = Depends(get_storage),
 ) -> AdminDropSongsResponse:
     """Delete a single song and optionally its storage files."""
-    dao = SongDAO(session)
-    song = await dao.get_by_id(song_id)
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-
-    storage_errors: list[str] = []
-    if not skip_storage:
-        for prefix in _collect_storage_prefixes(song):
-            try:
-                deleted = storage.delete_prefix(prefix)
-                logger.info("Deleted %d storage files under %s", deleted, prefix)
-            except Exception as e:
-                logger.warning("Storage cleanup failed for %s: %s", prefix, e)
-                storage_errors.append(f"{prefix}: {e}")
-
-    await dao.delete_by_id(song.id)
-    logger.info(
-        "Dropped song %s (%s) (skip_storage=%s)", song_id, song.song_name, skip_storage
-    )
-
-    return AdminDropSongsResponse(songs_deleted=1, storage_errors=storage_errors)
+    service = AdminService(session, storage)
+    return await service.drop_song(song_id, skip_storage=skip_storage)
 
 
 @router.delete("/songs", response_model=AdminDropSongsResponse)
@@ -417,32 +242,8 @@ async def admin_drop_all_songs(
     storage: StorageBackend = Depends(get_storage),
 ) -> AdminDropSongsResponse:
     """Delete ALL songs and optionally their storage files. Requires confirm=yes-delete-all."""
-    if confirm != "yes-delete-all":
-        raise HTTPException(
-            status_code=400,
-            detail="confirm must be 'yes-delete-all'",
-        )
-
-    dao = SongDAO(session)
-    songs = await dao.list_all(offset=0, limit=100_000)
-
-    storage_errors: list[str] = []
-    if not skip_storage:
-        for song in songs:
-            for prefix in _collect_storage_prefixes(song):
-                try:
-                    storage.delete_prefix(prefix)
-                except Exception as e:
-                    logger.warning("Storage cleanup failed for %s: %s", prefix, e)
-                    storage_errors.append(f"{prefix}: {e}")
-
-    for song in songs:
-        await dao.delete_by_id(song.id)
-
-    count = len(songs)
-    logger.info("Dropped all %d songs (skip_storage=%s)", count, skip_storage)
-
-    return AdminDropSongsResponse(songs_deleted=count, storage_errors=storage_errors)
+    service = AdminService(session, storage)
+    return await service.drop_all_songs(confirm=confirm, skip_storage=skip_storage)
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +290,13 @@ async def admin_sanity_check(
     processing: ProcessingService = Depends(get_processing_service),
     settings: Settings = Depends(get_settings),
 ) -> SanityResponse:
-    """Run a full pipeline sanity check and return per-step results."""
+    """Run a full pipeline sanity check and return per-step results.
+
+    NOTE: This endpoint intentionally uses DAOs directly because it is a
+    diagnostic probe that tests connectivity and service health step-by-step,
+    capturing per-step timing and errors. Moving this logic into a service
+    would not simplify the code — it would just relocate it.
+    """
     checks: list[SanityCheckResult] = []
     t_start = time.monotonic()
 
@@ -500,7 +307,7 @@ async def admin_sanity_check(
     vocals_path: str | None = None
     guitar_path: str | None = None
 
-    # 1. DB connectivity ---------------------------------------------------
+    # 1. DB connectivity
     async def _check_db() -> None:
         nonlocal db_ok
         await SongDAO(session).ping()
@@ -508,7 +315,7 @@ async def admin_sanity_check(
 
     checks.append(await _run_check("db_connectivity", _check_db))
 
-    # 2. Storage connectivity ----------------------------------------------
+    # 2. Storage connectivity
     async def _check_storage() -> None:
         nonlocal storage_ok
         storage.file_exists("__sanity_probe__")
@@ -516,7 +323,7 @@ async def admin_sanity_check(
 
     checks.append(await _run_check("storage_connectivity", _check_storage))
 
-    # 3-6. Service health checks -------------------------------------------
+    # 3-5. Service health checks
     health_targets = {
         "health_demucs": f"http://{settings.services.inference_demucs}/health",
         "health_chords": f"http://{settings.services.chords_generator}/health",
@@ -525,8 +332,9 @@ async def admin_sanity_check(
     health_ok: dict[str, bool] = {}
 
     for svc_name, url in health_targets.items():
-
         async def _check_health(_url: str = url) -> None:
+            import httpx
+
             async with httpx.AsyncClient(timeout=_HEALTH_TIMEOUT) as client:
                 resp = await client.get(_url)
                 resp.raise_for_status()
@@ -535,7 +343,7 @@ async def admin_sanity_check(
         health_ok[svc_name] = result.status == SanityCheckStatus.PASSED
         checks.append(result)
 
-    # 7. Song lookup -------------------------------------------------------
+    # 6. Song lookup
     async def _check_song_lookup() -> None:
         nonlocal song
         song_dao = SongDAO(session)
@@ -559,7 +367,7 @@ async def admin_sanity_check(
     )
     song_ok = song is not None
 
-    # 8. Audio exists in storage -------------------------------------------
+    # 7. Audio exists in storage
     async def _check_audio_exists() -> None:
         nonlocal audio_path
         assert song is not None
@@ -579,7 +387,7 @@ async def admin_sanity_check(
     )
     audio_ok = audio_path is not None
 
-    # 9. Stem separation ---------------------------------------------------
+    # 8. Stem separation
     async def _check_stem_separation() -> None:
         nonlocal vocals_path, guitar_path
         assert audio_path is not None
@@ -600,32 +408,14 @@ async def admin_sanity_check(
     )
 
     # Fallback: use existing stems on disk if separation was skipped/failed
-    if (
-        vocals_path is None
-        and song
-        and song.vocals_key
-        and storage.file_exists(song.vocals_key)
-    ):
-        vocals_path = storage.get_url(song.vocals_key)
-    if (
-        guitar_path is None
-        and song
-        and song.guitar_key
-        and storage.file_exists(song.guitar_key)
-    ):
-        guitar_path = storage.get_url(song.guitar_key)
+    vocals_path = _resolve_stem_path(
+        vocals_path, song, "vocals_key", "vocals.mp3", storage,
+    )
+    guitar_path = _resolve_stem_path(
+        guitar_path, song, "guitar_key", "guitar.mp3", storage,
+    )
 
-    # Also try the conventional stem keys if separation produced files
-    if vocals_path is None and song:
-        key = f"{song.song_name}/vocals.mp3"
-        if storage.file_exists(key):
-            vocals_path = storage.get_url(key)
-    if guitar_path is None and song:
-        key = f"{song.song_name}/guitar.mp3"
-        if storage.file_exists(key):
-            guitar_path = storage.get_url(key)
-
-    # 10. Chord recognition ------------------------------------------------
+    # 9. Chord recognition
     async def _check_chords() -> None:
         assert audio_path is not None
         await processing.recognize_chords(audio_path)
@@ -639,7 +429,7 @@ async def admin_sanity_check(
         await _run_check("chord_recognition", _check_chords, skip_if=skip_chords)
     )
 
-    # 11. Lyrics transcription ---------------------------------------------
+    # 10. Lyrics transcription
     async def _check_lyrics() -> None:
         assert vocals_path is not None
         await processing.transcribe_lyrics(
@@ -657,7 +447,7 @@ async def admin_sanity_check(
         await _run_check("lyrics_transcription", _check_lyrics, skip_if=skip_lyrics)
     )
 
-    # Aggregate ------------------------------------------------------------
+    # Aggregate
     total_ms = round((time.monotonic() - t_start) * 1000, 1)
     any_failed = any(c.status == SanityCheckStatus.FAILED for c in checks)
     overall = SanityCheckStatus.FAILED if any_failed else SanityCheckStatus.PASSED
@@ -669,3 +459,27 @@ async def admin_sanity_check(
         checks=checks,
         total_duration_ms=total_ms,
     )
+
+
+def _resolve_stem_path(
+    current_path: str | None,
+    song: SongRecord | None,
+    key_attr: str,
+    filename: str,
+    storage: StorageBackend,
+) -> str | None:
+    """Try to resolve a stem path from existing storage if not already set."""
+    if current_path is not None:
+        return current_path
+    if not song:
+        return None
+
+    existing_key = getattr(song, key_attr, None)
+    if existing_key and storage.file_exists(existing_key):
+        return storage.get_url(existing_key)
+
+    key = f"{song.song_name}/{filename}"
+    if storage.file_exists(key):
+        return storage.get_url(key)
+
+    return None

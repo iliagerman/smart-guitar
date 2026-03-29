@@ -13,8 +13,16 @@ export function TunerGauge({ cents, active }: TunerGaugeProps) {
   const closeColor = Math.abs(cents) <= 15
 
   return (
-    <div className="w-full max-w-xs mx-auto">
-      <svg viewBox="0 0 300 170" className="w-full">
+    <div
+      className="w-full max-w-xs mx-auto"
+      role="meter"
+      aria-label="Tuning accuracy"
+      aria-valuenow={active ? Math.round(cents) : 0}
+      aria-valuemin={-50}
+      aria-valuemax={50}
+      data-testid="tuner-gauge"
+    >
+      <svg viewBox="0 0 300 170" className="w-full" aria-hidden="true">
         {/* Background arc segments */}
         <defs>
           <linearGradient id="gauge-gradient" x1="0" y1="0" x2="1" y2="0">

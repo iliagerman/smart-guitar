@@ -1,7 +1,6 @@
 """Local bucket sync — scans local_bucket/{artist}/{song_name}/ and upserts into DB."""
 
 import logging
-import os
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession

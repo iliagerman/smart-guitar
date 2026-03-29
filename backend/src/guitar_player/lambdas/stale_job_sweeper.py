@@ -26,6 +26,8 @@ from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
 from guitar_player.lambdas.runtime import init_runtime
 from guitar_player.request_context import request_id_var
+from guitar_player.schemas.records import SongRecord
+from guitar_player.storage import StorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -51,47 +53,46 @@ async def _sweep_once(*, limit: int) -> int:
         for job in stale_jobs:
             song = await song_dao.get_by_id(job.song_id)
             await job_dao.update_status(job.id, "FAILED", error_message="Job timed out")
-            # Release processing lock if this job owns it.
             if song and song.processing_job_id == job.id:
                 await song_dao.update_by_id(song.id, processing_job_id=None)
             failed += 1
 
             if song and song.song_name:
-                try:
-                    from guitar_player.job_status_manifest import (
-                        write_job_status_manifest,
-                    )
-
-                    write_job_status_manifest(
-                        storage,
-                        song_name=song.song_name,
-                        job_id=job.id,
-                        song_id=song.id,
-                        status="FAILED",
-                        stage="failed",
-                        progress=job.progress,
-                        error_message="Job timed out",
-                        min_interval_s=0.0,
-                        extra={"reason": "stale_job_sweeper"},
-                    )
-                except Exception:
-                    logger.debug(
-                        "Failed to write manifest for stale job %s",
-                        job.id,
-                        exc_info=True,
-                    )
+                _write_failed_manifest(storage, song, job)
 
         await job_dao.commit()
         return failed
 
 
+def _write_failed_manifest(
+    storage: StorageBackend, song: SongRecord, job: Any
+) -> None:
+    """Write a FAILED job_status manifest so S3-polling clients stop."""
+    try:
+        from guitar_player.job_status_manifest import write_job_status_manifest
+
+        write_job_status_manifest(
+            storage,
+            song_name=song.song_name,
+            job_id=job.id,
+            song_id=song.id,
+            status="FAILED",
+            stage="failed",
+            progress=job.progress,
+            error_message="Job timed out",
+            min_interval_s=0.0,
+            extra={"reason": "stale_job_sweeper"},
+        )
+    except Exception:
+        logger.debug(
+            "Failed to write manifest for stale job %s", job.id, exc_info=True
+        )
+
+
 async def _rescue_stale_downloads() -> int:
-    """Download audio via IP Royal proxy for songs stuck in download_requested_at > 2 min."""
+    """Download audio via proxy for songs stuck in download_requested_at > 2 min."""
     from guitar_player.config import get_settings
-    from guitar_player.services.audio_normalize import transcode_audio_to_mp3_cbr192
-    from guitar_player.services.job_service import JobService
-    from guitar_player.services.processing_service import ProcessingService
-    from guitar_player.services.youtube_service import YoutubeService
+    from guitar_player.services.youtube_service import YouTubeServiceConfig, YoutubeService
 
     settings = get_settings()
     storage = get_storage()
@@ -105,78 +106,103 @@ async def _rescue_stale_downloads() -> int:
             return 0
 
         youtube = YoutubeService(
-            proxy=settings.youtube.proxy,
-            cookies_file=settings.youtube.cookies_file,
-            use_cookies_for_public_videos=settings.youtube.use_cookies_for_public_videos,
-            po_token_provider_enabled=settings.youtube.po_token_provider_enabled,
-            po_token_provider_base_url=settings.youtube.po_token_provider_base_url,
-            po_token_provider_disable_innertube=settings.youtube.po_token_provider_disable_innertube,
+            YouTubeServiceConfig(
+                proxy=settings.youtube.proxy,
+                cookies_file=settings.youtube.cookies_file,
+                use_cookies_for_public_videos=settings.youtube.use_cookies_for_public_videos,
+                po_token_provider_enabled=settings.youtube.po_token_provider_enabled,
+                po_token_provider_base_url=settings.youtube.po_token_provider_base_url,
+                po_token_provider_disable_innertube=settings.youtube.po_token_provider_disable_innertube,
+            )
         )
 
         for song in songs:
-            if not song.youtube_id or not song.audio_key:
-                await song_dao.update_by_id(song.id, download_requested_at=None)
-                continue
-
-            # Skip if audio already appeared (homeserver was just slow)
-            if storage.file_exists(song.audio_key):
-                logger.info(
-                    "Stale download rescue: audio already exists for %s — clearing flag",
-                    song.song_name,
-                )
-                await song_dao.update_by_id(song.id, download_requested_at=None)
-                rescued += 1
-                continue
-
-            logger.warning(
-                "Stale download rescue: downloading via proxy for %s (yt=%s)",
-                song.song_name,
-                song.youtube_id,
-            )
-            tmp_dir = tempfile.mkdtemp(prefix="rescue_dl_")
-            try:
-                local_audio, _title, _meta = await youtube.download(
-                    song.youtube_id, tmp_dir, skip_preflight=True
-                )
-                local_mp3 = os.path.join(tmp_dir, "audio.mp3")
-                transcode_audio_to_mp3_cbr192(local_audio, local_mp3)
-                storage.upload_file(local_mp3, song.audio_key)
-
-                await song_dao.update_by_id(song.id, download_requested_at=None)
-                await song_dao.flush()
-
-                # Trigger processing
-                processing = ProcessingService(settings)
-                job_svc = JobService(session, storage)
-                await job_svc.create_and_process_job(
-                    user_sub="admin-service",
-                    user_email="admin-service@local.test",
-                    song_id=song.id,
-                    descriptions=["vocals", "guitar", "guitar_removed"],
-                    processing=processing,
-                )
-                rescued += 1
-                logger.info(
-                    "Stale download rescue: completed for %s", song.song_name
-                )
-            except Exception:
-                logger.exception(
-                    "Stale download rescue: failed for %s (yt=%s)",
-                    song.song_name,
-                    song.youtube_id,
-                )
-                # Clear flag to prevent infinite retries — the DLQ / admin can handle it
-                await song_dao.update_by_id(song.id, download_requested_at=None)
-            finally:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
+            rescued += await _rescue_single_song(song, song_dao, youtube, storage, session, settings)
 
         await song_dao.commit()
     return rescued
 
 
+async def _rescue_single_song(
+    song: SongRecord,
+    song_dao: SongDAO,
+    youtube: Any,
+    storage: StorageBackend,
+    session: Any,
+    settings: Any,
+) -> int:
+    """Attempt to rescue a single stale download. Returns 1 on success, 0 otherwise."""
+    if not song.youtube_id or not song.audio_key:
+        await song_dao.update_by_id(song.id, download_requested_at=None)
+        return 0
+
+    if storage.file_exists(song.audio_key):
+        logger.info(
+            "Stale download rescue: audio already exists for %s -- clearing flag",
+            song.song_name,
+        )
+        await song_dao.update_by_id(song.id, download_requested_at=None)
+        return 1
+
+    logger.warning(
+        "Stale download rescue: downloading via proxy for %s (yt=%s)",
+        song.song_name,
+        song.youtube_id,
+    )
+    tmp_dir = tempfile.mkdtemp(prefix="rescue_dl_")
+    try:
+        return await _download_and_process(song, song_dao, youtube, storage, session, settings, tmp_dir)
+    except Exception:
+        logger.exception(
+            "Stale download rescue: failed for %s (yt=%s)",
+            song.song_name,
+            song.youtube_id,
+        )
+        await song_dao.update_by_id(song.id, download_requested_at=None)
+        return 0
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+async def _download_and_process(
+    song: SongRecord,
+    song_dao: SongDAO,
+    youtube: Any,
+    storage: StorageBackend,
+    session: Any,
+    settings: Any,
+    tmp_dir: str,
+) -> int:
+    """Download, transcode, upload, and trigger processing for a song."""
+    from guitar_player.services.audio_normalize import transcode_audio_to_mp3_cbr192
+    from guitar_player.services.job_service import JobService
+    from guitar_player.services.processing_service import ProcessingService
+
+    local_audio, _title, _meta = await youtube.download(
+        song.youtube_id, tmp_dir, skip_preflight=True
+    )
+    local_mp3 = os.path.join(tmp_dir, "audio.mp3")
+    transcode_audio_to_mp3_cbr192(local_audio, local_mp3)
+    storage.upload_file(local_mp3, song.audio_key)
+
+    await song_dao.update_by_id(song.id, download_requested_at=None)
+    await song_dao.flush()
+
+    processing = ProcessingService(settings)
+    job_svc = JobService(session, storage)
+    await job_svc.create_and_process_job(
+        user_sub="admin-service",
+        user_email="admin-service@local.test",
+        song_id=song.id,
+        descriptions=["vocals", "guitar", "guitar_removed"],
+        processing=processing,
+    )
+    logger.info("Stale download rescue: completed for %s", song.song_name)
+    return 1
+
+
 async def _run() -> dict[str, Any]:
     total_failed = 0
-    # Safety bounds: don't run forever.
     max_batches = 10
     batch_size = 200
 
@@ -186,7 +212,6 @@ async def _run() -> dict[str, Any]:
         if n == 0:
             break
 
-    # Rescue stale homeserver downloads
     total_rescued = 0
     try:
         total_rescued = await _rescue_stale_downloads()
@@ -199,7 +224,6 @@ async def _run() -> dict[str, Any]:
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     init_runtime(service_name="stale-job-sweeper")
 
-    # EventBridge-triggered: generate a fresh correlation ID per invocation.
     request_id_var.set(str(uuid.uuid4()))
 
     try:

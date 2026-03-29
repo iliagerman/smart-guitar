@@ -22,7 +22,8 @@ export function useDeleteChords() {
       toast.success('Chord version deleted')
     },
     onError: (error: unknown) => {
-      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const apiError = error as { response?: { data?: { detail?: string } } } | undefined
+      const msg = apiError?.response?.data?.detail
       toast.error(msg ?? 'Failed to delete chord version')
     },
   })

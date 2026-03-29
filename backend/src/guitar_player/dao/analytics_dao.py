@@ -44,7 +44,7 @@ class AnalyticsDAO(BaseDAO[AnalyticsEvent, AnalyticsEventRecord]):
             stmt = stmt.where(and_(*conditions))
         return stmt
 
-    def _bucket_expression(self, granularity: str):
+    def _bucket_expression(self, granularity: str) -> Any:
         bind = self._session.bind
         dialect = bind.dialect.name if bind is not None else "postgresql"
         if dialect == "sqlite":

@@ -7,7 +7,11 @@ function formatBucketLabel(value: string) {
     return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
 }
 
-export function LoginChart({ trends }: { trends: EventTrend[] }) {
+interface LoginChartProps {
+    trends: EventTrend[]
+}
+
+export function LoginChart({ trends }: LoginChartProps) {
     const loginTrend = trends.find((trend) => trend.event_type === 'login')
     const data = useMemo(
         () =>

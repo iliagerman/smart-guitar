@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Check, Flame, Loader2 } from 'lucide-react'
+import { Flame } from 'lucide-react'
 import { useCreateJob } from '../hooks/use-create-job'
 import { useJobPolling } from '../hooks/use-job-polling'
 import { cn } from '@/lib/cn'
+import { StatusIcon, type StepStatus } from './StatusIcon'
 
 interface ProcessingChecklistProps {
   songId: string
@@ -14,34 +15,12 @@ interface ProcessingChecklistProps {
   isGeneratingChords: boolean
 }
 
-type StepStatus = 'completed' | 'in_progress' | 'pending'
-
 interface Step {
   label: string
   status: StepStatus
   action?: () => void
   progress?: number | null
   stage?: string | null
-}
-
-function StatusIcon({ status }: { status: StepStatus }) {
-  if (status === 'completed') {
-    return (
-      <div className="flex items-center justify-center size-5 rounded-full bg-emerald-500/20 text-emerald-400">
-        <Check size={14} strokeWidth={3} />
-      </div>
-    )
-  }
-  if (status === 'in_progress') {
-    return (
-      <div className="flex items-center justify-center size-5 text-flame-400">
-        <Loader2 size={14} className="animate-spin" />
-      </div>
-    )
-  }
-  return (
-    <div className="flex items-center justify-center size-5 rounded-full border-2 border-charcoal-600" />
-  )
 }
 
 export function ProcessingChecklist({
@@ -113,6 +92,8 @@ export function ProcessingChecklist({
               <button
                 onClick={step.action}
                 className="ml-auto flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-flame-400 text-charcoal-950 hover:bg-flame-500 transition-colors"
+                aria-label={`Start ${step.label.toLowerCase()}`}
+                data-testid="checklist-start-button"
               >
                 <Flame size={12} />
                 Start
@@ -123,6 +104,8 @@ export function ProcessingChecklist({
               <button
                 onClick={handleProcessStems}
                 className="ml-auto flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                aria-label="Retry processing stems"
+                data-testid="checklist-retry-button"
               >
                 Retry
               </button>

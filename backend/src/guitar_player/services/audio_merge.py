@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -74,6 +75,4 @@ async def merge_vocals_guitar_stem(
         logger.exception("Failed to merge vocals+guitar for %s", song_name)
         return None
     finally:
-        import shutil
-
         shutil.rmtree(tmp_dir, ignore_errors=True)

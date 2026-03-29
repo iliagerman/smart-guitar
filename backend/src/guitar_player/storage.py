@@ -6,7 +6,6 @@ presigned URLs for secure client-side access.
 
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
 from typing import Protocol

@@ -3,7 +3,11 @@ import { useSubscription } from '../hooks/use-subscription'
 import { PaywallDialog } from './PaywallDialog'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
-export function SubscriptionGuard({ children }: { children: React.ReactNode }) {
+interface SubscriptionGuardProps {
+  children: React.ReactNode
+}
+
+export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { data: status, isLoading } = useSubscription()
   const [userOpened, setUserOpened] = useState(false)
   const mustShowPaywall = !!(status && !status.has_access)

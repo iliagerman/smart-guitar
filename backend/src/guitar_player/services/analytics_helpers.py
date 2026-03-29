@@ -36,9 +36,8 @@ async def _record_event_async(**kwargs: Any) -> None:
             await dao.commit()
         except Exception:
             await dao.rollback()
-            logger.warning(
+            logger.exception(
                 "Failed to record analytics event",
-                exc_info=True,
                 extra={"event_type": kwargs.get("event_type")},
             )
 
@@ -53,9 +52,8 @@ async def _record_events_batch_async(events: list[dict[str, Any]]) -> None:
             await dao.commit()
         except Exception:
             await dao.rollback()
-            logger.warning(
+            logger.exception(
                 "Failed to record analytics event batch",
-                exc_info=True,
                 extra={"batch_size": len(events)},
             )
 

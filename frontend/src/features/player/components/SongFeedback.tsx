@@ -44,6 +44,7 @@ export function SongFeedback({ songId }: SongFeedbackProps) {
           onClick={() => handleThumbClick('thumbs_up')}
           className="p-1 rounded-full text-smoke-400 hover:text-green-400 transition-colors"
           aria-label="Thumbs up"
+          data-testid="feedback-thumbs-up"
         >
           <ThumbsUp size={14} />
         </button>
@@ -52,6 +53,7 @@ export function SongFeedback({ songId }: SongFeedbackProps) {
           onClick={() => handleThumbClick('thumbs_down')}
           className="p-1 rounded-full text-smoke-400 hover:text-red-400 transition-colors"
           aria-label="Thumbs down"
+          data-testid="feedback-thumbs-down"
         >
           <ThumbsDown size={14} />
         </button>
@@ -82,10 +84,11 @@ export function SongFeedback({ songId }: SongFeedbackProps) {
               <>
                 <textarea
                   value={comment}
-                  onChange={(e) => setComment(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                   placeholder="Add a comment (optional)..."
                   rows={3}
                   maxLength={500}
+                  data-testid="feedback-comment-input"
                   className={cn(
                     'w-full rounded-lg bg-charcoal-800 border border-charcoal-600 px-3 py-2',
                     'text-sm text-smoke-100 placeholder:text-smoke-500',
@@ -101,6 +104,7 @@ export function SongFeedback({ songId }: SongFeedbackProps) {
                     type="button"
                     onClick={handleSubmit}
                     disabled={feedback.isPending}
+                    data-testid="feedback-submit-button"
                     className={cn(
                       'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
                       'bg-flame-400 text-charcoal-950 hover:bg-flame-500',

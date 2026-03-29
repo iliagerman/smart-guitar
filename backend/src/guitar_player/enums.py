@@ -1,8 +1,8 @@
 """Shared enumerations used across the application."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class PaymentProvider(str, Enum):
+class PaymentProvider(StrEnum):
     PADDLE = "paddle"
     ALLPAY = "allpay"

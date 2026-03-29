@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -17,8 +16,8 @@ class FavoriteResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     song_id: uuid.UUID
-    created_at: Optional[datetime] = None
-    song: Optional[SongResponse] = None
+    created_at: datetime | None = None
+    song: SongResponse | None = None
 
     model_config = {"from_attributes": True}
 

@@ -191,8 +191,7 @@ export function CameraPreview({ stream }: CameraPreviewProps) {
         autoPlay
         muted
         playsInline
-        className="h-[90px] w-[120px] object-cover"
-        style={{ transform: 'scaleX(-1)' }}
+        className="h-[90px] w-[120px] object-cover -scale-x-100"
       />
     </div>,
     document.body,

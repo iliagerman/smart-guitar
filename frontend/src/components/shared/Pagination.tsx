@@ -33,6 +33,7 @@ export function Pagination({ offset, limit, total, onPageChange, className }: Pa
           disabled={!hasPrev}
           className="p-1.5 rounded-lg text-smoke-400 hover:text-smoke-100 hover:bg-charcoal-700/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
           aria-label="Previous page"
+          data-testid="pagination-prev-button"
         >
           <ChevronLeft size={18} />
         </button>
@@ -41,6 +42,7 @@ export function Pagination({ offset, limit, total, onPageChange, className }: Pa
           disabled={!hasNext}
           className="p-1.5 rounded-lg text-smoke-400 hover:text-smoke-100 hover:bg-charcoal-700/60 disabled:opacity-30 disabled:pointer-events-none transition-colors"
           aria-label="Next page"
+          data-testid="pagination-next-button"
         >
           <ChevronRight size={18} />
         </button>

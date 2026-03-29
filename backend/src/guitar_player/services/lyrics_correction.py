@@ -291,8 +291,8 @@ def _build_group_segments(
 
 
 def merge_lyrics_with_llm(
-    quick_data: dict[str, Any],
-    regular_data: dict[str, Any],
+    quick_data: dict[str, Any],  # schema-less: raw Whisper/OpenAI JSON output
+    regular_data: dict[str, Any],  # schema-less: raw Whisper/OpenAI JSON output
     llm: LlmService,
 ) -> tuple[dict[str, Any], MergeDiagnostics]:
     quick_segments = quick_data.get("segments", [])

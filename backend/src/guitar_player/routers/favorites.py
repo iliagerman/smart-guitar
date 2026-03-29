@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import require_active_subscription
@@ -21,7 +21,11 @@ from guitar_player.services.favorite_service import FavoriteService
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 
-@router.post("", response_model=FavoriteResponse, status_code=201)
+@router.post(
+    "",
+    response_model=FavoriteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_favorite(
     body: AddFavoriteRequest,
     background_tasks: BackgroundTasks,
@@ -43,7 +47,7 @@ async def add_favorite(
     return favorite
 
 
-@router.delete("/{song_id}", status_code=204)
+@router.delete("/{song_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_favorite(
     song_id: uuid.UUID,
     background_tasks: BackgroundTasks,

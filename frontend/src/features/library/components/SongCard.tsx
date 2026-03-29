@@ -16,7 +16,7 @@ export function SongCard({ song }: SongCardProps) {
   return (
     <Link
       to={songDetailPath(song.id)}
-      className="flex items-center gap-3 p-3 bg-charcoal-800/60 backdrop-blur-sm border border-charcoal-700/50 rounded-xl hover:bg-charcoal-800/80 hover:border-flame-400/30 hover:shadow-[0_0_20px_rgba(250,204,21,0.08)] transition-all"
+      className="flex items-center gap-3 p-3 bg-charcoal-800/60 backdrop-blur-sm border border-charcoal-700/50 rounded-xl hover:bg-charcoal-800/80 hover:border-flame-400/30 hover:shadow-[0_0_20px_rgba(250,204,21,0.08)] transition-colors"
       data-testid={`song-card-${song.id}`}
     >
       <div className="relative w-12 h-12 rounded-lg bg-charcoal-700/60 overflow-hidden shrink-0">

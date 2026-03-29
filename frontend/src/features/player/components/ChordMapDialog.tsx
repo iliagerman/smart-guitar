@@ -6,7 +6,12 @@ import { cn } from '@/lib/cn'
 import { ChordMap } from './ChordMap'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
 
-function ChordMapIcon({ size = 48, className }: { size?: number; className?: string }) {
+interface ChordMapIconProps {
+    size?: number
+    className?: string
+}
+
+function ChordMapIcon({ size = 48, className }: ChordMapIconProps) {
     return (
         <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={cn('shrink-0', className)}>
             {/* Grid / chord diagram */}

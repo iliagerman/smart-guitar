@@ -1,4 +1,5 @@
 import { api } from '../config/api'
+import type { MessageResponse } from '../types/api'
 import type { Favorite } from '../types/favorite'
 
 export const favoritesApi = {
@@ -9,5 +10,5 @@ export const favoritesApi = {
     api.post<Favorite>('/api/v1/favorites', { song_id: songId }).then((r) => r.data),
 
   remove: (songId: string) =>
-    api.delete(`/api/v1/favorites/${songId}`).then((r) => r.data),
+    api.delete<MessageResponse>(`/api/v1/favorites/${songId}`).then((r) => r.data),
 }

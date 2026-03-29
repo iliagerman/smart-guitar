@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,16 +13,16 @@ class Song(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "songs"
     __table_args__ = (Index("ix_songs_created_at", "created_at"),)
 
-    youtube_id: Mapped[Optional[str]] = mapped_column(
+    youtube_id: Mapped[str | None] = mapped_column(
         String(20), unique=True, nullable=True
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    artist: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    artist: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     song_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    thumbnail_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    audio_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    genre: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    thumbnail_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    audio_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    genre: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     play_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0", index=True
     )
@@ -32,24 +31,24 @@ class Song(UUIDMixin, TimestampMixin, Base):
     )
 
     # Stem and chord file paths (storage keys)
-    vocals_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    drums_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    bass_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    guitar_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    piano_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    other_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    guitar_removed_key: Mapped[Optional[str]] = mapped_column(
+    vocals_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    drums_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    bass_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    guitar_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    piano_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    other_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    guitar_removed_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )
-    vocals_guitar_key: Mapped[Optional[str]] = mapped_column(
+    vocals_guitar_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )
-    chords_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    lyrics_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    lyrics_quick_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    lyrics_corrected_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    tabs_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    external_strums_key: Mapped[Optional[str]] = mapped_column(
+    chords_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lyrics_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lyrics_quick_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lyrics_corrected_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tabs_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    external_strums_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )
 
@@ -57,7 +56,7 @@ class Song(UUIDMixin, TimestampMixin, Base):
 
     # Points to the active Job processing this song.  Set atomically via
     # SELECT FOR UPDATE to prevent concurrent job creation.
-    processing_job_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    processing_job_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
     )
 
@@ -87,35 +86,35 @@ class Song(UUIDMixin, TimestampMixin, Base):
     )
 
     # Storage key for Gemini-detected chords (chords_web.json)
-    web_chords_key: Mapped[Optional[str]] = mapped_column(
+    web_chords_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )
 
     # Timestamps for lightweight task cooldowns — prevent re-enqueuing
     # background lyrics/tabs/merge on every poll (5-6 sec interval).
-    lyrics_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+    lyrics_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    tabs_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+    tabs_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    merge_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+    merge_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    external_strums_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+    external_strums_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    web_chords_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+    web_chords_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     # Set when audio download is dispatched to homeserver via SQS.
     # Cleared when homeserver confirms completion or fallback finishes.
-    download_requested_at: Mapped[Optional[datetime]] = mapped_column(
+    download_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    downloaded_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    downloaded_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 

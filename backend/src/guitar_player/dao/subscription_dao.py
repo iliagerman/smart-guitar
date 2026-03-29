@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Subscription, SubscriptionRecord)
 
-    async def get_active_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
+    async def get_active_by_user(self, user_id: uuid.UUID) -> SubscriptionRecord | None:
         stmt = select(Subscription).where(
             and_(
                 Subscription.user_id == user_id,
@@ -29,7 +28,7 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
 
     async def get_by_external_id(
         self, provider: str, external_sub_id: str
-    ) -> Optional[SubscriptionRecord]:
+    ) -> SubscriptionRecord | None:
         stmt = select(Subscription).where(
             and_(
                 Subscription.provider == provider,
@@ -40,7 +39,7 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
         obj = result.scalar_one_or_none()
         return self._to_record(obj) if obj else None
 
-    async def get_pending_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
+    async def get_pending_by_user(self, user_id: uuid.UUID) -> SubscriptionRecord | None:
         stmt = (
             select(Subscription)
             .where(
@@ -56,7 +55,7 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
         obj = result.scalar_one_or_none()
         return self._to_record(obj) if obj else None
 
-    async def get_by_user(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
+    async def get_by_user(self, user_id: uuid.UUID) -> SubscriptionRecord | None:
         stmt = (
             select(Subscription)
             .where(Subscription.user_id == user_id)
@@ -77,7 +76,7 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
-    async def get_canceled_with_access(self, user_id: uuid.UUID) -> Optional[SubscriptionRecord]:
+    async def get_canceled_with_access(self, user_id: uuid.UUID) -> SubscriptionRecord | None:
         now = datetime.now(timezone.utc)
         stmt = select(Subscription).where(
             and_(

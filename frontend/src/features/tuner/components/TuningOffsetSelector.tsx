@@ -28,6 +28,8 @@ export function TuningOffsetSelector({ offset, onChange }: TuningOffsetSelectorP
               ? 'border-charcoal-800 text-smoke-700 cursor-not-allowed'
               : 'border-charcoal-700 text-smoke-400 hover:border-charcoal-600 hover:text-smoke-200'
           )}
+          aria-label="Decrease tuning offset"
+          data-testid="tuning-offset-decrease"
         >
           <Minus size={16} />
         </button>
@@ -45,6 +47,8 @@ export function TuningOffsetSelector({ offset, onChange }: TuningOffsetSelectorP
               ? 'border-charcoal-800 text-smoke-700 cursor-not-allowed'
               : 'border-charcoal-700 text-smoke-400 hover:border-charcoal-600 hover:text-smoke-200'
           )}
+          aria-label="Increase tuning offset"
+          data-testid="tuning-offset-increase"
         >
           <Plus size={16} />
         </button>

@@ -3,7 +3,11 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { DateRangePicker } from './DateRangePicker'
 import { UserFilterSelect } from './UserFilterSelect'
 
-export function DashboardHeader({ emails }: { emails: string[] }) {
+interface DashboardHeaderProps {
+    emails: string[]
+}
+
+export function DashboardHeader({ emails }: DashboardHeaderProps) {
     return (
         <PageHeader
             title="Analytics"

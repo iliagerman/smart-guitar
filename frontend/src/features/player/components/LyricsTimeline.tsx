@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useLyricsSync } from '../hooks/use-lyrics-sync'
 import { scrollToCenter } from '../lib/scroll-to-center'
 import { normalizeWords } from '../lib/normalize-words'
+import { cn } from '@/lib/cn'
 import type { LyricsSegment } from '@/types/song'
 
 interface LyricsTimelineProps {
@@ -52,13 +53,13 @@ export function LyricsTimeline({ segments, onSeek }: LyricsTimelineProps) {
                   ? activeRef
                   : undefined
               }
-              className={
+              className={cn(
+                'cursor-pointer',
                 si === activeSegmentIndex && wi === activeWordIndex
                   ? 'text-flame-400 font-semibold'
                   : ''
-              }
+              )}
               onClick={() => onSeek?.(word.start)}
-              style={{ cursor: 'pointer' }}
               title={`${word.start.toFixed(2)}s – ${word.end.toFixed(2)}s`}
             >
               {word.word}

@@ -1,11 +1,18 @@
 """Cognito authentication service wrapping boto3 cognito-idp client."""
 
 import logging
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
 
 from guitar_player.config import Settings
+from guitar_player.schemas.auth import (
+    CognitoCodeDeliveryResult,
+    CognitoRefreshResult,
+    CognitoRegisterResult,
+    CognitoTokenResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +35,7 @@ class CognitoAuthService:
         self._user_pool_id = cognito.user_pool_id
         self._client_id = cognito.client_id
 
-        kwargs: dict = {"region_name": cognito.region}
+        kwargs: dict[str, Any] = {"region_name": cognito.region}
         if not settings.aws.use_iam_role:
             kwargs["aws_access_key_id"] = settings.aws.access_key
             kwargs["aws_secret_access_key"] = settings.aws.secret_key
@@ -41,8 +48,8 @@ class CognitoAuthService:
         message = exc.response["Error"]["Message"]
         raise CognitoAuthError(code, message) from exc
 
-    def register(self, email: str, password: str) -> dict:
-        """Sign up a new user. Returns user_sub, user_confirmed, and code_delivery info."""
+    def register(self, email: str, password: str) -> CognitoRegisterResult:
+        """Sign up a new user."""
         try:
             resp = self._client.sign_up(
                 ClientId=self._client_id,
@@ -50,13 +57,14 @@ class CognitoAuthService:
                 Password=password,
                 UserAttributes=[{"Name": "email", "Value": email}],
             )
-            return {
-                "user_sub": resp["UserSub"],
-                "user_confirmed": resp["UserConfirmed"],
-                "code_delivery": resp.get("CodeDeliveryDetails"),
-            }
+            return CognitoRegisterResult(
+                user_sub=resp["UserSub"],
+                user_confirmed=resp["UserConfirmed"],
+                code_delivery=resp.get("CodeDeliveryDetails"),
+            )
         except ClientError as exc:
             self._handle_error(exc)
+            raise  # unreachable, satisfies type checker
 
     def confirm(self, email: str, code: str) -> None:
         """Confirm a user's sign-up with the verification code."""
@@ -69,7 +77,7 @@ class CognitoAuthService:
         except ClientError as exc:
             self._handle_error(exc)
 
-    def login(self, email: str, password: str) -> dict:
+    def login(self, email: str, password: str) -> CognitoTokenResult:
         """Authenticate with email/password and return tokens."""
         try:
             resp = self._client.initiate_auth(
@@ -81,16 +89,17 @@ class CognitoAuthService:
                 },
             )
             result = resp["AuthenticationResult"]
-            return {
-                "access_token": result["AccessToken"],
-                "id_token": result["IdToken"],
-                "refresh_token": result["RefreshToken"],
-                "expires_in": result["ExpiresIn"],
-            }
+            return CognitoTokenResult(
+                access_token=result["AccessToken"],
+                id_token=result["IdToken"],
+                refresh_token=result["RefreshToken"],
+                expires_in=result["ExpiresIn"],
+            )
         except ClientError as exc:
             self._handle_error(exc)
+            raise  # unreachable, satisfies type checker
 
-    def refresh_tokens(self, refresh_token: str) -> dict:
+    def refresh_tokens(self, refresh_token: str) -> CognitoRefreshResult:
         """Exchange a refresh token for new access/id tokens."""
         try:
             resp = self._client.initiate_auth(
@@ -101,31 +110,38 @@ class CognitoAuthService:
                 },
             )
             result = resp["AuthenticationResult"]
-            return {
-                "access_token": result["AccessToken"],
-                "id_token": result["IdToken"],
-                "expires_in": result["ExpiresIn"],
-            }
+            return CognitoRefreshResult(
+                access_token=result["AccessToken"],
+                id_token=result["IdToken"],
+                expires_in=result["ExpiresIn"],
+            )
         except ClientError as exc:
             self._handle_error(exc)
+            raise  # unreachable, satisfies type checker
 
-    def resend_confirmation_code(self, email: str) -> dict:
+    def resend_confirmation_code(self, email: str) -> CognitoCodeDeliveryResult:
         """Resend the sign-up confirmation code to the user's email."""
         try:
             resp = self._client.resend_confirmation_code(
                 ClientId=self._client_id,
                 Username=email,
             )
-            return {"code_delivery": resp.get("CodeDeliveryDetails")}
+            return CognitoCodeDeliveryResult(
+                code_delivery=resp.get("CodeDeliveryDetails"),
+            )
         except ClientError as exc:
             self._handle_error(exc)
+            raise  # unreachable, satisfies type checker
 
-    # ── Admin helpers ─────────────────────────────────────────────
+    # -- Admin helpers --
 
-    def list_unconfirmed_users(self) -> list[dict]:
-        """List all users with UNCONFIRMED status (paginated)."""
-        users: list[dict] = []
-        params: dict = {
+    def list_unconfirmed_users(self) -> list[dict[str, Any]]:
+        """List all users with UNCONFIRMED status (paginated).
+
+        Returns raw Cognito user dicts -- schema-less external API data.
+        """
+        users: list[dict[str, Any]] = []
+        params: dict[str, Any] = {
             "UserPoolId": self._user_pool_id,
             "Filter": 'cognito:user_status = "UNCONFIRMED"',
             "Limit": 60,

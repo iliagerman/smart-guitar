@@ -1,4 +1,12 @@
-export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+/** Const object for job status values. Use `JobStatus.PENDING` etc. instead of raw strings. */
+export const JobStatus = {
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+} as const
+
+export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus]
 
 export interface JobResult {
   description: string

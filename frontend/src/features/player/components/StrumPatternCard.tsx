@@ -40,6 +40,13 @@ interface StrumPatternCardProps {
   onOpenTutorial?: () => void
 }
 
+interface SectionPatternProps {
+  section: SectionStrumPattern
+  bpm: number
+  disabled?: boolean
+  onPlayingChange?: (playing: boolean) => void
+}
+
 export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading, onOpenTutorial }: StrumPatternCardProps) {
   const hasTutorials = (tutorialLinks && tutorialLinks.length > 0) || !!tutorialUrl
   const [playingSection, setPlayingSection] = useState<string | null>(null)
@@ -55,8 +62,10 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
             {hasTutorials && onOpenTutorial && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onOpenTutorial() }}
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onOpenTutorial() }}
                 className="flex items-center gap-1 text-[11px] text-flame-400 hover:text-flame-300 transition-colors cursor-pointer"
+                aria-label="Open tutorial"
+                data-testid="strum-tutorial-button"
               >
                 <ExternalLink size={11} />
                 Learn to play
@@ -94,12 +103,7 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
   )
 }
 
-function SectionPattern({ section, bpm, disabled, onPlayingChange }: {
-  section: SectionStrumPattern
-  bpm: number
-  disabled?: boolean
-  onPlayingChange?: (playing: boolean) => void
-}) {
+function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatternProps) {
   const rawPattern = section.pattern.map((s) => s.direction)
   // Filter out 'miss' entries for audio playback — only play actual strokes
   const playablePattern = rawPattern.filter((d): d is 'down' | 'up' => d !== 'miss')
@@ -133,6 +137,7 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: {
           )}
           title={isPlaying ? 'Stop' : disabled ? 'Stop current pattern first' : 'Play pattern'}
           aria-label={isPlaying ? 'Stop pattern' : 'Play pattern'}
+          data-testid="strum-play-button"
         >
           {isPlaying ? <Square size={10} /> : <Play size={10} className="ml-0.5" />}
         </button>

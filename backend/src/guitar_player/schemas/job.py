@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -15,8 +14,8 @@ class CreateJobRequest(BaseModel):
 
 class JobResultEntry(BaseModel):
     description: str
-    target_key: Optional[str] = None
-    residual_key: Optional[str] = None
+    target_key: str | None = None
+    residual_key: str | None = None
 
 
 class ActiveJobInfo(BaseModel):
@@ -25,7 +24,7 @@ class ActiveJobInfo(BaseModel):
     id: uuid.UUID
     status: str
     progress: int = 0
-    stage: Optional[str] = None
+    stage: str | None = None
 
 
 class JobResponse(BaseModel):
@@ -34,13 +33,13 @@ class JobResponse(BaseModel):
     song_id: uuid.UUID
     status: str
     progress: int | None = None
-    stage: Optional[str] = None
-    descriptions: Optional[list[str]] = None
-    mode: Optional[str] = None
-    error_message: Optional[str] = None
-    results: Optional[list[JobResultEntry]] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    stage: str | None = None
+    descriptions: list[str] | None = None
+    mode: str | None = None
+    error_message: str | None = None
+    results: list[JobResultEntry] | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}

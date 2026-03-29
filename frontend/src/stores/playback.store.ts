@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 
-export type StemName = string
 export type SheetMode = 'chords' | 'tabs'
 
 interface PlaybackState {

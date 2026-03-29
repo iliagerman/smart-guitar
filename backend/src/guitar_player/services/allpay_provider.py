@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.config import Settings
 from guitar_player.dao.subscription_dao import SubscriptionDAO

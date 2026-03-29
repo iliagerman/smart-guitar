@@ -15,6 +15,7 @@ export function SubscriptionFailPage() {
       <button
         onClick={() => navigate(ROUTES.LIBRARY, { replace: true })}
         className="px-6 py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
+        data-testid="subscription-fail-back-button"
       >
         Go Back
       </button>

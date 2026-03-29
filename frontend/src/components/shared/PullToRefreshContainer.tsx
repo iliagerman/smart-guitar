@@ -35,8 +35,7 @@ export function PullToRefreshContainer({
   return (
     <div
       ref={scrollRef}
-      className={cn(className)}
-      style={{ overscrollBehaviorY: 'none' }}
+      className={cn('overscroll-y-none', className)}
     >
       <PullIndicator state={state} pullDistance={pullDistance} threshold={DEFAULT_THRESHOLD} />
       {children}

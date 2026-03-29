@@ -19,7 +19,7 @@ export function SearchResultCard({ result, onSelect, isSelecting, isActive, down
     <button
       onClick={() => onSelect(result)}
       disabled={isSelecting}
-      className="w-full flex items-center gap-3 p-3 bg-charcoal-800/60 backdrop-blur-sm border border-charcoal-700/50 rounded-xl hover:bg-charcoal-800/80 hover:border-flame-400/30 hover:shadow-[0_0_20px_rgba(250,204,21,0.08)] transition-all text-left disabled:opacity-50"
+      className="w-full flex items-center gap-3 p-3 bg-charcoal-800/60 backdrop-blur-sm border border-charcoal-700/50 rounded-xl hover:bg-charcoal-800/80 hover:border-flame-400/30 hover:shadow-[0_0_20px_rgba(250,204,21,0.08)] transition-colors text-left disabled:opacity-50"
       data-testid={`search-result-${result.youtube_id}`}
     >
       <div className="relative w-12 h-12 rounded-lg bg-charcoal-700/60 overflow-hidden shrink-0">

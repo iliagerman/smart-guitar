@@ -27,7 +27,7 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search songs..."
-        className="w-full pl-10 pr-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-xl text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all"
+        className="w-full pl-10 pr-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-xl text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
         data-testid="search-input"
       />
       {isLoading && (

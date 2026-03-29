@@ -8,7 +8,7 @@ SQLAlchemy model instances.
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -20,52 +20,52 @@ class SongRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    youtube_id: Optional[str] = None
+    youtube_id: str | None = None
     title: str
-    artist: Optional[str] = None
-    duration_seconds: Optional[int] = None
+    artist: str | None = None
+    duration_seconds: int | None = None
     song_name: str
-    thumbnail_key: Optional[str] = None
-    audio_key: Optional[str] = None
-    genre: Optional[str] = None
+    thumbnail_key: str | None = None
+    audio_key: str | None = None
+    genre: str | None = None
     play_count: int = 0
     like_count: int = 0
 
     # Stem and chord file paths (storage keys)
-    vocals_key: Optional[str] = None
-    drums_key: Optional[str] = None
-    bass_key: Optional[str] = None
-    guitar_key: Optional[str] = None
-    piano_key: Optional[str] = None
-    other_key: Optional[str] = None
-    guitar_removed_key: Optional[str] = None
-    vocals_guitar_key: Optional[str] = None
-    chords_key: Optional[str] = None
-    lyrics_key: Optional[str] = None
-    lyrics_quick_key: Optional[str] = None
-    lyrics_corrected_key: Optional[str] = None
-    tabs_key: Optional[str] = None
-    external_strums_key: Optional[str] = None
+    vocals_key: str | None = None
+    drums_key: str | None = None
+    bass_key: str | None = None
+    guitar_key: str | None = None
+    piano_key: str | None = None
+    other_key: str | None = None
+    guitar_removed_key: str | None = None
+    vocals_guitar_key: str | None = None
+    chords_key: str | None = None
+    lyrics_key: str | None = None
+    lyrics_quick_key: str | None = None
+    lyrics_corrected_key: str | None = None
+    tabs_key: str | None = None
+    external_strums_key: str | None = None
 
     # Processing lock & deduplication
-    processing_job_id: Optional[uuid.UUID] = None
+    processing_job_id: uuid.UUID | None = None
     lyrics_corrected: bool = False
     lyrics_heal_version: int = 0
     lyrics_failed: bool = False
     tabs_failed: bool = False
     external_strums_failed: bool = False
     web_chords_failed: bool = False
-    web_chords_key: Optional[str] = None
+    web_chords_key: str | None = None
 
     # Cooldown timestamps
-    lyrics_attempted_at: Optional[datetime] = None
-    tabs_attempted_at: Optional[datetime] = None
-    merge_attempted_at: Optional[datetime] = None
-    external_strums_attempted_at: Optional[datetime] = None
-    web_chords_attempted_at: Optional[datetime] = None
-    download_requested_at: Optional[datetime] = None
+    lyrics_attempted_at: datetime | None = None
+    tabs_attempted_at: datetime | None = None
+    merge_attempted_at: datetime | None = None
+    external_strums_attempted_at: datetime | None = None
+    web_chords_attempted_at: datetime | None = None
+    download_requested_at: datetime | None = None
 
-    downloaded_by: Optional[uuid.UUID] = None
+    downloaded_by: uuid.UUID | None = None
 
 
 class JobRecord(BaseModel):
@@ -79,12 +79,12 @@ class JobRecord(BaseModel):
     song_id: uuid.UUID
     status: str
     progress: int = 0
-    stage: Optional[str] = None
-    descriptions: Optional[list] = None
-    mode: Optional[str] = None
-    error_message: Optional[str] = None
-    results: Optional[list] = None
-    completed_at: Optional[datetime] = None
+    stage: str | None = None
+    descriptions: list | None = None
+    mode: str | None = None
+    error_message: str | None = None
+    results: list | None = None
+    completed_at: datetime | None = None
 
 
 class UserRecord(BaseModel):
@@ -96,7 +96,7 @@ class UserRecord(BaseModel):
 
     cognito_sub: str
     email: str
-    trial_ends_at: Optional[datetime] = None
+    trial_ends_at: datetime | None = None
     has_seen_onboarding: bool = False
 
 
@@ -111,7 +111,7 @@ class FavoriteRecord(BaseModel):
     song_id: uuid.UUID
 
     # Populated via selectin relationship when available.
-    song: Optional[SongRecord] = None
+    song: SongRecord | None = None
 
 
 class SubscriptionRecord(BaseModel):
@@ -127,9 +127,9 @@ class SubscriptionRecord(BaseModel):
     external_customer_id: str
     status: str
     plan_type: str
-    current_period_start: Optional[datetime] = None
-    current_period_end: Optional[datetime] = None
-    canceled_at: Optional[datetime] = None
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+    canceled_at: datetime | None = None
 
 
 class ChordVoteRecord(BaseModel):
@@ -153,11 +153,11 @@ class AnalyticsEventRecord(BaseModel):
     event_type: str
     event_category: str
     event_source: str
-    user_sub: Optional[str] = None
-    user_email: Optional[str] = None
-    tenant_id: Optional[str] = None
-    aws_account_id: Optional[str] = None
-    song_id: Optional[uuid.UUID] = None
-    song_title: Optional[str] = None
-    session_id: Optional[str] = None
-    properties: Optional[dict[str, Any]] = None
+    user_sub: str | None = None
+    user_email: str | None = None
+    tenant_id: str | None = None
+    aws_account_id: str | None = None
+    song_id: uuid.UUID | None = None
+    song_title: str | None = None
+    session_id: str | None = None
+    properties: dict[str, Any] | None = None

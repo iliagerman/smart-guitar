@@ -71,7 +71,8 @@ export function useSaveChords() {
       toast.success('Chords saved')
     },
     onError: (error: unknown) => {
-      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const apiError = error as { response?: { data?: { detail?: string } } } | undefined
+      const msg = apiError?.response?.data?.detail
       toast.error(msg ?? 'Failed to save chords')
     },
   })
