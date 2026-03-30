@@ -208,3 +208,95 @@ resource "aws_s3_bucket_policy" "landing" {
     ]
   })
 }
+
+################################################################################
+# Media (Audio Bucket) — Origin Access Control
+################################################################################
+
+resource "aws_cloudfront_origin_access_control" "media" {
+  name                              = "${var.project_name}-media-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+################################################################################
+# Media (Audio Bucket) — CloudFront Distribution
+################################################################################
+
+resource "aws_cloudfront_distribution" "media" {
+  enabled         = true
+  is_ipv6_enabled = true
+  aliases         = var.media_domain_aliases
+  price_class     = "PriceClass_100"
+  comment         = "${var.project_name} media CDN"
+
+  origin {
+    domain_name              = var.audio_bucket_regional_domain_name
+    origin_id                = "s3-audio"
+    origin_access_control_id = aws_cloudfront_origin_access_control.media.id
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "s3-audio"
+
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+
+    forwarded_values {
+      query_string = false
+      headers      = ["Origin", "Access-Control-Request-Headers", "Access-Control-Request-Method"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 86400
+    max_ttl     = 31536000
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = merge(var.tags, { Name = "${var.project_name}-media-cdn" })
+}
+
+################################################################################
+# Media (Audio Bucket) — S3 Bucket Policy (allow CloudFront OAC)
+################################################################################
+
+resource "aws_s3_bucket_policy" "audio" {
+  bucket = var.audio_bucket_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontOAC"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${var.audio_bucket_arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.media.arn
+          }
+        }
+      }
+    ]
+  })
+}

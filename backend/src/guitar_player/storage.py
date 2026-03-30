@@ -27,6 +27,7 @@ class StorageBackend(Protocol):
     def download_to_local(self, key: str, local_path: str) -> str: ...
     def file_exists(self, key: str) -> bool: ...
     def get_url(self, key: str) -> str: ...
+    def get_presigned_url(self, key: str) -> str: ...
     def list_files(self, prefix: str) -> list[str]: ...
     def delete_file(self, key: str) -> bool: ...
     def delete_prefix(self, prefix: str) -> int: ...
@@ -65,6 +66,9 @@ class LocalStorage:
 
     def get_url(self, key: str) -> str:
         return str((self._base_path / key).resolve())
+
+    def get_presigned_url(self, key: str) -> str:
+        return self.get_url(key)
 
     def list_files(self, prefix: str) -> list[str]:
         base = self._base_path / prefix
@@ -109,6 +113,7 @@ class S3Storage:
         self._bucket = settings.storage.bucket or ""
         self._region = settings.aws.region
         self._expiry = settings.presigned_url.expiry_seconds
+        self._cdn_base_url = (settings.storage.cdn_base_url or "").rstrip("/") or None
 
         kwargs: dict = {
             "region_name": self._region,
@@ -148,6 +153,12 @@ class S3Storage:
             return False
 
     def get_url(self, key: str) -> str:
+        if self._cdn_base_url:
+            return f"{self._cdn_base_url}/{key}"
+        return self.get_presigned_url(key)
+
+    def get_presigned_url(self, key: str) -> str:
+        """Always generate a presigned S3 URL, bypassing CDN."""
         return self._s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": self._bucket, "Key": key},

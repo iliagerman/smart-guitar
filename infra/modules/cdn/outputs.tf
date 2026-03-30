@@ -21,3 +21,15 @@ output "landing_distribution_domain_name" {
 output "landing_distribution_hosted_zone_id" {
   value = aws_cloudfront_distribution.landing.hosted_zone_id
 }
+
+output "media_distribution_id" {
+  value = aws_cloudfront_distribution.media.id
+}
+
+output "media_distribution_domain_name" {
+  value = aws_cloudfront_distribution.media.domain_name
+}
+
+output "media_distribution_hosted_zone_id" {
+  value = aws_cloudfront_distribution.media.hosted_zone_id
+}

@@ -93,9 +93,10 @@ async def get_job_status_url(
 
         key = _job_status_manifest_key(song.song_name, job_id)
 
-    # S3Storage.get_url returns a presigned URL; LocalStorage returns a file path
-    # unreachable from the browser. For local, return a backend URL instead.
-    storage_url = storage.get_url(key)
+    # Job manifests are ephemeral polling files — use presigned URLs to bypass
+    # CDN caching. LocalStorage returns a file path unreachable from the
+    # browser, so fall back to a backend URL for local dev.
+    storage_url = storage.get_presigned_url(key)
     if storage_url.startswith("/") or storage_url.startswith("file:"):
         url = str(request.url_for("get_job_status_manifest", job_id=str(job_id)))
     else:

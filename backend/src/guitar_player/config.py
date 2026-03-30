@@ -63,6 +63,7 @@ class StorageConfig(BaseModel):
     backend: Literal["local", "s3"] = "local"
     base_path: str | None = None
     bucket: str | None = None
+    cdn_base_url: str | None = None
 
 
 class CognitoConfig(BaseModel):

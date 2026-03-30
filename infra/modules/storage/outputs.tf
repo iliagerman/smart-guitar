@@ -6,6 +6,10 @@ output "audio_bucket_arn" {
   value = aws_s3_bucket.audio.arn
 }
 
+output "audio_bucket_regional_domain_name" {
+  value = aws_s3_bucket.audio.bucket_regional_domain_name
+}
+
 output "frontend_bucket_name" {
   value = aws_s3_bucket.frontend.id
 }

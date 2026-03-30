@@ -44,6 +44,23 @@ variable "landing_domain_aliases" {
   default = []
 }
 
+variable "audio_bucket_name" {
+  type = string
+}
+
+variable "audio_bucket_arn" {
+  type = string
+}
+
+variable "audio_bucket_regional_domain_name" {
+  type = string
+}
+
+variable "media_domain_aliases" {
+  type    = list(string)
+  default = []
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

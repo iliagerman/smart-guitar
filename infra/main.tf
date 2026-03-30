@@ -106,6 +106,10 @@ module "cdn" {
   landing_bucket_arn                   = module.storage.landing_bucket_arn
   landing_bucket_regional_domain_name  = module.storage.landing_bucket_regional_domain_name
   landing_domain_aliases               = [var.domain_name, "www.${var.domain_name}"]
+  audio_bucket_name                    = module.storage.audio_bucket_name
+  audio_bucket_arn                     = module.storage.audio_bucket_arn
+  audio_bucket_regional_domain_name    = module.storage.audio_bucket_regional_domain_name
+  media_domain_aliases                 = [local.media_domain]
   tags                                 = local.common_tags
 }
 
@@ -1002,6 +1006,19 @@ resource "aws_route53_record" "landing" {
   alias {
     name                   = module.cdn.landing_distribution_domain_name
     zone_id                = module.cdn.landing_distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# media.smart-guitar.com → CloudFront (media CDN)
+resource "aws_route53_record" "media" {
+  zone_id = module.dns.public_hosted_zone_id
+  name    = local.media_domain
+  type    = "A"
+
+  alias {
+    name                   = module.cdn.media_distribution_domain_name
+    zone_id                = module.cdn.media_distribution_hosted_zone_id
     evaluate_target_health = false
   }
 }
