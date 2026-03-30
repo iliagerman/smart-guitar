@@ -17,6 +17,8 @@ export interface SongOverrides {
   transposeSemitones?: number
   lyricsOffsetMs?: number
   strumSource?: StrumSource
+  /** Per-song stem selection. undefined = use global default, string[] = specific stems, 'fullSong' = full song mode. */
+  activeStems?: string[] | 'fullSong'
 }
 
 export interface CameraPreviewPosition {
@@ -88,7 +90,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       recordVideo: false,
       cameraPreviewPosition: null,
       cameraPreviewMinimized: false,
-      defaultStems: ['vocals', 'drums'],
+      defaultStems: ['vocals', 'drums', 'bass', 'piano', 'other'],
       songOverrides: {},
       setSongOverride: (songId, key, value) =>
         set((state) => ({
@@ -211,9 +213,23 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           }
         }
 
+        // Default stems update (v9 → v10): switch from ['vocals', 'drums'] to all except guitar
+        if (state) {
+          const current = state.defaultStems as string[] | undefined
+          if (current !== undefined && Array.isArray(current)) {
+            const oldDefault = ['vocals', 'drums']
+            const isOldDefault =
+              current.length === oldDefault.length &&
+              oldDefault.every((s) => current.includes(s))
+            if (isOldDefault) {
+              state.defaultStems = ['vocals', 'drums', 'bass', 'piano', 'other']
+            }
+          }
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 9,
+      version: 10,
     }
   )
 )

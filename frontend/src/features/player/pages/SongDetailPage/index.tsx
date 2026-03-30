@@ -112,11 +112,20 @@ export function SongDetailPage() {
     if (!songId) return
     hasRecordedPlayRef.current = false
     setCurrentSong(songId)
-    const defaults = usePlayerPrefsStore.getState().defaultStems
-    if (defaults.length > 0) {
-      setActiveStems(defaults)
+
+    const prefs = usePlayerPrefsStore.getState()
+    const overrides = prefs.songOverrides[songId]
+
+    if (overrides?.activeStems !== undefined) {
+      if (overrides.activeStems === 'fullSong') {
+        selectFullSong()
+      } else {
+        setActiveStems(overrides.activeStems)
+      }
+    } else if (prefs.defaultStems.length > 0) {
+      setActiveStems(prefs.defaultStems)
     }
-  }, [songId, setCurrentSong, setActiveStems])
+  }, [songId, setCurrentSong, setActiveStems, selectFullSong])
 
   useEffect(() => {
     if (!songId) return

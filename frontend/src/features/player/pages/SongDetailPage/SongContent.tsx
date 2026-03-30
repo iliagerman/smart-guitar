@@ -67,6 +67,8 @@ export function SongContent({
   const deleteChord = useChordEditStore((s) => s.deleteChord)
   const moveChordToTime = useChordEditStore((s) => s.moveChordToTime)
   const updateWordText = useChordEditStore((s) => s.updateWordText)
+  const selectedWordLocation = useChordEditStore((s) => s.selectedWordLocation)
+  const selectWord = useChordEditStore((s) => s.selectWord)
 
   const hasChordSheet = hasChords || hasAnyLyrics || chordsLoading
   const showBackgroundProcessing =
@@ -131,12 +133,14 @@ export function SongContent({
                         onSeek={onSeek}
                         isEditMode={isEditMode}
                         selectedChordIndex={selectedEditChordIndex}
+                        selectedWordLocation={isEditMode ? selectedWordLocation : undefined}
                         onChordSelect={selectChord}
                         onChordRename={updateChordLabel}
                         onChordDelete={deleteChord}
                         onChordDrop={moveChordToTime}
                         onWordClick={isEditMode ? onAddChordAtWord : undefined}
                         onWordRename={isEditMode ? updateWordText : undefined}
+                        onWordSelect={isEditMode ? selectWord : undefined}
                       />
                     </>
                   )}

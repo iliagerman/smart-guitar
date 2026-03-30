@@ -10,18 +10,25 @@ import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { ChordEntry, LyricsSegment } from '@/types/song'
 
+interface WordLocation {
+  segmentIndex: number
+  wordIndex: number
+}
+
 interface ChordSheetProps {
   chords: ChordEntry[]
   lyrics: LyricsSegment[]
   onSeek?: (time: number) => void
   isEditMode?: boolean
   selectedChordIndex?: number | null
+  selectedWordLocation?: WordLocation | null
   onChordSelect?: (globalIndex: number) => void
   onChordRename?: (globalIndex: number, newName: string) => void
   onChordDelete?: (globalIndex: number) => void
   onChordDrop?: (globalIndex: number, newStartTime: number) => void
   onWordClick?: (startTime: number) => void
   onWordRename?: (segmentIndex: number, wordIndex: number, newText: string) => void
+  onWordSelect?: (location: WordLocation) => void
 }
 
 const LOOK_AHEAD_WORDS = 20
@@ -174,14 +181,18 @@ interface EditableWordProps {
   word: string
   segmentIndex: number
   wordIndex: number
+  isSelected?: boolean
   onRename: (segmentIndex: number, wordIndex: number, newText: string) => void
+  onSelect?: (segmentIndex: number, wordIndex: number) => void
 }
 
 function EditableWord({
   word,
   segmentIndex,
   wordIndex,
+  isSelected,
   onRename,
+  onSelect,
 }: EditableWordProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [value, setValue] = useState(word)
@@ -189,6 +200,10 @@ function EditableWord({
   const handleDoubleClick = () => {
     setValue(word)
     setIsEditing(true)
+  }
+
+  const handleClick = () => {
+    onSelect?.(segmentIndex, wordIndex)
   }
 
   const commit = () => {
@@ -220,9 +235,14 @@ function EditableWord({
 
   return (
     <span
-      className="cursor-text hover:bg-flame-400/10 rounded px-0.5 text-smoke-300"
+      className={cn(
+        'cursor-text hover:bg-flame-400/10 rounded px-0.5 text-smoke-300',
+        isSelected && 'ring-2 ring-sky-400 bg-sky-400/10',
+      )}
+      onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      title="Double-click to edit"
+      title="Click to select timing · Double-click to edit text"
+      data-testid={`word-edit-${segmentIndex}-${wordIndex}`}
     >
       {word}
     </span>
@@ -235,12 +255,14 @@ export function ChordSheet({
   onSeek,
   isEditMode = false,
   selectedChordIndex,
+  selectedWordLocation,
   onChordSelect,
   onChordRename,
   onChordDelete,
   onChordDrop,
   onWordClick,
   onWordRename,
+  onWordSelect,
 }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
   const lines = mergeChordLyrics(chords, lyrics)
@@ -385,10 +407,18 @@ export function ChordSheet({
         word={word}
         segmentIndex={segmentIndex}
         wordIndex={wordIndex}
+        isSelected={
+          selectedWordLocation?.segmentIndex === segmentIndex &&
+          selectedWordLocation?.wordIndex === wordIndex
+        }
         onRename={onWordRename!}
+        onSelect={onWordSelect
+          ? (si, wi) => onWordSelect({ segmentIndex: si, wordIndex: wi })
+          : undefined
+        }
       />
     ),
-    [onWordRename]
+    [onWordRename, onWordSelect, selectedWordLocation]
   )
 
   if (lines.length === 0) return null

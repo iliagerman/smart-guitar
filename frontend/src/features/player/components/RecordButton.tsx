@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Circle, Download, Mic, Square, Video } from 'lucide-react'
+import * as Popover from '@radix-ui/react-popover'
+import { Circle, Mic, Square, Video } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRecorder } from '../hooks/use-recorder'
 import { useVideoRecorder } from '../hooks/use-video-recorder'
 import { CameraPreview } from './CameraPreview'
-import { ShareMenu } from './ShareMenu'
+import { ShareDialog } from './ShareDialog'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { cn } from '@/lib/cn'
@@ -41,6 +42,7 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
 
   const [showModeSelector, setShowModeSelector] = useState(false)
   const [activeMode, setActiveMode] = useState<RecordingMode | null>(null)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
   // Determine which recorder to use: activeMode for manual, recordVideo for auto-record
   const useVideo = activeMode !== null ? activeMode === 'video' : recordVideo
@@ -50,7 +52,6 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
     recordingDuration,
     recordedBlob,
     stopRecording,
-    downloadRecording,
   } = useVideo ? videoRecorder : audioRecorder
 
   const videoPreviewStream = useVideo ? videoRecorder.videoPreviewStream : null
@@ -103,9 +104,10 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
           }
         })
       } else if (wasPlaying && !state.isPlaying && isRecordingRef.current) {
-        stopRecordingRef.current(autoDownloadRef.current)
-        toast.success(autoDownloadRef.current ? 'Recording saved' : 'Recording ready')
-        setActiveMode(null)
+        stopRecordingRef.current(false)
+        toast.success('Recording ready')
+        setShareDialogOpen(true)
+        // Don't clear activeMode here — share dialog needs it to read the correct blob.
       }
     })
 
@@ -114,10 +116,12 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
 
   const handleRecordButtonClick = () => {
     if (isRecording) {
-      stopRecording(autoDownloadRecordings)
-      toast.success(autoDownloadRecordings ? 'Recording saved' : 'Recording ready')
+      stopRecording(false)
+      toast.success('Recording ready')
       setShowModeSelector(false)
-      setActiveMode(null)
+      setShareDialogOpen(true)
+      // Don't clear activeMode here — it determines which recorder's blob we read.
+      // It's cleared when the share dialog closes.
       return
     }
     setShowModeSelector((prev) => !prev)
@@ -140,50 +144,47 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
     }
   }
 
-  const handleDownload = () => {
-    downloadRecording()
-    toast.success('Recording saved')
-  }
-
-  const showDownloadButton = !isRecording && recordedBlob !== null && !autoDownloadRecordings
-  const showShareButton = !isRecording && recordedBlob !== null && useVideo
-
   const filename = buildFilename(artist, songTitle) + (useVideo ? '.mp4' : '.mp3')
 
   return (
     <div data-tour="record" className="flex items-center gap-1.5">
-      <div className="relative">
-        <button
-          onClick={handleRecordButtonClick}
-          className={cn(
-            'inline-flex items-center justify-center rounded-lg w-16 h-16',
-            'border transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-            isRecording
-              ? 'bg-red-600/20 border-red-500 hover:border-red-400'
-              : 'bg-charcoal-700 border-charcoal-600 hover:border-flame-400/30',
-          )}
-          aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-          data-testid="record-button"
-        >
-          {isRecording ? (
-            <div className="flex flex-col items-center gap-0.5">
-              <Square size={18} className="text-red-400 fill-red-400" />
-              <span className="text-[10px] text-red-400 font-mono tabular-nums">
-                {formatDuration(recordingDuration)}
-              </span>
-            </div>
-          ) : (
-            <Circle size={28} className="fill-current text-red-500 transition-colors" />
-          )}
-        </button>
-
-        {showModeSelector && !isRecording && (
-          <div
+      <Popover.Root open={showModeSelector && !isRecording} onOpenChange={setShowModeSelector}>
+        <Popover.Trigger asChild>
+          <button
+            onClick={handleRecordButtonClick}
             className={cn(
-              'absolute top-full left-1/2 -translate-x-1/2 mt-2',
-              'flex flex-col w-36 rounded-lg overflow-hidden',
+              'inline-flex items-center justify-center rounded-lg w-16 h-16',
+              'border transition-colors',
+              'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+              isRecording
+                ? 'bg-red-600/20 border-red-500 hover:border-red-400'
+                : 'bg-charcoal-700 border-charcoal-600 hover:border-flame-400/30',
+            )}
+            aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+            data-testid="record-button"
+          >
+            {isRecording ? (
+              <div className="flex flex-col items-center gap-0.5">
+                <Square size={18} className="text-red-400 fill-red-400" />
+                <span className="text-[10px] text-red-400 font-mono tabular-nums">
+                  {formatDuration(recordingDuration)}
+                </span>
+              </div>
+            ) : (
+              <Circle size={28} className="fill-current text-red-500 transition-colors" />
+            )}
+          </button>
+        </Popover.Trigger>
+
+        <Popover.Portal>
+          <Popover.Content
+            side="bottom"
+            sideOffset={8}
+            align="center"
+            className={cn(
+              'flex flex-col w-36 rounded-lg overflow-hidden z-50',
               'bg-charcoal-800 border border-charcoal-600 shadow-lg',
+              'animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
             )}
             data-testid="recording-mode-selector"
           >
@@ -214,31 +215,23 @@ export function RecordButton({ songTitle, artist }: RecordButtonProps) {
               <Video size={18} />
               Video
             </button>
-          </div>
-        )}
-      </div>
-
-      {showDownloadButton && (
-        <button
-          onClick={handleDownload}
-          className={cn(
-            'inline-flex items-center justify-center rounded-lg w-16 h-16',
-            'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
-            'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-          )}
-          aria-label="Download recording"
-          data-testid="recording-download-button"
-        >
-          <Download size={22} />
-        </button>
-      )}
-
-      {showShareButton && recordedBlob && (
-        <ShareMenu blob={recordedBlob} filename={filename} />
-      )}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
 
       <CameraPreview stream={videoPreviewStream} />
+
+      {recordedBlob && (
+        <ShareDialog
+          blob={recordedBlob}
+          filename={filename}
+          open={shareDialogOpen}
+          onOpenChange={(open) => {
+            setShareDialogOpen(open)
+            if (!open) setActiveMode(null)
+          }}
+        />
+      )}
     </div>
   )
 }

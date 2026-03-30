@@ -17,7 +17,19 @@ export function ChordEditToolbar({ onSave, isSaving }: ChordEditToolbarProps) {
   const deleteChord = useChordEditStore((s) => s.deleteChord)
   const selectChord = useChordEditStore((s) => s.selectChord)
 
+  const selectedWordLocation = useChordEditStore((s) => s.selectedWordLocation)
+  const editingLyrics = useChordEditStore((s) => s.editingLyrics)
+  const selectWord = useChordEditStore((s) => s.selectWord)
+  const updateWordStartTime = useChordEditStore((s) => s.updateWordStartTime)
+  const updateWordEndTime = useChordEditStore((s) => s.updateWordEndTime)
+  const cascadeUpdateWordTime = useChordEditStore((s) => s.cascadeUpdateWordTime)
+  const cascadeWordTime = useChordEditStore((s) => s.cascadeWordTime)
+  const toggleCascadeMode = useChordEditStore((s) => s.toggleCascadeMode)
+
   const selectedChord = selectedChordIndex !== null ? editingChords[selectedChordIndex] : null
+  const selectedWord = selectedWordLocation && editingLyrics
+    ? editingLyrics[selectedWordLocation.segmentIndex]?.words[selectedWordLocation.wordIndex]
+    : null
 
   return (
     <div
@@ -68,6 +80,69 @@ export function ChordEditToolbar({ onSave, isSaving }: ChordEditToolbarProps) {
             data-testid="chord-edit-delete-btn"
           >
             <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+
+      {selectedWord && selectedWordLocation && (
+        <div className="flex flex-wrap items-center gap-1.5 border-l border-charcoal-600 pl-2">
+          <span className="text-xs text-smoke-400">
+            Word: <span className="text-smoke-100 font-medium">&ldquo;{selectedWord.word}&rdquo;</span>
+          </span>
+          <label htmlFor="word-edit-start" className="text-xs text-smoke-400">
+            Start:
+          </label>
+          <input
+            id="word-edit-start"
+            type="number"
+            step={0.05}
+            min={0}
+            value={selectedWord.start.toFixed(2)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const val = parseFloat(e.target.value) || 0
+              if (cascadeWordTime) {
+                cascadeUpdateWordTime(selectedWordLocation.segmentIndex, selectedWordLocation.wordIndex, val)
+              } else {
+                updateWordStartTime(selectedWordLocation.segmentIndex, selectedWordLocation.wordIndex, val)
+              }
+            }}
+            className="w-20 rounded bg-charcoal-700 border border-charcoal-600 px-2 py-1 text-sm text-smoke-100 outline-none focus:border-sky-400/50"
+            data-testid="word-edit-start-input"
+          />
+          <label htmlFor="word-edit-end" className="text-xs text-smoke-400">
+            End:
+          </label>
+          <input
+            id="word-edit-end"
+            type="number"
+            step={0.05}
+            min={0}
+            value={selectedWord.end.toFixed(2)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const val = parseFloat(e.target.value) || 0
+              updateWordEndTime(selectedWordLocation.segmentIndex, selectedWordLocation.wordIndex, val)
+            }}
+            className="w-20 rounded bg-charcoal-700 border border-charcoal-600 px-2 py-1 text-sm text-smoke-100 outline-none focus:border-sky-400/50"
+            data-testid="word-edit-end-input"
+          />
+          <label className="inline-flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cascadeWordTime}
+              onChange={toggleCascadeMode}
+              className="accent-sky-400"
+              data-testid="word-edit-cascade-checkbox"
+            />
+            <span className="text-xs text-smoke-400">Shift downstream</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => selectWord(null)}
+            className="rounded p-1 text-smoke-400 hover:bg-smoke-400/10 transition-colors"
+            aria-label="Deselect word"
+            data-testid="word-edit-deselect-btn"
+          >
+            <X size={14} />
           </button>
         </div>
       )}

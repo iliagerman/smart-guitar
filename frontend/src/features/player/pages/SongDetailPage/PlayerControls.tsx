@@ -1,6 +1,8 @@
+import { useCallback } from 'react'
 import { Heart, Pencil } from 'lucide-react'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 import { TransportControls } from '../../components/TransportControls'
 import { TrackSelector } from '../../components/TrackSelector'
@@ -182,7 +184,19 @@ function PrimaryControls({
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
   const toggleStem = usePlaybackStore((s) => s.toggleStem)
   const selectFullSong = usePlaybackStore((s) => s.selectFullSong)
+  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
   const isEditMode = useChordEditStore((s) => s.isEditMode)
+
+  const handleToggleStem = useCallback((stem: string) => {
+    toggleStem(stem)
+    const { activeStems: newStems, isFullSong: nowFull } = usePlaybackStore.getState()
+    setSongOverride(songId, 'activeStems', nowFull ? 'fullSong' : newStems)
+  }, [songId, toggleStem, setSongOverride])
+
+  const handleSelectFullSong = useCallback(() => {
+    selectFullSong()
+    setSongOverride(songId, 'activeStems', 'fullSong')
+  }, [songId, selectFullSong, setSongOverride])
 
   return (
     <>
@@ -229,8 +243,8 @@ function PrimaryControls({
         <TrackSelector
           activeStems={activeStems}
           isFullSong={isFullSong}
-          onToggleStem={toggleStem}
-          onSelectFullSong={selectFullSong}
+          onToggleStem={handleToggleStem}
+          onSelectFullSong={handleSelectFullSong}
           availableStems={detail.stems}
           stemTypes={detail.stem_types}
         />
