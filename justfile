@@ -11,6 +11,11 @@ default_audio := project_dir + "/local_bucket/bob_dylan/knocking_on_heavens_door
 default_vocals := project_dir + "/local_bucket_test/bob_dylan_vocals/knocking_on_heavens_door/vocals.mp3"
 default_vocals_key := "bob_dylan_vocals/knocking_on_heavens_door/vocals.mp3"
 
+# ── Setup ───────────────────────────────────────────────────────
+
+# Install all project dependencies (frontend + all Python services)
+setup: setup-frontend setup-backend setup-demucs setup-chords setup-lyrics setup-tabs
+
 # ── Infrastructure ──────────────────────────────────────────────
 
 # Deploy all AWS infrastructure and write infra-outputs.json.
