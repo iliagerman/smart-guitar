@@ -1,6 +1,7 @@
 """Shared fixtures for integration tests."""
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import event, create_engine
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -47,6 +48,10 @@ def session_factory(settings):
             poolclass=NullPool,
             connect_args={"check_same_thread": False, "timeout": 30},
         )
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def _register_regexp(dbapi_conn, _connection_record):
+            dbapi_conn.create_function("regexp", 2, lambda pattern, string: bool(re.search(pattern, string or "")))
     else:
         engine = create_async_engine(async_url, echo=False, poolclass=NullPool)
 

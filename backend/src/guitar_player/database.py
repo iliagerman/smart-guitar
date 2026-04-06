@@ -10,6 +10,7 @@ Notes on SQLite in tests:
 import asyncio
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
@@ -79,6 +80,10 @@ def init_db(settings: Settings) -> async_sessionmaker[AsyncSession]:
         @event.listens_for(_engine.sync_engine, "begin")
         def _sqlite_begin_immediate(conn):
             conn.exec_driver_sql("BEGIN IMMEDIATE")
+
+        @event.listens_for(_engine.sync_engine, "connect")
+        def _sqlite_register_regexp(dbapi_conn, _connection_record):
+            dbapi_conn.create_function("regexp", 2, lambda pattern, string: bool(re.search(pattern, string or "")))
 
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     logger.info("Database engine created for %s", settings.environment)

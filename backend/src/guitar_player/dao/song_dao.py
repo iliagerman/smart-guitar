@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
@@ -71,7 +71,11 @@ class SongDAO(BaseDAO[Song, SongRecord]):
         count_stmt = select(func.count()).select_from(Song).where(*conditions)
         total = (await self._session.execute(count_stmt)).scalar_one()
 
-        stmt = select(Song).where(*conditions).offset(offset).limit(limit)
+        is_non_english = case(
+            (Song.title.regexp_match(r'[^\x00-\x7F]'), 1),
+            else_=0,
+        )
+        stmt = select(Song).where(*conditions).order_by(is_non_english.asc()).offset(offset).limit(limit)
         result = await self._session.execute(stmt)
         return [self._to_record(obj) for obj in result.scalars().all()], total
 
@@ -90,10 +94,14 @@ class SongDAO(BaseDAO[Song, SongRecord]):
             count_stmt = count_stmt.where(*conditions)
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        is_non_english = case(
+            (Song.title.regexp_match(r'[^\x00-\x7F]'), 1),
+            else_=0,
+        )
         stmt = select(Song)
         if conditions:
             stmt = stmt.where(*conditions)
-        stmt = stmt.offset(offset).limit(limit)
+        stmt = stmt.order_by(is_non_english.asc()).offset(offset).limit(limit)
         result = await self._session.execute(stmt)
         return [self._to_record(obj) for obj in result.scalars().all()], total
 
