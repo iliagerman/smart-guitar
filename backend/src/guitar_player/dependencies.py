@@ -15,6 +15,7 @@ from guitar_player.services.favorite_service import FavoriteService
 from guitar_player.services.job_service import JobService
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.processing_service import ProcessingService
+from guitar_player.services.recommendation_service import RecommendationService
 from guitar_player.services.song_service import SongService
 from guitar_player.services.allpay_provider import AllPayProvider
 from guitar_player.services.payment_provider import PaymentProviderProtocol
@@ -129,6 +130,15 @@ def get_job_service(
     storage: StorageBackend = Depends(get_storage),
 ) -> JobService:
     return JobService(session, storage)
+
+
+def get_recommendation_service(
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> RecommendationService:
+    from guitar_player.dao.song_dao import SongDAO  # circular import
+
+    return RecommendationService(SongDAO(session), storage)
 
 
 def get_payment_provider(

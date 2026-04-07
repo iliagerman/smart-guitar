@@ -159,10 +159,14 @@ class SongDAO(BaseDAO[Song, SongRecord]):
         genre: str | None = None,
         offset: int = 0,
         limit: int = 50,
+        *,
+        english_only: bool = False,
     ) -> tuple[list[SongRecord], int]:
         conditions = []
         if genre:
             conditions.append(Song.genre == genre)
+        if english_only:
+            conditions.append(~Song.title.regexp_match(r'[^\x00-\x7F]'))
 
         count_stmt = select(func.count()).select_from(Song)
         if conditions:
@@ -313,5 +317,35 @@ class SongDAO(BaseDAO[Song, SongRecord]):
     async def get_all_songs(self) -> list[SongRecord]:
         """Return all songs (for sync stale detection)."""
         stmt = select(Song)
+        result = await self._session.execute(stmt)
+        return [self._to_record(obj) for obj in result.scalars().all()]
+
+    async def list_recommendation_candidates(
+        self,
+        exclude_id: uuid.UUID,
+        genre: str | None = None,
+        artist: str | None = None,
+        limit: int = 200,
+        *,
+        english_only: bool = False,
+    ) -> list[SongRecord]:
+        """Fetch playable songs matching genre or artist for recommendation scoring."""
+        conditions = [Song.id != exclude_id, Song.audio_key.isnot(None)]
+        match_conditions = []
+        if genre:
+            match_conditions.append(Song.genre == genre)
+        if artist:
+            match_conditions.append(Song.artist == artist)
+        if match_conditions:
+            conditions.append(or_(*match_conditions))
+        if english_only:
+            conditions.append(~Song.title.regexp_match(r'[^\x00-\x7F]'))
+
+        stmt = (
+            select(Song)
+            .where(*conditions)
+            .order_by(Song.like_count.desc())
+            .limit(limit)
+        )
         result = await self._session.execute(stmt)
         return [self._to_record(obj) for obj in result.scalars().all()]

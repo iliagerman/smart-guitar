@@ -9,7 +9,6 @@ These tests are lightweight (SQLite, no external services) because we pass
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest

@@ -5,6 +5,7 @@ export const queryKeys = {
     detail: (id: string) => ['songs', 'detail', id] as const,
     recent: (limit?: number) => ['songs', 'recent', { limit }] as const,
     search: (query: string) => ['songs', 'search', query] as const,
+    recommendations: (id: string) => ['songs', 'recommendations', id] as const,
   },
   jobs: {
     all: ['jobs'] as const,

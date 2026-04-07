@@ -14,6 +14,7 @@ from guitar_player.auth.subscription_guard import require_active_subscription
 from guitar_player.dependencies import (
     get_job_service,
     get_processing_service,
+    get_recommendation_service,
     get_song_service,
     get_storage,
     get_telegram_service,
@@ -27,6 +28,7 @@ from guitar_player.schemas.song import (
     FeedbackRating,
     GenreListResponse,
     PaginatedSongsResponse,
+    RecommendationsResponse,
     SaveUserChordsRequest,
     SaveUserChordsResponse,
     SearchRequest,
@@ -36,6 +38,7 @@ from guitar_player.schemas.song import (
     SongResponse,
     SongSection,
 )
+from guitar_player.services.recommendation_service import RecommendationService
 from guitar_player.services.analytics_helpers import (
     analytics_identity_from_user,
     track_event,
@@ -372,6 +375,17 @@ async def _handle_missing_stem(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"No {stem} file -- reprocessing triggered",
     )
+
+
+@router.get("/{song_id}/recommendations", response_model=RecommendationsResponse)
+async def get_recommendations(
+    song_id: uuid.UUID,
+    limit: int = Query(10, ge=1, le=30),
+    user: CurrentUser = Depends(require_active_subscription),
+    recommendation_service: RecommendationService = Depends(get_recommendation_service),
+) -> RecommendationsResponse:
+    """Return similar song recommendations for the given song."""
+    return await recommendation_service.get_recommendations(song_id, limit=limit)
 
 
 @router.get("/{song_id}", response_model=SongDetailResponse)

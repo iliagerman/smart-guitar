@@ -81,4 +81,11 @@ export const songsApi = {
         vote,
       })
       .then((r) => r.data),
+
+  recommendations: (songId: string, limit = 10) =>
+    api
+      .get<{ items: Song[]; seed_song_id: string }>(`/api/v1/songs/${songId}/recommendations`, {
+        params: { limit },
+      })
+      .then((r) => r.data.items),
 }

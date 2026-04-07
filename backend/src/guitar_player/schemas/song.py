@@ -47,6 +47,11 @@ class SongResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RecommendationsResponse(BaseModel):
+    items: list[SongResponse]
+    seed_song_id: uuid.UUID
+
+
 class StemType(BaseModel):
     name: str
     label: str

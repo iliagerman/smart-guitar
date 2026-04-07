@@ -138,7 +138,7 @@ async def test_job_processing_translates_stems_and_generates_lyrics(
         vg_mp3 = song_dir / "vocals_guitar.mp3"
         generated_files.append(vg_mp3)
         assert vg_mp3.is_file(), (
-            f"Expected output missing: vocals_guitar.mp3"
+            "Expected output missing: vocals_guitar.mp3"
         )
 
         # Also verify Song DB keys were set for the produced stems.

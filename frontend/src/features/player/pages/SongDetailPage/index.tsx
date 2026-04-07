@@ -30,6 +30,7 @@ import { simplifyChords, transposeForCapo } from '@/lib/chord-simplifier'
 import { SongHeader } from './SongHeader'
 import { PlayerControls } from './PlayerControls'
 import { SongContent } from './SongContent'
+import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
 
 function getAudioUrl(
@@ -420,6 +421,9 @@ export function SongDetailPage() {
         onAddChordAtWord={handleAddChordAtWord}
         onOpenTutorial={() => setShowTutorial(true)}
       />
+
+      {/* Recommendations */}
+      <RecommendedSongs songId={songId!} />
 
       {/* Floating YouTube tutorial */}
       {showTutorial && (

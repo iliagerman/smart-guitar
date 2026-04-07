@@ -10,7 +10,6 @@ Remove the pytestmark to run these tests manually.
 import uuid
 
 import pytest
-from jose import jwt
 
 from guitar_player.auth.cognito import verify_token
 from guitar_player.config import load_settings

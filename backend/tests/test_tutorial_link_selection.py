@@ -313,8 +313,8 @@ class TestTutorialLinkSelectionInStrumFlow:
             TutorialLink(url="https://youtube.com/watch?v=live1", title="Artist Live Concert 2024"),
         ]
 
-        youtube_links = [l for l in links if "youtube.com" in l.url or "youtu.be" in l.url]
-        scored = [(l, _score_tutorial_link(l.title, l.url)) for l in youtube_links]
+        youtube_links = [link for link in links if "youtube.com" in link.url or "youtu.be" in link.url]
+        scored = [(link, _score_tutorial_link(link.title, link.url)) for link in youtube_links]
         scored.sort(key=lambda x: x[1], reverse=True)
         best_link, best_score = scored[0]
 
@@ -327,8 +327,8 @@ class TestTutorialLinkSelectionInStrumFlow:
             TutorialLink(url="https://youtube.com/watch?v=lesson1", title="שיעור גיטרה - שלמה ארצי - אקורדים ופריטה"),
         ]
 
-        youtube_links = [l for l in links if "youtube.com" in l.url or "youtu.be" in l.url]
-        scored = [(l, _score_tutorial_link(l.title, l.url)) for l in youtube_links]
+        youtube_links = [link for link in links if "youtube.com" in link.url or "youtu.be" in link.url]
+        scored = [(link, _score_tutorial_link(link.title, link.url)) for link in youtube_links]
         scored.sort(key=lambda x: x[1], reverse=True)
         best_link, _ = scored[0]
 
@@ -340,10 +340,10 @@ class TestTutorialLinkSelectionInStrumFlow:
             TutorialLink(url="https://guitartricks.com/lesson/456", title="Guitar Tutorial"),
         ]
 
-        youtube_links = [l for l in links if "youtube.com" in l.url or "youtu.be" in l.url]
+        youtube_links = [link for link in links if "youtube.com" in link.url or "youtu.be" in link.url]
         assert len(youtube_links) == 0
 
     def test_empty_links_list(self):
         links: list[TutorialLink] = []
-        youtube_links = [l for l in links if "youtube.com" in l.url or "youtu.be" in l.url]
+        youtube_links = [link for link in links if "youtube.com" in link.url or "youtu.be" in link.url]
         assert len(youtube_links) == 0

@@ -402,9 +402,9 @@ class SongService:
     async def list_recent_songs(
         self, offset: int = 0, limit: int = 50,
     ) -> PaginatedSongsResponse:
-        """Global recent songs (not per-user), paginated."""
+        """Global recent songs (not per-user), paginated — English only."""
         songs, total = await self._song_dao.list_top_recent(
-            genre=None, offset=offset, limit=limit,
+            genre=None, offset=offset, limit=limit, english_only=True,
         )
         return PaginatedSongsResponse(
             items=[self._enrich_song_response(s) for s in songs],
