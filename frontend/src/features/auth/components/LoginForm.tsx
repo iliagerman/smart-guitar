@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
 import { useLogin } from '../hooks/use-login'
@@ -21,6 +22,7 @@ function isNotConfirmedError(error: unknown): boolean {
 export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const login = useLogin()
   const navigate = useNavigate()
   const { googleError, googlePending, handleGoogleSignIn } = useGoogleSignIn()
@@ -60,17 +62,28 @@ export function LoginForm() {
         data-testid="login-email"
         required
       />
-      <input
-        id="login-password"
-        name="password"
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
-        data-testid="login-password"
-        required
-      />
+      <div className="relative">
+        <input
+          id="login-password"
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
+          data-testid="login-password"
+          required
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-smoke-300 transition-colors"
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          data-testid="login-password-toggle"
+        >
+          {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+        </button>
+      </div>
       <button
         type="submit"
         disabled={login.isPending}

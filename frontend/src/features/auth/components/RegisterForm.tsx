@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import axios from 'axios'
 import { useRegister } from '../hooks/use-register'
 import { useGoogleSignIn } from '../hooks/use-google-signin'
@@ -16,6 +17,8 @@ export function RegisterForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [mismatchError, setMismatchError] = useState('')
   const register = useRegister()
   const navigate = useNavigate()
@@ -55,28 +58,54 @@ export function RegisterForm() {
         data-testid="register-email"
         required
       />
-      <input
-        id="register-password"
-        name="password"
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
-        data-testid="register-password"
-        required
-      />
-      <input
-        id="register-confirm-password"
-        name="confirmPassword"
-        type="password"
-        placeholder="Confirm password"
-        value={confirmPassword}
-        onChange={(e) => { setConfirmPassword(e.target.value); setMismatchError('') }}
-        className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
-        data-testid="register-confirm-password"
-        required
-      />
+      <div className="relative">
+        <input
+          id="register-password"
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
+          data-testid="register-password"
+          required
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-smoke-300 transition-colors"
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          data-testid="register-password-toggle"
+        >
+          {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+        </button>
+      </div>
+      {/* At least 8 characters, 1 uppercase, 1 number, 1 special character */}
+      <p className="text-smoke-500 text-xs -mt-2">
+        Min 8 characters, 1 uppercase, 1 number, 1 special character
+      </p>
+      <div className="relative">
+        <input
+          id="register-confirm-password"
+          name="confirmPassword"
+          type={showConfirmPassword ? 'text' : 'password'}
+          placeholder="Confirm password"
+          value={confirmPassword}
+          onChange={(e) => { setConfirmPassword(e.target.value); setMismatchError('') }}
+          className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
+          data-testid="register-confirm-password"
+          required
+        />
+        <button
+          type="button"
+          onClick={() => setShowConfirmPassword((v) => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-smoke-300 transition-colors"
+          aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+          data-testid="register-confirm-password-toggle"
+        >
+          {showConfirmPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+        </button>
+      </div>
       {mismatchError && (
         <p className="text-red-500 text-sm text-center">{mismatchError}</p>
       )}
