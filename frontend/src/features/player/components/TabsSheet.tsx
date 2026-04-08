@@ -6,6 +6,7 @@ import { useTabsSheetSync } from '../hooks/use-tabs-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { scrollToCenter } from '../lib/scroll-to-center'
 import { cn } from '@/lib/cn'
+import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { LyricsSegment, RhythmInfo, StrumEvent, TabNote } from '@/types/song'
 
@@ -173,6 +174,14 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
+  const currentSongId = usePlaybackStore((s) => s.currentSongId)
+
+  // Reset scroll to top when song changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [currentSongId])
 
   useEffect(() => {
     if (showHighlight && activeLineRef.current && scrollRef.current) {

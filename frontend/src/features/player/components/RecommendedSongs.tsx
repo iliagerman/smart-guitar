@@ -21,10 +21,10 @@ function RecommendedCard({ song }: RecommendedCardProps) {
   return (
     <Link
       to={songDetailPath(song.id)}
-      className="shrink-0 w-20 sm:w-28 group"
+      className="shrink-0 w-14 sm:w-28 group"
       data-testid={`recommended-song-${song.id}`}
     >
-      <div className="relative w-20 h-20 sm:w-28 sm:h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-colors">
+      <div className="relative w-14 h-14 sm:w-28 sm:h-28 rounded-lg sm:rounded-xl bg-charcoal-700/60 overflow-hidden mb-1 sm:mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-colors">
         {thumbnailUrl && !imgFailed ? (
           <img
             src={thumbnailUrl}
@@ -44,8 +44,8 @@ function RecommendedCard({ song }: RecommendedCardProps) {
           />
         )}
       </div>
-      <p className="text-smoke-100 text-xs font-medium truncate">{displaySongTitle(song)}</p>
-      <p className="text-smoke-500 text-[10px] truncate">{displayArtistName(song)}</p>
+      <p className="text-smoke-100 text-[10px] sm:text-xs font-medium truncate">{displaySongTitle(song)}</p>
+      <p className="text-smoke-500 text-[9px] sm:text-[10px] truncate">{displayArtistName(song)}</p>
     </Link>
   )
 }
@@ -66,7 +66,7 @@ export function RecommendedSongs({ songId }: RecommendedSongsProps) {
         <h3 className="text-smoke-300 text-sm font-medium mb-3">Similar Songs</h3>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="w-20 h-28 sm:w-28 sm:h-36 shrink-0 rounded-lg" />
+            <Skeleton key={i} className="w-14 h-20 sm:w-28 sm:h-36 shrink-0 rounded-lg" />
           ))}
         </div>
       </div>
@@ -78,7 +78,7 @@ export function RecommendedSongs({ songId }: RecommendedSongsProps) {
   return (
     <div className="px-4 pb-20" data-testid="recommended-songs">
       <h3 className="text-smoke-300 text-sm font-medium mb-3">Similar Songs</h3>
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {songs.map((song) => (
           <RecommendedCard key={song.id} song={song} />
         ))}

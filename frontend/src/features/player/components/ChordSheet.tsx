@@ -7,6 +7,7 @@ import { isElementVisible, scrollIntoContainerView } from '../lib/scroll-to-cent
 import { ChordSheetLine } from './ChordSheetLine'
 import { getChordColor, formatChordName } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
+import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { ChordEntry, LyricsSegment } from '@/types/song'
 
@@ -272,6 +273,14 @@ export function ChordSheet({
   const activeWordRef = useRef<HTMLDivElement>(null)
   const lookAheadWordRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
+  const currentSongId = usePlaybackStore((s) => s.currentSongId)
+
+  // Reset scroll to top when song changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [currentSongId])
 
   useEffect(() => {
     if (isEditMode || !showHighlight || !scrollRef.current) return
