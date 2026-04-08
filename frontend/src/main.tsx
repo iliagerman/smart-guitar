@@ -8,7 +8,21 @@ import { initMetaPixel } from '@/lib/meta-pixel'
 
 initAmplifyAuth()
 initMetaPixel()
-registerSW({ immediate: true })
+
+registerSW({
+  immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return
+    // Check for SW updates on every page load
+    registration.update()
+    // Re-check when the tab regains focus (user returning to the app)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        registration.update()
+      }
+    })
+  },
+})
 
 // Reload the page when a new service worker takes control (new deploy)
 let reloading = false
