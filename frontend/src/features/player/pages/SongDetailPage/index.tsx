@@ -440,8 +440,8 @@ export function SongDetailPage() {
         onOpenTutorial={() => setShowTutorial(true)}
       />
 
-      {/* Recommendations */}
-      <RecommendedSongs songId={songId!} />
+      {/* Recommendations — hidden during playback to give more space to chords/lyrics */}
+      {!isPlaying && <RecommendedSongs songId={songId!} />}
 
       {/* Floating YouTube tutorial */}
       {showTutorial && (
