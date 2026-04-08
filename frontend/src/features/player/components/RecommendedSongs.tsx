@@ -62,8 +62,7 @@ export function RecommendedSongs({ songId }: RecommendedSongsProps) {
 
   if (isLoading) {
     return (
-      <div className="shrink-0 px-4 pt-3 pb-6">
-        <h3 className="text-smoke-200 text-base sm:text-lg font-semibold mb-2 sm:mb-3">Similar Songs</h3>
+      <div className="shrink-0 px-4 pt-2 pb-6">
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="w-14 h-20 sm:w-28 sm:h-36 shrink-0 rounded-lg" />
@@ -76,8 +75,7 @@ export function RecommendedSongs({ songId }: RecommendedSongsProps) {
   if (!songs?.length) return null
 
   return (
-    <div className="shrink-0 px-4 pt-3 pb-4" data-testid="recommended-songs">
-      <h3 className="text-smoke-200 text-base sm:text-lg font-semibold mb-2 sm:mb-3">Similar Songs</h3>
+    <div className="shrink-0 px-4 pt-2 pb-4" data-testid="recommended-songs">
       <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {songs.map((song) => (
           <RecommendedCard key={song.id} song={song} />
