@@ -61,6 +61,7 @@ export function SongDetailPage() {
   const setCurrentSong = usePlaybackStore((s) => s.setCurrentSong)
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   useWakeLock(isPlaying)
   const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: true })
   const { data: favorites } = useFavorites()
@@ -440,8 +441,8 @@ export function SongDetailPage() {
         onOpenTutorial={() => setShowTutorial(true)}
       />
 
-      {/* Recommendations — hidden during playback to give more space to chords/lyrics */}
-      {!isPlaying && <RecommendedSongs songId={songId!} />}
+      {/* Recommendations — shown only after playback stops or song ends */}
+      {!isPlaying && hasPlaybackOccurred && <RecommendedSongs songId={songId!} />}
 
       {/* Floating YouTube tutorial */}
       {showTutorial && (

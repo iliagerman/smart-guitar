@@ -221,7 +221,9 @@ export function useAudioPlayer() {
   const loadStems = useCallback((stemUrls: Map<string, string>) => {
     const channels = channelsRef.current
     const primary = getPrimary()
-    const currentTime = primary ? primary.audio.currentTime : 0
+    // Use store time (reset to 0 on song change) rather than audio element time,
+    // so switching songs always starts from the beginning.
+    const currentTime = usePlaybackStore.getState().currentTime
     const wasPlaying = primary ? !primary.audio.paused : false
 
     // Remove channels no longer needed
@@ -262,7 +264,7 @@ export function useAudioPlayer() {
       if (only && isSameAudioSource(only.audio.src, url)) return
     }
 
-    const currentTime = primary ? primary.audio.currentTime : 0
+    const currentTime = usePlaybackStore.getState().currentTime
     const wasPlaying = primary ? !primary.audio.paused : false
 
     destroyAllChannels()

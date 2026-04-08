@@ -10,6 +10,8 @@ interface PlaybackState {
   /** When true, the original full MP3 plays. Mutually exclusive with individual stems. */
   isFullSong: boolean
   isPlaying: boolean
+  /** True once playback has started at least once for the current song. */
+  hasPlaybackOccurred: boolean
   currentTime: number
   duration: number
   playbackRate: number
@@ -39,6 +41,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   activeStems: [],
   isFullSong: true,
   isPlaying: false,
+  hasPlaybackOccurred: false,
   currentTime: 0,
   duration: 0,
   playbackRate: 1,
@@ -47,7 +50,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   chordDisplayMode: 'standard',
   chordCapoFret: 0,
   setCurrentSong: (songId) =>
-    set({ currentSongId: songId, currentTime: 0, isPlaying: false, sheetMode: 'chords', selectedChordOptionIndex: null, chordDisplayMode: 'standard', chordCapoFret: 0 }),
+    set({ currentSongId: songId, currentTime: 0, isPlaying: false, hasPlaybackOccurred: false, sheetMode: 'chords', selectedChordOptionIndex: null, chordDisplayMode: 'standard', chordCapoFret: 0 }),
   toggleStem: (stem) => {
     const { activeStems, isFullSong } = get()
     if (isFullSong) {
@@ -76,7 +79,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
     }
   },
   selectFullSong: () => set({ isFullSong: true, activeStems: [] }),
-  setPlaying: (playing) => set({ isPlaying: playing }),
+  setPlaying: (playing) => set({ isPlaying: playing, hasPlaybackOccurred: playing ? true : get().hasPlaybackOccurred }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
   setPlaybackRate: (rate) =>
@@ -90,6 +93,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
       activeStems: [],
       isFullSong: true,
       isPlaying: false,
+      hasPlaybackOccurred: false,
       currentTime: 0,
       duration: 0,
       playbackRate: 1,
