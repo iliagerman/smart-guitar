@@ -335,7 +335,7 @@ export function SongDetailPage() {
   const headerArtist = displayArtistName(detail.song)
 
   return (
-    <div className="relative h-full flex flex-col overflow-hidden" data-testid="song-detail-page">
+    <div className="relative h-full flex flex-col overflow-hidden pb-16 lg:pb-0" data-testid="song-detail-page">
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div
