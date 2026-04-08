@@ -19,6 +19,10 @@ export interface SongOverrides {
   strumSource?: StrumSource
   /** Per-song stem selection. undefined = use global default, string[] = specific stems, 'fullSong' = full song mode. */
   activeStems?: string[] | 'fullSong'
+  playbackRate?: number
+  chordDisplayMode?: 'standard' | 'beginner' | 'capo'
+  chordCapoFret?: number
+  sheetMode?: 'chords' | 'tabs'
 }
 
 export interface CameraPreviewPosition {
@@ -229,7 +233,9 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
 
         return state as unknown as PlayerPrefsState
       },
-      version: 10,
+      // v10 → v11: per-song playbackRate, chordDisplayMode, chordCapoFret, sheetMode
+      // No migration needed — new SongOverrides fields are optional (default undefined).
+      version: 11,
     }
   )
 )

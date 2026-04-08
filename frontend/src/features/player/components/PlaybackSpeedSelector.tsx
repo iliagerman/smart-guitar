@@ -2,6 +2,7 @@ import { Gauge } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5] as const
 
@@ -12,11 +13,17 @@ function formatSpeed(rate: number) {
 export function PlaybackSpeedSelector() {
   const playbackRate = usePlaybackStore((s) => s.playbackRate)
   const setPlaybackRate = usePlaybackStore((s) => s.setPlaybackRate)
+  const currentSongId = usePlaybackStore((s) => s.currentSongId)
+  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
 
   function cycleNext() {
     const currentIdx = SPEED_OPTIONS.indexOf(playbackRate as (typeof SPEED_OPTIONS)[number])
     const nextIdx = (currentIdx + 1) % SPEED_OPTIONS.length
-    setPlaybackRate(SPEED_OPTIONS[nextIdx])
+    const newRate = SPEED_OPTIONS[nextIdx]
+    setPlaybackRate(newRate)
+    if (currentSongId) {
+      setSongOverride(currentSongId, 'playbackRate', newRate)
+    }
   }
 
   return (

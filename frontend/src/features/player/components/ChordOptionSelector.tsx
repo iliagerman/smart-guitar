@@ -3,6 +3,7 @@ import { SlidersHorizontal } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { findBestCapoFrets } from '@/lib/chord-simplifier'
 import type { ChordEntry } from '@/types/song'
 
@@ -23,11 +24,20 @@ export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOpti
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const setSheetMode = usePlaybackStore((s) => s.setSheetMode)
   const setChordDisplayMode = usePlaybackStore((s) => s.setChordDisplayMode)
+  const currentSongId = usePlaybackStore((s) => s.currentSongId)
+  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
 
   const bestCapoFrets = useMemo(
     () => (activeChords.length > 0 ? findBestCapoFrets(activeChords) : []),
     [activeChords],
   )
+
+  const persistChordOption = (mode: 'standard' | 'beginner' | 'capo', fret: number, sheet: 'chords' | 'tabs') => {
+    if (!currentSongId) return
+    setSongOverride(currentSongId, 'chordDisplayMode', mode)
+    setSongOverride(currentSongId, 'chordCapoFret', fret)
+    setSongOverride(currentSongId, 'sheetMode', sheet)
+  }
 
   const entries = useMemo(() => {
     const list: OptionEntry[] = [
@@ -37,6 +47,7 @@ export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOpti
         apply: () => {
           setSheetMode('chords')
           setChordDisplayMode('standard')
+          persistChordOption('standard', 0, 'chords')
         },
       },
       {
@@ -45,6 +56,7 @@ export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOpti
         apply: () => {
           setSheetMode('chords')
           setChordDisplayMode('beginner')
+          persistChordOption('beginner', 0, 'chords')
         },
       },
     ]
@@ -56,6 +68,7 @@ export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOpti
         apply: () => {
           setSheetMode('chords')
           setChordDisplayMode('capo', fret)
+          persistChordOption('capo', fret, 'chords')
         },
       })
     }
@@ -67,12 +80,14 @@ export function ChordOptionSelector({ activeChords, hasTabs = false }: ChordOpti
         apply: () => {
           setSheetMode('tabs')
           setChordDisplayMode('standard')
+          persistChordOption('standard', 0, 'tabs')
         },
       })
     }
 
     return list
-  }, [bestCapoFrets, hasTabs, setSheetMode, setChordDisplayMode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bestCapoFrets, hasTabs, setSheetMode, setChordDisplayMode, currentSongId, setSongOverride])
 
   if (entries.length < 2) return null
 

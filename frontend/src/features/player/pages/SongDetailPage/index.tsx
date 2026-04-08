@@ -126,6 +126,24 @@ export function SongDetailPage() {
     } else if (prefs.defaultStems.length > 0) {
       setActiveStems(prefs.defaultStems)
     }
+
+    // Restore per-song playback rate
+    if (overrides?.playbackRate !== undefined) {
+      usePlaybackStore.getState().setPlaybackRate(overrides.playbackRate)
+    }
+
+    // Restore per-song chord display mode + capo fret
+    if (overrides?.chordDisplayMode !== undefined) {
+      usePlaybackStore.getState().setChordDisplayMode(
+        overrides.chordDisplayMode,
+        overrides.chordCapoFret ?? 0,
+      )
+    }
+
+    // Restore per-song sheet mode (chords vs tabs)
+    if (overrides?.sheetMode !== undefined) {
+      usePlaybackStore.getState().setSheetMode(overrides.sheetMode)
+    }
   }, [songId, setCurrentSong, setActiveStems, selectFullSong])
 
   useEffect(() => {
