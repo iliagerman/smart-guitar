@@ -19,6 +19,8 @@ import { useFavorites } from '@/features/library/hooks/use-favorites'
 import { useJobWatcherStore } from '@/stores/job-watcher.store'
 import { env } from '@/config/env'
 import { songsApi } from '@/api/songs.api'
+import { queryClient } from '@/config/query-client'
+import { queryKeys } from '@/api/query-keys'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 import { useSaveChords } from '../../hooks/use-save-chords'
@@ -152,6 +154,17 @@ export function SongDetailPage() {
     addViewingSong(songId)
     return () => removeViewingSong(songId)
   }, [songId, addViewingSong, removeViewingSong])
+
+  // Prefetch recommendations when playback first occurs so they appear instantly on pause.
+  useEffect(() => {
+    if (hasPlaybackOccurred && songId) {
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.songs.recommendations(songId),
+        queryFn: () => songsApi.recommendations(songId),
+        staleTime: 5 * 60 * 1000,
+      })
+    }
+  }, [hasPlaybackOccurred, songId])
 
   // Load audio when stems or full-song mode changes.
   useEffect(() => {
