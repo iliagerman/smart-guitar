@@ -55,10 +55,11 @@ export const songsApi = {
   detail: (songId: string) =>
     api.get<SongDetail>(`/api/v1/songs/${songId}`).then((r) => r.data),
 
-  playbackSource: (songId: string, stems: string[]) =>
+  playbackSource: (songId: string, stems: string[], signal?: AbortSignal) =>
     api
       .get<PlaybackSourceResponse>(`/api/v1/songs/${songId}/playback-source`, {
         params: { stems: stems.join(',') },
+        signal,
       })
       .then((r) => r.data),
 

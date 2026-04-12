@@ -34,6 +34,10 @@ import { PlayerControls } from './PlayerControls'
 import { SongContent } from './SongContent'
 import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
+import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
+import { buildSheetVersions } from '../../lib/sheet-versions'
+
+const STEM_MIX_DEBOUNCE_MS = 400
 
 function getAudioUrl(
   songId: string,
@@ -86,6 +90,7 @@ export function SongDetailPage() {
 
   // Per-song values with global fallback
   const selectedVersionIndex = songOverrides?.selectedVersionIndex ?? 0
+  const selectedLyricsSource = songOverrides?.selectedLyricsSource ?? 'auto'
   const transposeSemitones = songOverrides?.transposeSemitones ?? globalTranspose
   const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? globalLyricsOffset
   const strumSource = songOverrides?.strumSource ?? globalStrumSource
@@ -174,6 +179,9 @@ export function SongDetailPage() {
     if (!detail || !songId) return
 
     let cancelled = false
+    let debounceTimer: number | null = null
+    const controller = new AbortController()
+    const shouldPrepareSyncedMix = !env.isLocal && !isFullSong && activeStems.length > 1
 
     const loadSelectedAudio = async () => {
       if (isFullSong) {
@@ -195,15 +203,21 @@ export function SongDetailPage() {
         return
       }
 
-      if (!env.isLocal) {
-        setIsPreparingSyncedMix(true)
+      if (shouldPrepareSyncedMix) {
         try {
-          const response = await songsApi.playbackSource(songId, [...activeStems].sort())
+          const response = await songsApi.playbackSource(
+            songId,
+            [...activeStems].sort(),
+            controller.signal,
+          )
           if (!cancelled) {
             loadFullSong(response.url)
           }
           return
         } catch {
+          if (cancelled || controller.signal.aborted) {
+            return
+          }
           // Fall back to legacy multi-element playback if mix resolution fails.
         } finally {
           if (!cancelled) {
@@ -223,11 +237,21 @@ export function SongDetailPage() {
       }
     }
 
-    setIsPreparingSyncedMix(false)
+    setIsPreparingSyncedMix(shouldPrepareSyncedMix)
+    if (shouldPrepareSyncedMix) {
+      debounceTimer = window.setTimeout(() => {
+        void loadSelectedAudio()
+      }, STEM_MIX_DEBOUNCE_MS)
+    } else {
+      void loadSelectedAudio()
+    }
 
-    void loadSelectedAudio()
     return () => {
       cancelled = true
+      controller.abort()
+      if (debounceTimer !== null) {
+        window.clearTimeout(debounceTimer)
+      }
     }
   }, [detail, songId, isFullSong, activeStems, loadStems, loadFullSong])
 
@@ -246,6 +270,7 @@ export function SongDetailPage() {
   }, [detail, isFullSong, activeStems, setActiveStems, selectFullSong])
 
   const handleTogglePlay = useCallback(() => {
+    if (isPreparingSyncedMix) return
     if (songId && !isPlaying && !hasRecordedPlayRef.current) {
       hasRecordedPlayRef.current = true
       trackCustomEvent('PlaySong', { song_id: songId })
@@ -254,7 +279,12 @@ export function SongDetailPage() {
       })
     }
     togglePlay()
-  }, [isPlaying, songId, togglePlay])
+  }, [isPlaying, isPreparingSyncedMix, songId, togglePlay])
+
+  const handleSeek = useCallback((time: number) => {
+    if (isPreparingSyncedMix) return
+    seek(time)
+  }, [isPreparingSyncedMix, seek])
 
   const handleToggleFavorite = () => {
     if (!songId) return
@@ -265,10 +295,14 @@ export function SongDetailPage() {
     }
   }
 
-  // --- Unified version system ---
-  const allVersions = useMemo(
-    () => (detail?.chord_options ?? []).filter((o) => !o.hidden && !o.is_variant),
-    [detail?.chord_options],
+  // --- Simplified sheet + independent lyrics selection ---
+  const preferredChordSource =
+    detail?.chord_source === 'gemini' || detail?.chord_source === 'autochord'
+      ? detail.chord_source
+      : null
+  const sheetVersions = useMemo(
+    () => buildSheetVersions(detail?.chord_options ?? [], preferredChordSource),
+    [detail?.chord_options, preferredChordSource],
   )
 
   const variantOptions = useMemo(
@@ -276,7 +310,7 @@ export function SongDetailPage() {
     [detail?.chord_options],
   )
 
-  const activeVersion = allVersions[selectedVersionIndex] ?? allVersions[0]
+  const activeVersion = sheetVersions[selectedVersionIndex] ?? sheetVersions[0]
   const baseChords = useMemo(() => activeVersion?.chords ?? [], [activeVersion])
 
   const activeChords = useMemo(() => {
@@ -342,8 +376,21 @@ export function SongDetailPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const activeLyrics = useMemo(() => activeVersion?.lyrics ?? [], [activeVersion])
-  const activeLyricsSource = activeVersion?.lyrics_source ?? null
+  const availableLyricsSources = useMemo(
+    () => (detail ? getAvailableLyricsSources(detail, activeVersion) : []),
+    [detail, activeVersion],
+  )
+  const activeLyricsOption = useMemo(
+    () =>
+      availableLyricsSources.find((option) => option.key === selectedLyricsSource)
+      ?? availableLyricsSources[0],
+    [availableLyricsSources, selectedLyricsSource],
+  )
+  const activeLyrics = useMemo(
+    () => activeLyricsOption?.segments ?? [],
+    [activeLyricsOption],
+  )
+  const activeLyricsSource = activeLyricsOption?.source ?? null
 
   const debugNormalizedSegments = useMemo(
     () => activeLyrics.map((s) => ({ ...s, words: normalizeWords(s) })),
@@ -370,7 +417,10 @@ export function SongDetailPage() {
 
   const thumbnailSrc = (!thumbFailed ? cachedThumbnail : null) ?? '/art/album-placeholder.png'
 
-  const hasAnyLyrics = activeLyrics.length > 0
+  const hasVisibleLyrics = activeLyrics.length > 0
+  const hasAnyLyrics = availableLyricsSources.some(
+    (option) => option.key !== 'off' && option.segments.length > 0,
+  )
   const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
 
   const handleEnterEditMode = useCallback(() => {
@@ -444,8 +494,9 @@ export function SongDetailPage() {
             thumbnailSrc={thumbnailSrc}
             isAdmin={isAdmin}
             isPlaying={isPlaying}
+            isPlaybackDisabled={isPreparingSyncedMix}
             onTogglePlay={handleTogglePlay}
-            onSeek={seek}
+            onSeek={handleSeek}
             onThumbnailError={() => songId && markThumbnailFailed(songId)}
           />
 
@@ -459,19 +510,23 @@ export function SongDetailPage() {
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
             audioStatusMessage={audioStatusMessage}
-            allVersions={allVersions}
+            isPlaybackDisabled={isPreparingSyncedMix}
+            sheetVersions={sheetVersions}
             activeChords={activeChords}
             selectedVersionIndex={selectedVersionIndex}
+            availableLyricsSources={availableLyricsSources}
+            selectedLyricsSource={selectedLyricsSource}
             chordNamesForMap={chordNamesForMap}
             representativeStrumPattern={representativeStrumPattern}
             sectionStrumPatterns={sectionStrumPatterns}
             userEmail={userEmail}
             chordsUpgrading={chordsUpgrading}
             onTogglePlay={handleTogglePlay}
-            onSeek={seek}
+            onSeek={handleSeek}
             onToggleFavorite={handleToggleFavorite}
             onEnterEditMode={handleEnterEditMode}
             onSetVersionIndex={(idx: number) => setSongOverride(songId!, 'selectedVersionIndex', idx)}
+            onSetLyricsSource={(mode) => setSongOverride(songId!, 'selectedLyricsSource', mode)}
             onDeleteChords={() => {
               if (songId && confirm('Delete your chord version?')) {
                 deleteChordsMutation.mutate({ songId })
@@ -498,7 +553,7 @@ export function SongDetailPage() {
         representativeStrumPattern={representativeStrumPattern}
         sectionStrumPatterns={sectionStrumPatterns}
         chordsLoading={chordsLoading}
-        onSeek={seek}
+        onSeek={handleSeek}
         onSaveChords={handleSaveChords}
         isSavingChords={saveChordsMutation.isPending}
         onAddChordAtWord={handleAddChordAtWord}
@@ -519,7 +574,7 @@ export function SongDetailPage() {
 
       <OnboardingTour />
 
-      {showLyricsDebug && hasAnyLyrics && (
+      {showLyricsDebug && hasVisibleLyrics && (
         <LyricsSyncDebug
           segments={debugNormalizedSegments}
           activeSegmentIndex={debugSync.activeSegmentIndex}

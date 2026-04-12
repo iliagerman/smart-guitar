@@ -1,21 +1,24 @@
 import { useCallback } from 'react'
 import { Heart, Pencil } from 'lucide-react'
+
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
-import { usePlaybackStore } from '@/stores/playback.store'
-import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
-import { useChordEditStore } from '@/stores/chord-edit.store'
-import { TransportControls } from '../../components/TransportControls'
-import { TrackSelector } from '../../components/TrackSelector'
-import { ChordOptionSelector } from '../../components/ChordOptionSelector'
-import { ChordDisplayControls } from '../../components/ChordDisplayControls'
-import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
-import { LyricsSyncControl } from '../../components/LyricsSyncControl'
-import { ScrollModeControl } from '../../components/ScrollModeControl'
-import { ChordVersionToggle } from '../../components/ChordVersionToggle'
-import { ChordMapDialog } from '../../components/ChordMapDialog'
-import { RecordButton } from '../../components/RecordButton'
 import { cn } from '@/lib/cn'
+import { usePlaybackStore } from '@/stores/playback.store'
+import type { LyricsSourceMode } from '@/stores/player-prefs.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { SongDetail, ChordOption } from '@/types/song'
+import { useChordEditStore } from '@/stores/chord-edit.store'
+
+import { ChordMapDialog } from '../../components/ChordMapDialog'
+import { LyricsSourceSelector } from '../../components/LyricsSourceSelector'
+import { LyricsSyncControl } from '../../components/LyricsSyncControl'
+import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
+import { RecordButton } from '../../components/RecordButton'
+import { ScrollModeControl } from '../../components/ScrollModeControl'
+import { SheetSelector } from '../../components/SheetSelector'
+import { TrackSelector } from '../../components/TrackSelector'
+import { TransportControls } from '../../components/TransportControls'
+import type { LyricsSourceOption } from '../../lib/lyrics-sources'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
 
 interface PlayerControlsProps {
@@ -28,9 +31,12 @@ interface PlayerControlsProps {
   isFavorited: boolean
   showAudioStatus: boolean
   audioStatusMessage?: string
-  allVersions: ChordOption[]
+  isPlaybackDisabled?: boolean
+  sheetVersions: ChordOption[]
   activeChords: { chord: string; start_time: number; end_time: number }[]
   selectedVersionIndex: number
+  availableLyricsSources: LyricsSourceOption[]
+  selectedLyricsSource: LyricsSourceMode
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
@@ -41,6 +47,7 @@ interface PlayerControlsProps {
   onToggleFavorite: () => void
   onEnterEditMode: () => void
   onSetVersionIndex: (idx: number) => void
+  onSetLyricsSource: (mode: LyricsSourceMode) => void
   onDeleteChords: () => void
   onOpenTutorial: () => void
 }
@@ -55,7 +62,7 @@ function AudioStatusBanner({ message }: AudioStatusBannerProps) {
 
   const fallbackMessage = isFullSong
     ? 'Downloading audio...'
-    : `Preparing ${activeStems.map((s) => s.replaceAll('_', ' ')).join(', ')}...`
+    : `Preparing ${activeStems.map((stem) => stem.replaceAll('_', ' ')).join(', ')}...`
 
   return (
     <div
@@ -69,8 +76,8 @@ function AudioStatusBanner({ message }: AudioStatusBannerProps) {
 }
 
 /**
- * Renders the transport controls with primary action buttons (favorite, edit, stems, version)
- * and secondary controls (chord options, display, speed, lyrics sync, scroll mode).
+ * Renders the transport controls with primary action buttons and the simplified
+ * sheet/lyrics controls used for source switching on mobile.
  */
 export function PlayerControls({
   songId,
@@ -82,9 +89,12 @@ export function PlayerControls({
   isFavorited,
   showAudioStatus,
   audioStatusMessage,
-  allVersions,
+  isPlaybackDisabled = false,
+  sheetVersions,
   activeChords,
   selectedVersionIndex,
+  availableLyricsSources,
+  selectedLyricsSource,
   chordNamesForMap,
   representativeStrumPattern,
   sectionStrumPatterns,
@@ -95,6 +105,7 @@ export function PlayerControls({
   onToggleFavorite,
   onEnterEditMode,
   onSetVersionIndex,
+  onSetLyricsSource,
   onDeleteChords,
   onOpenTutorial,
 }: PlayerControlsProps) {
@@ -104,6 +115,7 @@ export function PlayerControls({
       <TransportControls
         onTogglePlay={onTogglePlay}
         onSeek={onSeek}
+        isPlaybackDisabled={isPlaybackDisabled}
         primaryControls={
           <PrimaryControls
             songId={songId}
@@ -112,27 +124,32 @@ export function PlayerControls({
             headerArtist={headerArtist}
             hasChords={hasChords}
             isFavorited={isFavorited}
-            allVersions={allVersions}
-            selectedVersionIndex={selectedVersionIndex}
+            isStemSelectionDisabled={isPlaybackDisabled}
             chordNamesForMap={chordNamesForMap}
             representativeStrumPattern={representativeStrumPattern}
             sectionStrumPatterns={sectionStrumPatterns}
-            userEmail={userEmail}
-            chordsUpgrading={chordsUpgrading}
             onToggleFavorite={onToggleFavorite}
             onEnterEditMode={onEnterEditMode}
-            onSetVersionIndex={onSetVersionIndex}
-            onDeleteChords={onDeleteChords}
             onOpenTutorial={onOpenTutorial}
           />
         }
         secondaryControls={
           <>
-            <ChordOptionSelector
+            <SheetSelector
+              versions={sheetVersions}
+              selectedVersionIndex={selectedVersionIndex}
               activeChords={activeChords}
               hasTabs={hasTabs}
+              currentUserEmail={userEmail ?? undefined}
+              upgrading={chordsUpgrading}
+              onSelectVersionIndex={onSetVersionIndex}
+              onDeleteCurrentVersion={onDeleteChords}
             />
-            <ChordDisplayControls />
+            <LyricsSourceSelector
+              options={availableLyricsSources}
+              selected={selectedLyricsSource}
+              onSelect={onSetLyricsSource}
+            />
             <PlaybackSpeedSelector />
             <LyricsSyncControl />
             <ScrollModeControl />
@@ -143,7 +160,10 @@ export function PlayerControls({
   )
 }
 
-// --- Primary controls (extracted to keep PlayerControls render concise) ---
+interface StemSelection {
+  isFullSong: boolean
+  stems: string[]
+}
 
 interface PrimaryControlsProps {
   songId: string
@@ -152,17 +172,12 @@ interface PrimaryControlsProps {
   headerArtist: string
   hasChords: boolean
   isFavorited: boolean
-  allVersions: ChordOption[]
-  selectedVersionIndex: number
+  isStemSelectionDisabled?: boolean
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
-  userEmail: string | null
-  chordsUpgrading: boolean
   onToggleFavorite: () => void
   onEnterEditMode: () => void
-  onSetVersionIndex: (idx: number) => void
-  onDeleteChords: () => void
   onOpenTutorial: () => void
 }
 
@@ -173,36 +188,31 @@ function PrimaryControls({
   headerArtist,
   hasChords,
   isFavorited,
-  allVersions,
-  selectedVersionIndex,
+  isStemSelectionDisabled = false,
   chordNamesForMap,
   representativeStrumPattern,
   sectionStrumPatterns,
-  userEmail,
-  chordsUpgrading,
   onToggleFavorite,
   onEnterEditMode,
-  onSetVersionIndex,
-  onDeleteChords,
   onOpenTutorial,
 }: PrimaryControlsProps) {
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
-  const toggleStem = usePlaybackStore((s) => s.toggleStem)
+  const setActiveStems = usePlaybackStore((s) => s.setActiveStems)
   const selectFullSong = usePlaybackStore((s) => s.selectFullSong)
   const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
   const isEditMode = useChordEditStore((s) => s.isEditMode)
 
-  const handleToggleStem = useCallback((stem: string) => {
-    toggleStem(stem)
-    const { activeStems: newStems, isFullSong: nowFull } = usePlaybackStore.getState()
-    setSongOverride(songId, 'activeStems', nowFull ? 'fullSong' : newStems)
-  }, [songId, toggleStem, setSongOverride])
+  const handleApplyStemSelection = useCallback((selection: StemSelection) => {
+    if (selection.isFullSong || selection.stems.length === 0) {
+      selectFullSong()
+      setSongOverride(songId, 'activeStems', 'fullSong')
+      return
+    }
 
-  const handleSelectFullSong = useCallback(() => {
-    selectFullSong()
-    setSongOverride(songId, 'activeStems', 'fullSong')
-  }, [songId, selectFullSong, setSongOverride])
+    setActiveStems(selection.stems)
+    setSongOverride(songId, 'activeStems', selection.stems)
+  }, [selectFullSong, setActiveStems, setSongOverride, songId])
 
   return (
     <>
@@ -222,7 +232,7 @@ function PrimaryControls({
           size={28}
           className={cn(
             'transition-colors',
-            isFavorited ? 'fill-flame-400 text-flame-400 animate-favorite-ignite' : 'text-flame-400/70'
+            isFavorited ? 'fill-flame-400 text-flame-400 animate-favorite-ignite' : 'text-flame-400/70',
           )}
         />
       </button>
@@ -249,20 +259,10 @@ function PrimaryControls({
         <TrackSelector
           activeStems={activeStems}
           isFullSong={isFullSong}
-          onToggleStem={handleToggleStem}
-          onSelectFullSong={handleSelectFullSong}
+          onApplySelection={handleApplyStemSelection}
           availableStems={detail.stems}
           stemTypes={detail.stem_types}
-        />
-      </div>
-      <div className="contents" data-tour="version-toggle">
-        <ChordVersionToggle
-          versions={allVersions}
-          selectedIndex={selectedVersionIndex}
-          currentUserEmail={userEmail ?? undefined}
-          upgrading={chordsUpgrading}
-          onSelect={onSetVersionIndex}
-          onDelete={onDeleteChords}
+          isDisabled={isStemSelectionDisabled}
         />
       </div>
       <div className="contents" data-tour="chord-map">

@@ -11,6 +11,7 @@ interface SongHeaderProps {
   thumbnailSrc: string
   isAdmin: boolean
   isPlaying: boolean
+  isPlaybackDisabled?: boolean
   onTogglePlay: () => void
   onSeek: (time: number) => void
   onThumbnailError: () => void
@@ -26,6 +27,7 @@ export function SongHeader({
   thumbnailSrc,
   isAdmin,
   isPlaying,
+  isPlaybackDisabled = false,
   onTogglePlay,
   onSeek,
   onThumbnailError,
@@ -54,20 +56,26 @@ export function SongHeader({
       <div className="sm:hidden shrink-0 flex items-center gap-2">
         <button
           onClick={() => onSeek(Math.max(0, usePlaybackStore.getState().currentTime - 10))}
-          className="text-smoke-400 hover:text-smoke-100 transition-colors"
+          className={cn(
+            'text-smoke-400 transition-colors',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
+          )}
           aria-label="Back 10 seconds"
           data-testid="mobile-skip-back"
+          disabled={isPlaybackDisabled}
         >
           <SkipBack size={22} />
         </button>
         <button
           onClick={onTogglePlay}
           className={cn(
-            'w-12 h-12 rounded-full bg-flame-400 flex items-center justify-center text-charcoal-950 hover:bg-flame-500 transition-all',
+            'flex h-12 w-12 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 transition-colors',
             isPlaying ? 'animate-flame-pulse' : '',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-flame-500',
           )}
           aria-label={isPlaying ? 'Pause' : 'Play'}
           data-testid="mobile-play-button"
+          disabled={isPlaybackDisabled}
         >
           {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
         </button>
@@ -76,9 +84,13 @@ export function SongHeader({
             const s = usePlaybackStore.getState()
             onSeek(Math.min(s.duration, s.currentTime + 10))
           }}
-          className="text-smoke-400 hover:text-smoke-100 transition-colors"
+          className={cn(
+            'text-smoke-400 transition-colors',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
+          )}
           aria-label="Forward 10 seconds"
           data-testid="mobile-skip-forward"
+          disabled={isPlaybackDisabled}
         >
           <SkipForward size={22} />
         </button>
