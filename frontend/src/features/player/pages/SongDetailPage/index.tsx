@@ -100,6 +100,7 @@ export function SongDetailPage() {
   useEffect(() => { setGlobalStrumSource(strumSource) }, [strumSource, setGlobalStrumSource])
 
   const [showTutorial, setShowTutorial] = useState(false)
+  const [isPreparingSyncedMix, setIsPreparingSyncedMix] = useState(false)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
@@ -167,18 +168,66 @@ export function SongDetailPage() {
   }, [hasPlaybackOccurred, songId])
 
   // Load audio when stems or full-song mode changes.
+  // In production, multi-stem playback is resolved to a single pre-mixed track
+  // so the browser only plays one timeline and cannot drift between stems.
   useEffect(() => {
     if (!detail || !songId) return
-    if (isFullSong) {
-      const url = getAudioUrl(songId, 'full_mix', detail)
-      if (url) loadFullSong(url)
-    } else if (activeStems.length > 0) {
+
+    let cancelled = false
+
+    const loadSelectedAudio = async () => {
+      if (isFullSong) {
+        setIsPreparingSyncedMix(false)
+        const url = getAudioUrl(songId, 'full_mix', detail)
+        if (url) loadFullSong(url)
+        return
+      }
+
+      if (activeStems.length === 0) {
+        setIsPreparingSyncedMix(false)
+        return
+      }
+
+      if (activeStems.length === 1) {
+        setIsPreparingSyncedMix(false)
+        const url = getAudioUrl(songId, activeStems[0], detail)
+        if (url) loadFullSong(url)
+        return
+      }
+
+      if (!env.isLocal) {
+        setIsPreparingSyncedMix(true)
+        try {
+          const response = await songsApi.playbackSource(songId, [...activeStems].sort())
+          if (!cancelled) {
+            loadFullSong(response.url)
+          }
+          return
+        } catch {
+          // Fall back to legacy multi-element playback if mix resolution fails.
+        } finally {
+          if (!cancelled) {
+            setIsPreparingSyncedMix(false)
+          }
+        }
+      }
+
+      setIsPreparingSyncedMix(false)
       const urls = new Map<string, string>()
       for (const stem of activeStems) {
         const url = getAudioUrl(songId, stem, detail)
         if (url) urls.set(stem, url)
       }
-      if (urls.size > 0) loadStems(urls)
+      if (!cancelled && urls.size > 0) {
+        loadStems(urls)
+      }
+    }
+
+    setIsPreparingSyncedMix(false)
+
+    void loadSelectedAudio()
+    return () => {
+      cancelled = true
     }
   }, [detail, songId, isFullSong, activeStems, loadStems, loadFullSong])
 
@@ -361,7 +410,8 @@ export function SongDetailPage() {
   const hasChords = activeChords.length > 0
   const chordsLoading = !hasChords && !detail?.chord_source && hasStemsProcessed
   const chordsUpgrading = hasChords && detail?.chord_source === 'autochord' && !detail?.web_chords_failed
-  const showAudioStatus = !audioUrl && hasStemsProcessed
+  const showAudioStatus = isPreparingSyncedMix || (!audioUrl && hasStemsProcessed)
+  const audioStatusMessage = isPreparingSyncedMix ? 'Preparing synced mix...' : undefined
 
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
@@ -408,6 +458,7 @@ export function SongDetailPage() {
             hasTabs={hasTabs}
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
+            audioStatusMessage={audioStatusMessage}
             allVersions={allVersions}
             activeChords={activeChords}
             selectedVersionIndex={selectedVersionIndex}

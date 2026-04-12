@@ -28,6 +28,7 @@ from guitar_player.schemas.song import (
     FeedbackRating,
     GenreListResponse,
     PaginatedSongsResponse,
+    PlaybackSourceResponse,
     RecommendationsResponse,
     SaveUserChordsRequest,
     SaveUserChordsResponse,
@@ -58,6 +59,12 @@ _STEM_KEY_MAP: dict[str, str] = {
     "thumbnail": "thumbnail_key",
     "vocals": "vocals_key",
     "guitar": "guitar_key",
+    "drums": "drums_key",
+    "bass": "bass_key",
+    "piano": "piano_key",
+    "other": "other_key",
+    "guitar_removed": "guitar_removed_key",
+    "vocals_guitar": "vocals_guitar_key",
 }
 
 _STEM_MEDIA_TYPE: dict[str, str] = {
@@ -81,8 +88,23 @@ def _media_type_for(stem: str, file_path: Path) -> str:
     return _EXT_MEDIA_TYPE.get(file_path.suffix.lower(), _DEFAULT_MEDIA_TYPE)
 
 
+def _parse_playback_stems(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip() and part.strip() != "full_mix"]
+
+
 # Stems eligible for admin reprocessing (not audio or thumbnail)
-_REPROCESSABLE_STEMS = {"vocals", "guitar"}
+_REPROCESSABLE_STEMS = {
+    "vocals",
+    "guitar",
+    "drums",
+    "bass",
+    "piano",
+    "other",
+    "guitar_removed",
+    "vocals_guitar",
+}
 
 # All stem types used in regeneration
 _ALL_STEM_NAMES = (
@@ -295,6 +317,21 @@ async def vote_chord_version(
 
 
 # --- Dynamic /{song_id} endpoints ---
+
+
+@router.get("/{song_id}/playback-source", response_model=PlaybackSourceResponse)
+async def get_playback_source(
+    song_id: uuid.UUID,
+    stems: str | None = Query(
+        None,
+        description="Comma-separated stem names. Omit or use full_mix for the original audio.",
+    ),
+    _user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+) -> PlaybackSourceResponse:
+    """Return a single playable source URL for the requested playback selection."""
+    url = await song_service.resolve_playback_source(song_id, _parse_playback_stems(stems))
+    return PlaybackSourceResponse(url=url)
 
 
 @router.get("/{song_id}/stream")

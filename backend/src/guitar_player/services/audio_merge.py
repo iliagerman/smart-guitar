@@ -1,4 +1,4 @@
-"""Audio merge utility — mix two audio stems into one using FFmpeg."""
+"""Audio merge utilities for cached playback mixes."""
 
 import logging
 import os
@@ -13,23 +13,25 @@ logger = logging.getLogger(__name__)
 _FFMPEG_TIMEOUT = 120  # seconds
 
 
-def merge_audio_stems(input_a: str, input_b: str, output: str) -> None:
-    """Mix two audio files into a single MP3 file using FFmpeg amix filter.
+def merge_audio_files(input_paths: list[str], output: str) -> None:
+    """Mix multiple audio files into one CBR MP3 using FFmpeg amix."""
+    if len(input_paths) < 2:
+        raise ValueError("At least two audio inputs are required to build a mix")
 
-    Both inputs are mixed at their original volume levels (normalize=0).
-    Output is encoded as MP3 CBR 192 kbps for accurate browser currentTime.
-    """
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i", input_a,
-        "-i", input_b,
+    filter_inputs = "".join(f"[{idx}:a]" for idx in range(len(input_paths)))
+    cmd = ["ffmpeg", "-y"]
+    for path in input_paths:
+        cmd.extend(["-i", path])
+    cmd.extend([
         "-filter_complex",
-        "[0:a][1:a]amix=inputs=2:duration=longest:normalize=0",
-        "-codec:a", "libmp3lame",
-        "-b:a", "192k",
+        f"{filter_inputs}amix=inputs={len(input_paths)}:duration=longest:normalize=0",
+        "-codec:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
         output,
-    ]
+    ])
+
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -40,6 +42,47 @@ def merge_audio_stems(input_a: str, input_b: str, output: str) -> None:
         raise RuntimeError(
             f"FFmpeg merge failed (exit {result.returncode}): {result.stderr}"
         )
+
+
+def merge_audio_stems(input_a: str, input_b: str, output: str) -> None:
+    """Backward-compatible wrapper for merging exactly two stems."""
+    merge_audio_files([input_a, input_b], output)
+
+
+def build_stem_mix_key(song_name: str, stem_names: list[str]) -> str:
+    """Return the cached storage key for a canonical stem combination."""
+    canonical = "__".join(sorted(stem_names))
+    return f"{song_name}/mixes/{canonical}.mp3"
+
+
+async def ensure_stem_mix(
+    storage: StorageBackend,
+    song_name: str,
+    stem_keys: list[tuple[str, str]],
+) -> str:
+    """Create and cache a mixed playback file for the requested stems."""
+    output_key = build_stem_mix_key(song_name, [name for name, _ in stem_keys])
+    if storage.file_exists(output_key):
+        return output_key
+
+    tmp_dir = tempfile.mkdtemp(prefix="stem_mix_")
+    try:
+        local_inputs: list[str] = []
+        for stem_name, stem_key in stem_keys:
+            local_path = os.path.join(tmp_dir, f"{stem_name}.mp3")
+            storage.download_to_local(stem_key, local_path)
+            local_inputs.append(local_path)
+
+        output_local = os.path.join(tmp_dir, os.path.basename(output_key))
+        merge_audio_files(local_inputs, output_local)
+        storage.upload_file(output_local, output_key)
+        logger.info("Created cached stem mix -> %s", output_key)
+        return output_key
+    except Exception:
+        logger.exception("Failed to create cached stem mix for %s", song_name)
+        raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 async def merge_vocals_guitar_stem(

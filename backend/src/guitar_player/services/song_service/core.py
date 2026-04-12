@@ -30,6 +30,7 @@ from guitar_player.schemas.song import (
     SongSection,
 )
 from guitar_player.services.artwork_service import ArtworkService
+from guitar_player.services.audio_merge import ensure_stem_mix
 from guitar_player.services.audio_normalize import transcode_audio_to_mp3_cbr192
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.youtube_service import YoutubeService
@@ -47,6 +48,8 @@ from .detail import build_song_detail
 from .helpers import STEM_NAMES, slug_to_display, to_folder_name
 
 logger = logging.getLogger(__name__)
+
+_VALID_PLAYBACK_STEMS = frozenset(STEM_NAMES)
 
 
 class SongService:
@@ -367,6 +370,56 @@ class SongService:
             await self._song_dao.update_by_id(song_id, download_requested_at=None)
             return True
         return False
+
+    def _normalize_playback_stems(self, stems: list[str] | None) -> list[str]:
+        if not stems:
+            return []
+        normalized = sorted({stem.strip() for stem in stems if stem.strip()})
+        invalid = [stem for stem in normalized if stem not in _VALID_PLAYBACK_STEMS]
+        if invalid:
+            raise BadRequestError(
+                f"Unsupported stems requested: {', '.join(invalid)}"
+            )
+        return normalized
+
+    def _resolve_existing_source_url(self, key: str | None, label: str) -> str:
+        if not key or not self._storage.file_exists(key):
+            raise NotFoundError("Audio source", label)
+        return self._storage.get_presigned_url(key)
+
+    def _get_existing_stem_key(self, song: Any, stem: str) -> str:
+        key = getattr(song, f"{stem}_key", None)
+        if not key or not self._storage.file_exists(key):
+            raise NotFoundError("Stem", stem)
+        return key
+
+    async def resolve_playback_source(
+        self,
+        song_id: uuid.UUID,
+        stems: list[str] | None = None,
+    ) -> str:
+        """Resolve a single playable audio URL for the requested playback mode."""
+        song = await self._song_dao.get_by_id(song_id)
+        if not song:
+            raise NotFoundError("Song", str(song_id))
+
+        requested_stems = self._normalize_playback_stems(stems)
+        if not requested_stems:
+            return self._resolve_existing_source_url(song.audio_key, "full song")
+
+        if len(requested_stems) == 1:
+            stem_key = self._get_existing_stem_key(song, requested_stems[0])
+            return self._storage.get_presigned_url(stem_key)
+
+        if not song.song_name:
+            raise BadRequestError("Song is missing a storage folder name")
+
+        stem_keys = [
+            (stem_name, self._get_existing_stem_key(song, stem_name))
+            for stem_name in requested_stems
+        ]
+        output_key = await ensure_stem_mix(self._storage, song.song_name, stem_keys)
+        return self._storage.get_presigned_url(output_key)
 
     async def get_song_detail(self, song_id: uuid.UUID) -> SongDetailResponse:
         """Full song detail: audio URL, stems, chords."""

@@ -102,6 +102,7 @@ STEM_NAME_MAP: dict[str, str] = {
     "bass": "bass",
     "piano": "piano",
     "other": "other",
+    "guitar_removed": "guitar_removed",
 }
 
 # Currently empty -- all stems are kept.

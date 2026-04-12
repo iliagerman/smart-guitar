@@ -177,6 +177,10 @@ class SongDetailResponse(BaseModel):
     download_pending: bool = False
 
 
+class PlaybackSourceResponse(BaseModel):
+    url: str
+
+
 class EnrichedSearchResult(BaseModel):
     """Search result enriched with LLM-parsed names and local availability."""
 

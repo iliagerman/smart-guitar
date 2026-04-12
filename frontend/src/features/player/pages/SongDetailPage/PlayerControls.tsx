@@ -27,6 +27,7 @@ interface PlayerControlsProps {
   hasTabs: boolean
   isFavorited: boolean
   showAudioStatus: boolean
+  audioStatusMessage?: string
   allVersions: ChordOption[]
   activeChords: { chord: string; start_time: number; end_time: number }[]
   selectedVersionIndex: number
@@ -44,9 +45,17 @@ interface PlayerControlsProps {
   onOpenTutorial: () => void
 }
 
-function AudioStatusBanner() {
+interface AudioStatusBannerProps {
+  message?: string
+}
+
+function AudioStatusBanner({ message }: AudioStatusBannerProps) {
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
+
+  const fallbackMessage = isFullSong
+    ? 'Downloading audio...'
+    : `Preparing ${activeStems.map((s) => s.replaceAll('_', ' ')).join(', ')}...`
 
   return (
     <div
@@ -54,11 +63,7 @@ function AudioStatusBanner() {
       aria-live="polite"
     >
       <LoadingSpinner size="xs" inline />
-      <span>
-        {isFullSong
-          ? 'Downloading audio...'
-          : `Preparing ${activeStems.map((s) => s.replaceAll('_', ' ')).join(', ')}...`}
-      </span>
+      <span>{message ?? fallbackMessage}</span>
     </div>
   )
 }
@@ -76,6 +81,7 @@ export function PlayerControls({
   hasTabs,
   isFavorited,
   showAudioStatus,
+  audioStatusMessage,
   allVersions,
   activeChords,
   selectedVersionIndex,
@@ -94,7 +100,7 @@ export function PlayerControls({
 }: PlayerControlsProps) {
   return (
     <div className="flex flex-col gap-4" data-testid="player-controls">
-      {showAudioStatus && <AudioStatusBanner />}
+      {showAudioStatus && <AudioStatusBanner message={audioStatusMessage} />}
       <TransportControls
         onTogglePlay={onTogglePlay}
         onSeek={onSeek}
