@@ -20,7 +20,13 @@ from guitar_player.services.processing_service import (
     StemInfo,
 )
 
-from .constants import DEFAULT_REQUESTED_OUTPUTS, STEM_EXT, STEM_NAME_MAP
+from .constants import (
+    DEFAULT_REQUESTED_OUTPUTS,
+    DERIVED_STEMS,
+    STEM_EXT,
+    STEM_FILE_VARIANTS,
+    STEM_NAME_MAP,
+)
 from .helpers import find_stem, stem_candidates, to_demucs_requested_outputs
 
 logger = logging.getLogger(__name__)
@@ -645,6 +651,34 @@ async def process_job(job_id: uuid.UUID) -> None:
     )
 
 
+def _stem_storage_candidates(song_name: str, stem_name: str) -> list[str]:
+    filenames = STEM_FILE_VARIANTS.get(stem_name)
+    if filenames:
+        return [f"{song_name}/{filename}" for filename in filenames]
+    return stem_candidates(song_name, stem_name)
+
+
+def _find_existing_processing_stems(storage, song_name: str) -> dict[str, str]:
+    existing_stems: dict[str, str] = {}
+    for stem_name in STEM_NAME_MAP:
+        candidates = _stem_storage_candidates(song_name, stem_name)
+        key = next(
+            (candidate for candidate in candidates if storage.file_exists(candidate)),
+            None,
+        )
+        if key:
+            existing_stems[stem_name] = key
+    return existing_stems
+
+
+def _all_core_stems_present(existing_stems: dict[str, str]) -> bool:
+    return all(
+        stem_name in existing_stems
+        for stem_name in STEM_FILE_VARIANTS
+        if stem_name not in DERIVED_STEMS
+    )
+
+
 async def _run_separation_and_chords(
     processing: ProcessingService,
     storage,
@@ -658,18 +692,11 @@ async def _run_separation_and_chords(
     from guitar_player.config import get_settings
     settings = get_settings()
 
-    def _find_existing_key(candidates: list[str]) -> str | None:
-        return next((k for k in candidates if storage.file_exists(k)), None)
+    existing_stems = _find_existing_processing_stems(storage, song_name)
+    chords_key = f"{song_name}/chords.json"
+    chords_key_existing = chords_key if storage.file_exists(chords_key) else None
 
-    vocals_key_existing = _find_existing_key(
-        stem_candidates(song_name, "vocals", "vocals_isolated")
-    )
-    guitar_key_existing = _find_existing_key(
-        stem_candidates(song_name, "guitar", "guitar_isolated")
-    )
-    chords_key_existing = _find_existing_key([f"{song_name}/chords.json"])
-
-    stems_already_ok = bool(vocals_key_existing and guitar_key_existing)
+    stems_already_ok = _all_core_stems_present(existing_stems)
     chords_already_ok = bool(chords_key_existing)
 
     # Build separation task.
@@ -751,12 +778,10 @@ async def _run_separation_and_chords(
 
 async def _cached_separation(storage, song_name: str) -> SeparationResult:
     """Report existing stems as if they were produced by Demucs."""
-    stem_names = ["guitar", "vocals", "guitar_removed"]
-    stems: list[StemInfo] = []
-    for name in stem_names:
-        key = find_stem(storage, song_name, name)
-        if key:
-            stems.append(StemInfo(name=name, path=key))
+    stems = [
+        StemInfo(name=name, path=path)
+        for name, path in _find_existing_processing_stems(storage, song_name).items()
+    ]
     return SeparationResult(stems=stems, output_path=f"{song_name}/")
 
 

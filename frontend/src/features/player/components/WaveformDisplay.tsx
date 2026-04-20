@@ -35,7 +35,7 @@ export function WaveformDisplay({ audioUrl, onSeek }: WaveformDisplayProps) {
       barRadius: 2,
       normalize: true,
       interact: true,
-      backend: 'WebAudio',
+      backend: 'MediaElement',
     })
 
     ws.load(audioUrl)

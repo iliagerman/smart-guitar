@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { songsApi } from '@/api/songs.api'
 import { subscriptionApi } from '@/api/subscription.api'
 import { cn } from '@/lib/cn'
+import { ROUTES } from '@/router/routes'
 
 interface AdminMenuProps {
   songId: string
@@ -31,6 +33,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!open) return
@@ -56,6 +59,28 @@ export function AdminMenu({ songId }: AdminMenuProps) {
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       toast.error(detail ?? 'Regeneration failed')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleDeleteSong = async () => {
+    if (!confirm('Are you sure you want to permanently delete this song? This will remove all S3 data and database records. This cannot be undone.')) {
+      return
+    }
+    setLoading('Delete Song')
+    setOpen(false)
+    try {
+      const result = await songsApi.deleteSong(songId)
+      if (result.storageErrors.length > 0) {
+        toast.warning(`Song deleted but some storage files failed to clean up: ${result.storageErrors.join(', ')}`)
+      } else {
+        toast.success('Song deleted successfully')
+      }
+      navigate(ROUTES.LIBRARY)
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail ?? 'Failed to delete song')
     } finally {
       setLoading(null)
     }
@@ -113,6 +138,15 @@ export function AdminMenu({ songId }: AdminMenuProps) {
             data-testid="admin-menu-reset-onboarding"
           >
             Reset Onboarding Tour
+          </button>
+          <div className="border-t border-charcoal-600 my-1" />
+          <button
+            onClick={handleDeleteSong}
+            disabled={!!loading}
+            className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors disabled:opacity-50"
+            data-testid="admin-menu-delete-song"
+          >
+            Delete Song
           </button>
         </div>
       )}

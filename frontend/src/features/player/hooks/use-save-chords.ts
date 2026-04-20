@@ -6,6 +6,7 @@ import { useChordEditStore } from '@/stores/chord-edit.store'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { ChordEntry, LyricsSegment } from '@/types/song'
+import { buildSheetVersions } from '../lib/sheet-versions'
 
 interface SaveChordsParams {
   songId: string
@@ -42,18 +43,11 @@ export function useSaveChords() {
         return
       }
 
-      // Auto-select the new user version by finding its index in chord_options
-      // chord_options now contains all versions (primary, V1, user versions, variants)
-      // User versions have version_key containing 'chords_user'
-      const allOptions = detail.chord_options ?? []
-      const nonVariantOptions = allOptions.filter(
-        (o: { name: string; hidden?: boolean }) =>
-          !o.name.includes('Beginner') && !o.name.includes('Capo') && !o.hidden,
-      )
-      // Find the last user version (the one just saved)
+      // Auto-select the new user sheet source.
+      const sheetVersions = buildSheetVersions(detail.chord_options ?? [])
       let lastUserIdx = -1
-      for (let i = nonVariantOptions.length - 1; i >= 0; i--) {
-        if (nonVariantOptions[i].version_key?.includes('chords_user')) {
+      for (let i = sheetVersions.length - 1; i >= 0; i--) {
+        if (sheetVersions[i].version_key?.includes('chords_user')) {
           lastUserIdx = i
           break
         }
@@ -63,6 +57,11 @@ export function useSaveChords() {
           variables.songId,
           'selectedVersionIndex',
           lastUserIdx,
+        )
+        usePlayerPrefsStore.getState().setSongOverride(
+          variables.songId,
+          'selectedLyricsSource',
+          'auto',
         )
         usePlaybackStore.getState().setSheetMode('chords')
         usePlaybackStore.getState().setSelectedChordOptionIndex(null)

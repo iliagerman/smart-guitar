@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Circle, Mic, Square, Video } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,6 +15,7 @@ type RecordingMode = 'audio' | 'video'
 interface RecordButtonProps {
   songTitle: string
   artist: string
+  getRecordingTap: () => { context: AudioContext; node: GainNode } | null
 }
 
 function formatDuration(seconds: number): string {
@@ -35,8 +36,24 @@ function buildFilename(artist: string, songTitle: string): string {
  * Shows a mode picker (Audio / Video) on tap, then starts recording in the chosen mode.
  * Auto-record uses the store default without showing the picker.
  */
-export function RecordButton({ songTitle, artist }: RecordButtonProps) {
-  const audioRecorder = useRecorder()
+export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButtonProps) {
+  const headphonesMode = usePlayerPrefsStore((s) => s.headphonesMode)
+  const recordingGuitarGain = usePlayerPrefsStore((s) => s.recordingGuitarGain)
+  const recordingBackingGain = usePlayerPrefsStore((s) => s.recordingBackingGain)
+
+  const rawTap = headphonesMode ? getRecordingTap() : null
+  // Stabilize the tap reference so useRecorder's callbacks don't churn on every render.
+  const backingTrackTap = useMemo(
+    () => rawTap,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawTap?.context, rawTap?.node],
+  )
+
+  const audioRecorder = useRecorder(
+    backingTrackTap
+      ? { backingTrackTap, guitarGain: recordingGuitarGain, backingGain: recordingBackingGain }
+      : {},
+  )
   const videoRecorder = useVideoRecorder()
   const recordVideo = usePlayerPrefsStore((s) => s.recordVideo)
 

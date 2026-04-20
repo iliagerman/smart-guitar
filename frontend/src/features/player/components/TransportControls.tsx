@@ -8,6 +8,7 @@ interface TransportControlsProps {
   onTogglePlay: () => void
   onSeek: (time: number) => void
   primaryControls?: React.ReactNode
+  pinnedControls?: React.ReactNode
   secondaryControls?: React.ReactNode
   isPlaybackDisabled?: boolean
   /**
@@ -21,6 +22,7 @@ export function TransportControls({
   onTogglePlay,
   onSeek,
   primaryControls,
+  pinnedControls,
   secondaryControls,
   isPlaybackDisabled = false,
   showButtonsOnMobile = false,
@@ -68,6 +70,13 @@ export function TransportControls({
       {primaryControls && (
         <div className="flex items-center gap-2 justify-center pt-1 pb-3 overflow-x-auto scrollbar-hide">
           {primaryControls}
+        </div>
+      )}
+
+      {/* Pinned controls row — always visible (mobile + desktop) */}
+      {pinnedControls && (
+        <div className="flex flex-wrap items-center gap-1 justify-center pt-1">
+          {pinnedControls}
         </div>
       )}
 

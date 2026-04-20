@@ -7,6 +7,7 @@ import { useSubscriptionStore } from '../stores/subscription.store'
 
 export const api = axios.create({
   baseURL: env.apiBaseUrl,
+  timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 })
 

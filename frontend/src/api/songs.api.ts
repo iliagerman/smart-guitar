@@ -27,10 +27,6 @@ interface RegenerateResponse {
   errors: string[]
 }
 
-interface PlaybackSourceResponse {
-  url: string
-}
-
 export const songsApi = {
   search: (query: string) =>
     api.post<{ results: SearchResult[] }>('/api/v1/songs/search', { query }).then((r) => r.data.results),
@@ -54,14 +50,6 @@ export const songsApi = {
 
   detail: (songId: string) =>
     api.get<SongDetail>(`/api/v1/songs/${songId}`).then((r) => r.data),
-
-  playbackSource: (songId: string, stems: string[], signal?: AbortSignal) =>
-    api
-      .get<PlaybackSourceResponse>(`/api/v1/songs/${songId}/playback-source`, {
-        params: { stems: stems.join(',') },
-        signal,
-      })
-      .then((r) => r.data),
 
   recordPlay: (songId: string) =>
     api.post<MessageResponse>(`/api/v1/songs/${songId}/play`).then((r) => r.data),
@@ -100,4 +88,7 @@ export const songsApi = {
         params: { limit },
       })
       .then((r) => r.data.items),
+
+  deleteSong: (songId: string) =>
+    api.delete<{ songsDeleted: number; storageErrors: string[] }>(`/api/v1/songs/${songId}`).then((r) => r.data),
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSubscription } from '../hooks/use-subscription'
 import { PaywallDialog } from './PaywallDialog'
+import { BlockingErrorState } from '@/components/shared/BlockingErrorState'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
 interface SubscriptionGuardProps {
@@ -8,14 +9,23 @@ interface SubscriptionGuardProps {
 }
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-  const { data: status, isLoading } = useSubscription()
+  const { data: status, isLoading, isError, refetch } = useSubscription()
   const [userOpened, setUserOpened] = useState(false)
   const mustShowPaywall = !!(status && !status.has_access)
   const open = mustShowPaywall || userOpened
 
   if (isLoading) {
+    return <LoadingSpinner size="lg" className="flex-1 min-h-screen" />
+  }
+
+  if (isError) {
     return (
-      <LoadingSpinner size="lg" className="flex-1 min-h-screen" />
+      <BlockingErrorState
+        title="Could not load your subscription"
+        description="The app could not verify your access. Check your connection and try again."
+        onRetry={() => void refetch()}
+        retryTestId="subscription-guard-retry-button"
+      />
     )
   }
 

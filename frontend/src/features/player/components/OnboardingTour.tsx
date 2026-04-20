@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react'
-import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle } from 'lucide-react'
+import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
+import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle, Captions } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/cn'
 import { useSubscriptionStore } from '@/stores/subscription.store'
-import { usePlaybackStore } from '@/stores/playback.store'
 import { subscriptionApi } from '@/api/subscription.api'
 import { queryKeys } from '@/api/query-keys'
 
@@ -13,9 +12,10 @@ interface TourStep {
   title: string
   description: string
   icon: React.ReactNode
+  optional?: boolean
 }
 
-const STEPS: TourStep[] = [
+const ALL_STEPS: TourStep[] = [
   {
     tourAttr: 'favorite',
     title: 'Add to Favorites',
@@ -30,15 +30,23 @@ const STEPS: TourStep[] = [
   },
   {
     tourAttr: 'stem-selector',
-    title: 'Change the Stem',
-    description: 'Switch between vocals, guitar, guitar + vocals, or the full mix to practice along.',
+    title: 'Mix the Stems',
+    description: 'All stems play at full volume. Drag a stem\'s slider down to mute it — try muting vocals or guitar to practice along.',
     icon: <Music size={20} />,
   },
   {
     tourAttr: 'version-toggle',
-    title: 'Switch Version',
-    description: 'Tap to cycle through song versions. Each version pairs chords with lyrics — from auto-detected to AI-improved to your own edits.',
+    title: 'Pick a Chord Sheet',
+    description: 'Choose how chords are shown: auto-detected, AI, or your own edits — and pick Easy chords, a capo shape, or tabs when available.',
     icon: <Guitar size={20} />,
+    optional: true,
+  },
+  {
+    tourAttr: 'lyrics-source',
+    title: 'Switch Lyrics Source',
+    description: 'If the lyrics feel off, swap the source here — each source is synced independently from the chord sheet.',
+    icon: <Captions size={20} />,
+    optional: true,
   },
   {
     tourAttr: 'chord-map',
@@ -71,65 +79,39 @@ export function OnboardingTour() {
   const [stepIndex, setStepIndex] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [active, setActive] = useState(false)
-  const savedStemsRef = useRef<{ stems: string[]; isFullSong: boolean } | null>(null)
-
-  const STEM_STEP_INDEX = STEPS.findIndex((s) => s.tourAttr === 'stem-selector')
+  const [steps, setSteps] = useState<TourStep[]>([])
 
   // Wait for subscription data to load and target elements to exist before starting
   useEffect(() => {
     if (!isLoaded || hasSeenOnboarding) return
     const check = () => {
-      const allExist = STEPS.every((s) => document.querySelector(`[data-tour="${s.tourAttr}"]`))
-      if (allExist) {
-        setActive(true)
-      }
+      const requiredExist = ALL_STEPS.every(
+        (s) => s.optional || document.querySelector(`[data-tour="${s.tourAttr}"]`),
+      )
+      if (!requiredExist) return
+      const resolved = ALL_STEPS.filter(
+        (s) => document.querySelector(`[data-tour="${s.tourAttr}"]`) !== null,
+      )
+      setSteps(resolved)
+      setActive(true)
     }
     // Delay to let the page render
     const timer = setTimeout(check, 800)
     return () => clearTimeout(timer)
   }, [isLoaded, hasSeenOnboarding])
 
-  // Switch to guitar-only stem when entering the stem step, restore on leave
-  useEffect(() => {
-    if (!active) return
-    const playback = usePlaybackStore.getState()
-    if (stepIndex === STEM_STEP_INDEX) {
-      savedStemsRef.current = { stems: playback.activeStems, isFullSong: playback.isFullSong }
-      playback.setActiveStems(['guitar'])
-    } else if (savedStemsRef.current) {
-      const { stems, isFullSong } = savedStemsRef.current
-      if (isFullSong) {
-        playback.selectFullSong()
-      } else {
-        playback.setActiveStems(stems)
-      }
-      savedStemsRef.current = null
-    }
-  }, [active, stepIndex, STEM_STEP_INDEX])
-
   // Measure the current step's target element
   useLayoutEffect(() => {
     if (!active) return
-    const step = STEPS[stepIndex]
+    const step = steps[stepIndex]
     if (!step) return
     const measure = () => setRect(getTargetRect(step.tourAttr))
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [active, stepIndex])
+  }, [active, stepIndex, steps])
 
   const dismiss = useCallback(async () => {
-    // Restore stems if dismissed while on stem step
-    if (savedStemsRef.current) {
-      const { stems, isFullSong } = savedStemsRef.current
-      const playback = usePlaybackStore.getState()
-      if (isFullSong) {
-        playback.selectFullSong()
-      } else {
-        playback.setActiveStems(stems)
-      }
-      savedStemsRef.current = null
-    }
     setActive(false)
     // Optimistically update the local store
     const store = useSubscriptionStore.getState()
@@ -148,12 +130,12 @@ export function OnboardingTour() {
   }, [queryClient])
 
   const handleNext = useCallback(() => {
-    if (stepIndex < STEPS.length - 1) {
+    if (stepIndex < steps.length - 1) {
       setStepIndex((i) => i + 1)
-    } else {
-      dismiss()
+      return
     }
-  }, [stepIndex, dismiss])
+    dismiss()
+  }, [dismiss, stepIndex, steps.length])
 
   const handleBack = useCallback(() => {
     setStepIndex((i) => Math.max(0, i - 1))
@@ -171,8 +153,8 @@ export function OnboardingTour() {
 
   if (!active || !rect) return null
 
-  const step = STEPS[stepIndex]
-  const isLast = stepIndex === STEPS.length - 1
+  const step = steps[stepIndex]
+  const isLast = stepIndex === steps.length - 1
 
   // Position tooltip below the highlighted element
   const tooltipTop = rect.bottom + PADDING + 12
@@ -216,7 +198,7 @@ export function OnboardingTour() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-flame-400">{step.icon}</span>
           <h3 className="text-sm font-semibold text-smoke-100">{step.title}</h3>
-          <span className="ml-auto text-xs text-smoke-500">{stepIndex + 1}/{STEPS.length}</span>
+          <span className="ml-auto text-xs text-smoke-500">{stepIndex + 1}/{steps.length}</span>
         </div>
 
         <p className="text-xs text-smoke-400 leading-relaxed mb-4">{step.description}</p>

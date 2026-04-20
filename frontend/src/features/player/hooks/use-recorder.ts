@@ -2,6 +2,23 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { downloadBlob } from '../lib/download-blob'
 
+/** Pre-resolved backing track tap from the stem mixer. */
+interface BackingTrackTap {
+  context: AudioContext
+  node: AudioNode
+}
+
+interface RecorderOptions {
+  /** When set, the recorder uses the shared AudioContext and mixes the
+   *  backing track digitally into the output. Requires headphones. */
+  backingTrackTap?: BackingTrackTap | null
+  /** Gain for the guitar (mic) input. Default 3.0. */
+  guitarGain?: number
+  /** Gain for the backing track in the mix. Default 0.5. Only used when
+   *  backingTrackTap is provided. */
+  backingGain?: number
+}
+
 interface RecorderState {
   isRecording: boolean
   recordingDuration: number
@@ -13,7 +30,7 @@ interface RecorderState {
   clearRecording: () => void
 }
 
-const GAIN_VALUE = 3.0
+const DEFAULT_GUITAR_GAIN = 3.0
 const MP3_KBPS = 128
 const SAMPLES_PER_FRAME = 1152
 
@@ -51,7 +68,9 @@ async function ensureWorklet(audioCtx: AudioContext) {
   registeredContexts.add(audioCtx)
 }
 
-export function useRecorder(): RecorderState {
+export function useRecorder(options: RecorderOptions = {}): RecorderState {
+  const { backingTrackTap = null, guitarGain = DEFAULT_GUITAR_GAIN, backingGain = 0.5 } = options
+  const isDigitalMix = backingTrackTap !== null && backingTrackTap !== undefined
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
   const [permissionDenied, setPermissionDenied] = useState(false)
@@ -59,7 +78,9 @@ export function useRecorder(): RecorderState {
 
   const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const ownsAudioContextRef = useRef(false)
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
+  const backingGainNodeRef = useRef<GainNode | null>(null)
   const pcmChunksRef = useRef<Float32Array[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const filenameRef = useRef('')
@@ -73,16 +94,23 @@ export function useRecorder(): RecorderState {
       workletNodeRef.current.disconnect()
       workletNodeRef.current = null
     }
+    if (backingGainNodeRef.current) {
+      backingGainNodeRef.current.disconnect()
+      backingGainNodeRef.current = null
+    }
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) {
         track.stop()
       }
       streamRef.current = null
     }
-    if (audioContextRef.current) {
+    // Only close the AudioContext if we created it (mic-only mode).
+    // In digital-mix mode the context belongs to the stem mixer.
+    if (audioContextRef.current && ownsAudioContextRef.current) {
       audioContextRef.current.close()
-      audioContextRef.current = null
     }
+    audioContextRef.current = null
+    ownsAudioContextRef.current = false
   }, [])
 
   useEffect(() => cleanup, [cleanup])
@@ -115,15 +143,24 @@ export function useRecorder(): RecorderState {
       setPermissionDenied(false)
       setRecordedBlob(null)
 
-      const audioCtx = new AudioContext()
+      // In digital-mix mode reuse the stem mixer's AudioContext so we can
+      // tap its output. In mic-only mode create a dedicated context.
+      let audioCtx: AudioContext
+      if (isDigitalMix && backingTrackTap) {
+        audioCtx = backingTrackTap.context
+        ownsAudioContextRef.current = false
+      } else {
+        audioCtx = new AudioContext()
+        ownsAudioContextRef.current = true
+      }
       await audioCtx.resume()
       audioContextRef.current = audioCtx
 
       await ensureWorklet(audioCtx)
 
       const source = audioCtx.createMediaStreamSource(stream)
-      const gainNode = audioCtx.createGain()
-      gainNode.gain.value = GAIN_VALUE
+      const micGainNode = audioCtx.createGain()
+      micGainNode.gain.value = guitarGain
 
       const workletNode = new AudioWorkletNode(audioCtx, 'recorder-processor')
       workletNodeRef.current = workletNode
@@ -132,8 +169,22 @@ export function useRecorder(): RecorderState {
         pcmChunksRef.current.push(e.data)
       }
 
-      source.connect(gainNode)
-      gainNode.connect(workletNode)
+      // Sum mic and (optionally) backing track into the worklet.
+      // A merger GainNode sums both signals before the worklet captures them.
+      const sumNode = audioCtx.createGain()
+      sumNode.gain.value = 1
+      sumNode.connect(workletNode)
+
+      source.connect(micGainNode)
+      micGainNode.connect(sumNode)
+
+      if (isDigitalMix && backingTrackTap) {
+        const bGain = audioCtx.createGain()
+        bGain.gain.value = backingGain
+        backingTrackTap.node.connect(bGain)
+        bGain.connect(sumNode)
+        backingGainNodeRef.current = bGain
+      }
 
       setIsRecording(true)
       setRecordingDuration(0)
@@ -149,7 +200,7 @@ export function useRecorder(): RecorderState {
       }
       throw err
     }
-  }, [cleanup])
+  }, [cleanup, isDigitalMix, backingTrackTap, guitarGain, backingGain])
 
   const stopRecording = useCallback((autoDownload = true) => {
     const sampleRate = audioContextRef.current?.sampleRate ?? 44100

@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, Download, Share } from 'lucide-react'
+
+import { isAppleMobileSafariLike } from '@/lib/device'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -19,6 +21,10 @@ function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
 }
 
+function isIosNonSafari(): boolean {
+  return isIos() && !isAppleMobileSafariLike()
+}
+
 function isInStandaloneMode(): boolean {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -28,10 +34,13 @@ function isInStandaloneMode(): boolean {
 
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showIosBanner] = useState(() => {
+  const [showIosInstructions, setShowIosInstructions] = useState(false)
+  const showIosBanner = useMemo(() => {
     if (isInStandaloneMode() || wasDismissedRecently()) return false
     return isIos()
-  })
+  }, [])
+  const showIosSafariInstructions = useMemo(() => showIosBanner && isAppleMobileSafariLike(), [showIosBanner])
+  const showIosSafariFallback = useMemo(() => showIosBanner && isIosNonSafari(), [showIosBanner])
   const [visible, setVisible] = useState(() => {
     if (isInStandaloneMode() || wasDismissedRecently()) return false
     return isIos()
@@ -53,6 +62,7 @@ export function InstallPrompt() {
 
   const dismiss = () => {
     setVisible(false)
+    setShowIosInstructions(false)
     localStorage.setItem(DISMISSED_KEY, String(Date.now()))
   }
 
@@ -81,16 +91,47 @@ export function InstallPrompt() {
           <p className="text-sm font-semibold text-smoke-100">Install Smart Guitar</p>
 
           {showIosBanner ? (
-            <p className="mt-0.5 text-xs text-smoke-400">
-              Tap <Share className="inline h-3.5 w-3.5 align-text-bottom text-fire-400" /> then{' '}
-              <span className="font-medium text-smoke-300">"Add to Home Screen"</span>
-            </p>
+            <>
+              {showIosSafariInstructions ? (
+                <>
+                  <p className="mt-0.5 text-xs text-smoke-400">
+                    Install this app from Safari to keep it on your home screen.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowIosInstructions((prev) => !prev)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-fire-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fire-500 active:bg-fire-700"
+                    data-testid="install-prompt-ios-instructions-button"
+                  >
+                    <Share className="h-3.5 w-3.5" />
+                    {showIosInstructions ? 'Hide steps' : 'How to install'}
+                  </button>
+                  {showIosInstructions && (
+                    <div
+                      className="mt-2 rounded-xl border border-charcoal-700 bg-charcoal-800/80 px-3 py-2 text-xs text-smoke-300"
+                      data-testid="install-prompt-ios-instructions"
+                    >
+                      <ol className="list-decimal space-y-1 pl-4">
+                        <li>Tap <Share className="inline h-3.5 w-3.5 align-text-bottom text-fire-400" /> in Safari.</li>
+                        <li>Choose <span className="font-medium text-smoke-100">Add to Home Screen</span>.</li>
+                        <li>Tap <span className="font-medium text-smoke-100">Add</span> to finish.</li>
+                      </ol>
+                    </div>
+                  )}
+                </>
+              ) : showIosSafariFallback ? (
+                <div className="mt-0.5 text-xs text-smoke-400" data-testid="install-prompt-ios-open-safari">
+                  Open this page in Safari, then use <span className="font-medium text-smoke-300">Share → Add to Home Screen</span>.
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               <p className="mt-0.5 text-xs text-smoke-400">
                 Add to your home screen for quick access
               </p>
               <button
+                type="button"
                 onClick={install}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-fire-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fire-500 active:bg-fire-700"
                 data-testid="install-prompt-install-button"
@@ -103,6 +144,7 @@ export function InstallPrompt() {
         </div>
 
         <button
+          type="button"
           onClick={dismiss}
           className="shrink-0 rounded-lg p-1 text-smoke-500 transition-colors hover:bg-charcoal-700 hover:text-smoke-300"
           aria-label="Dismiss install prompt"

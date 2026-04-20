@@ -253,6 +253,8 @@ test.describe('Processing resume on refresh/navigation', () => {
     await expect(page.getByTestId('song-detail-page')).toBeVisible({ timeout: 15000 })
 
     // The processing progress UI should be visible (showing the other user's job progress)
-    await expect(page.getByText('60%')).toBeVisible()
+    await expect(
+      page.getByTestId('process-button-container').getByText('60%'),
+    ).toBeVisible()
   })
 })

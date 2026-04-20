@@ -1,4 +1,4 @@
-import { Mic, Video } from 'lucide-react'
+import { Headphones, Mic, Video } from 'lucide-react'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { cn } from '@/lib/cn'
 
@@ -43,13 +43,52 @@ function ToggleRow({ label, description, value, onChange, testId }: ToggleRowPro
  * Recording settings section for the profile page.
  * Controls auto-record, auto-download, and auto-record mode preferences.
  */
+interface GainSliderProps {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+  testId: string
+}
+
+function GainSlider({ label, value, min, max, step, onChange, testId }: GainSliderProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-smoke-300 text-xs">{label}</p>
+        <span className="text-smoke-500 text-xs font-mono tabular-nums">
+          {Math.round(value * 100)}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(Number(e.target.value))}
+        className="w-full accent-flame-500"
+        data-testid={testId}
+      />
+    </div>
+  )
+}
+
 export function RecordingSettingsSection() {
   const autoRecord = usePlayerPrefsStore((s) => s.autoRecord)
   const autoDownloadRecordings = usePlayerPrefsStore((s) => s.autoDownloadRecordings)
   const recordVideo = usePlayerPrefsStore((s) => s.recordVideo)
+  const headphonesMode = usePlayerPrefsStore((s) => s.headphonesMode)
+  const recordingGuitarGain = usePlayerPrefsStore((s) => s.recordingGuitarGain)
+  const recordingBackingGain = usePlayerPrefsStore((s) => s.recordingBackingGain)
   const setAutoRecord = usePlayerPrefsStore((s) => s.setAutoRecord)
   const setAutoDownloadRecordings = usePlayerPrefsStore((s) => s.setAutoDownloadRecordings)
   const setRecordVideo = usePlayerPrefsStore((s) => s.setRecordVideo)
+  const setHeadphonesMode = usePlayerPrefsStore((s) => s.setHeadphonesMode)
+  const setRecordingGuitarGain = usePlayerPrefsStore((s) => s.setRecordingGuitarGain)
+  const setRecordingBackingGain = usePlayerPrefsStore((s) => s.setRecordingBackingGain)
 
   return (
     <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600">
@@ -109,6 +148,43 @@ export function RecordingSettingsSection() {
               Video
             </button>
           </div>
+        </div>
+
+        <div className="border-t border-charcoal-700 pt-4">
+          <ToggleRow
+            label="Headphones Mode"
+            description="Mix backing track digitally into recording (requires headphones)"
+            value={headphonesMode}
+            onChange={setHeadphonesMode}
+            testId="headphones-mode-toggle"
+          />
+
+          {headphonesMode && (
+            <div className="mt-4 space-y-3 rounded-lg bg-charcoal-900/50 p-4 border border-charcoal-700">
+              <div className="flex items-center gap-2 text-xs text-smoke-400">
+                <Headphones size={14} />
+                <span>Recording mix levels</span>
+              </div>
+              <GainSlider
+                label="Guitar input"
+                value={recordingGuitarGain / 5}
+                min={0}
+                max={1}
+                step={0.02}
+                onChange={(v) => setRecordingGuitarGain(v * 5)}
+                testId="recording-guitar-gain-slider"
+              />
+              <GainSlider
+                label="Backing track"
+                value={recordingBackingGain}
+                min={0}
+                max={1}
+                step={0.02}
+                onChange={setRecordingBackingGain}
+                testId="recording-backing-gain-slider"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -4,7 +4,6 @@ import { ROUTES } from '@/router/routes'
 import { LogOut, User } from 'lucide-react'
 import { SubscriptionSection } from '@/features/subscription/components/SubscriptionSection'
 import { RecordingSettingsSection } from '../components/RecordingSettingsSection'
-import { DefaultStemsSection } from '../components/DefaultStemsSection'
 
 export function ProfilePage() {
   const { email, logout } = useAuthStore()
@@ -40,11 +39,6 @@ export function ProfilePage() {
       {/* Recording settings */}
       <div className="mb-4">
         <RecordingSettingsSection />
-      </div>
-
-      {/* Default stems */}
-      <div className="mb-4">
-        <DefaultStemsSection />
       </div>
 
       {/* Sign out */}
