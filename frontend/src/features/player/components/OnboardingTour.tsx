@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
-import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle, Captions } from 'lucide-react'
+import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle, Captions, Music2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { cn } from '@/lib/cn'
@@ -31,21 +31,28 @@ const ALL_STEPS: TourStep[] = [
   {
     tourAttr: 'stem-selector',
     title: 'Mix the Stems',
-    description: 'All stems play at full volume. Drag a stem\'s slider down to mute it — try muting vocals or guitar to practice along.',
+    description: 'By default the original song plays. Open the mixer to switch to individual stems — mute vocals or guitar to practice along, and adjust each stem\'s volume.',
     icon: <Music size={20} />,
   },
   {
     tourAttr: 'version-toggle',
     title: 'Pick a Chord Sheet',
-    description: 'Choose how chords are shown: auto-detected, AI, or your own edits — and pick Easy chords, a capo shape, or tabs when available.',
+    description: 'Switch between chord sheet versions or your own edits. Use Easy chords for beginner-friendly shapes, Capo to see fingering with a capo, or Tabs when available.',
     icon: <Guitar size={20} />,
     optional: true,
   },
   {
     tourAttr: 'lyrics-source',
     title: 'Switch Lyrics Source',
-    description: 'If the lyrics feel off, swap the source here — each source is synced independently from the chord sheet.',
+    description: 'The chord sheet includes its own lyrics. If you want different lyrics, swap the source here — but keep it on Auto for the best chord alignment.',
     icon: <Captions size={20} />,
+    optional: true,
+  },
+  {
+    tourAttr: 'secondary-controls',
+    title: 'Transpose, Speed & Scroll',
+    description: 'Transpose chords up or down (b/#), adjust playback speed, toggle between synced highlighting and auto-scroll, and fine-tune lyrics timing.',
+    icon: <Music2 size={20} />,
     optional: true,
   },
   {

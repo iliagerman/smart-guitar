@@ -92,11 +92,14 @@ export function TransportControls({
             <Settings2 size={20} />
             <ChevronDown size={16} className={cn('transition-transform', showSecondary && 'rotate-180')} />
           </button>
-          <div className={cn(
-            'flex flex-wrap items-center gap-1 justify-center border-t border-charcoal-700/40 pt-1.5 mt-0.5',
-            'opacity-75 hover:opacity-100 transition-opacity',
-            showSecondary ? 'flex' : 'hidden sm:flex',
-          )}>
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-1 justify-center border-t border-charcoal-700/40 pt-1.5 mt-0.5',
+              'opacity-75 hover:opacity-100 transition-opacity',
+              showSecondary ? 'flex' : 'hidden sm:flex',
+            )}
+            data-tour="secondary-controls"
+          >
             {secondaryControls}
           </div>
         </>
