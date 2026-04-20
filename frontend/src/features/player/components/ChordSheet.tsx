@@ -323,22 +323,22 @@ export function ChordSheet({
     (time: number, globalIndex: number) => {
       if (isEditMode) {
         onChordSelect?.(globalIndex)
-      } else {
+      } else if (showHighlight) {
         onSeek?.(time)
       }
     },
-    [isEditMode, onChordSelect, onSeek]
+    [isEditMode, showHighlight, onChordSelect, onSeek]
   )
 
   const handleWordClick = useCallback(
     (time: number) => {
       if (isEditMode) {
         onWordClick?.(time)
-      } else {
+      } else if (showHighlight) {
         onSeek?.(time)
       }
     },
-    [isEditMode, onWordClick, onSeek]
+    [isEditMode, showHighlight, onWordClick, onSeek]
   )
 
   const handleDragStart = useCallback(
