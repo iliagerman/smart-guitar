@@ -232,7 +232,7 @@ interface LyricsContentProps {
 function LyricsContent(props: LyricsContentProps) {
   const { line, isActive, showHighlight, isEditMode, isRtl } = props
   return (
-    <div className={cn('leading-normal', !isEditMode && (!isActive || !showHighlight) && 'text-smoke-500')}>
+    <div className={cn('leading-normal', !isEditMode && showHighlight && !isActive && 'text-smoke-500')}>
       {line.words.length > 0 ? (
         <WordsWithChords
           line={props.line}

@@ -1,3 +1,7 @@
+import { useState, useCallback, useEffect } from 'react'
+import { Maximize2, Minimize2 } from 'lucide-react'
+
+import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 import { ProcessButton } from '../../components/ProcessButton'
@@ -58,6 +62,19 @@ export function SongContent({
   onOpenTutorial,
 }: SongContentProps) {
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const toggleFullscreen = useCallback(() => setIsFullscreen((v) => !v), [])
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isFullscreen])
+
   const isEditMode = useChordEditStore((s) => s.isEditMode)
   const editingChords = useChordEditStore((s) => s.editingChords)
   const editingLyrics = useChordEditStore((s) => s.editingLyrics)
@@ -101,9 +118,32 @@ export function SongContent({
             />
 
             {hasChordSheet ? (
-              <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
-                <CurrentChordPanel chords={displayChords} />
-                <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+              <div
+                className={cn(
+                  isFullscreen
+                    ? 'fixed inset-0 z-50 flex flex-col bg-charcoal-950 p-4'
+                    : 'flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch',
+                )}
+              >
+                {!isFullscreen && <CurrentChordPanel chords={displayChords} />}
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
+                  {/* Fullscreen toggle */}
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    className={cn(
+                      'absolute top-2 z-10 p-1.5 rounded-lg',
+                      'bg-charcoal-700/80 border border-charcoal-600 text-smoke-300',
+                      'hover:text-smoke-100 hover:border-flame-400/30 transition-colors',
+                      isFullscreen ? 'right-2' : 'right-2',
+                    )}
+                    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                    title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Expand to fullscreen'}
+                    data-testid="fullscreen-toggle"
+                  >
+                    {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                  </button>
+
                   {chordsLoading && !hasChords ? (
                     <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
                       <div className="flex flex-col items-center gap-3">
@@ -145,20 +185,22 @@ export function SongContent({
                     </>
                   )}
                 </div>
-                <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
-                  <ChordMap
-                    chords={chordNamesForMap}
-                    representativePattern={representativeStrumPattern}
-                    sectionPatterns={sectionStrumPatterns}
-                    bpm={detail.source_bpm ?? detail.rhythm?.bpm}
-                    strumNotes={detail.strum_notes}
-                    tutorialUrl={detail.tutorial_url}
-                    tutorialLinks={detail.tutorial_links}
-                    strumLoading={!detail.songsterr_status}
-                    songKey={detail.song_key}
-                    onOpenTutorial={onOpenTutorial}
-                  />
-                </div>
+                {!isFullscreen && (
+                  <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
+                    <ChordMap
+                      chords={chordNamesForMap}
+                      representativePattern={representativeStrumPattern}
+                      sectionPatterns={sectionStrumPatterns}
+                      bpm={detail.source_bpm ?? detail.rhythm?.bpm}
+                      strumNotes={detail.strum_notes}
+                      tutorialUrl={detail.tutorial_url}
+                      tutorialLinks={detail.tutorial_links}
+                      strumLoading={!detail.songsterr_status}
+                      songKey={detail.song_key}
+                      onOpenTutorial={onOpenTutorial}
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
           </>
