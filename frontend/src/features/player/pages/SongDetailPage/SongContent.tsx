@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -62,18 +62,28 @@ export function SongContent({
   onOpenTutorial,
 }: SongContentProps) {
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
+  const fullscreenRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const toggleFullscreen = useCallback(() => setIsFullscreen((v) => !v), [])
 
-  // Escape key exits fullscreen
-  useEffect(() => {
-    if (!isFullscreen) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsFullscreen(false)
+  const toggleFullscreen = useCallback(() => {
+    if (!isFullscreen && fullscreenRef.current) {
+      fullscreenRef.current.requestFullscreen?.().catch(() => {
+        // Fallback: use CSS fullscreen if API not available
+        setIsFullscreen(true)
+      })
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen?.()
+    } else {
+      setIsFullscreen(false)
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
   }, [isFullscreen])
+
+  // Sync state when native fullscreen changes (e.g. user presses Escape)
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
 
   const isEditMode = useChordEditStore((s) => s.isEditMode)
   const editingChords = useChordEditStore((s) => s.editingChords)
@@ -119,10 +129,10 @@ export function SongContent({
 
             {hasChordSheet ? (
               <div
+                ref={fullscreenRef}
                 className={cn(
-                  isFullscreen
-                    ? 'fixed inset-0 z-50 flex flex-col bg-charcoal-950 p-4'
-                    : 'flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch',
+                  'flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch',
+                  isFullscreen && 'bg-charcoal-950 p-4',
                 )}
               >
                 {!isFullscreen && <CurrentChordPanel chords={displayChords} />}
