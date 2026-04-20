@@ -10,6 +10,7 @@ import { useChordEditStore } from '@/stores/chord-edit.store'
 import { ChordMapDialog } from '../../components/ChordMapDialog'
 import { LyricsSourceSelector } from '../../components/LyricsSourceSelector'
 import { LyricsSyncControl } from '../../components/LyricsSyncControl'
+import { ChordDisplayControls } from '../../components/ChordDisplayControls'
 import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
 import { RecordButton } from '../../components/RecordButton'
 import { ScrollModeControl } from '../../components/ScrollModeControl'
@@ -161,6 +162,7 @@ export function PlayerControls({
         }
         secondaryControls={
           <>
+            <ChordDisplayControls />
             <PlaybackSpeedSelector />
             <LyricsSyncControl />
             <ScrollModeControl />

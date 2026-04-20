@@ -45,6 +45,7 @@ function contentFingerprint(d: SongDetail): string {
     d.sections?.some(s => s.llm_pattern?.length) ? 'llm' : '',
     d.songsterr_status ?? '',
     d.chord_options.length,
+    d.chord_options.map(o => o.name).join(','),
     Object.values(d.stems).filter(Boolean).length,
     d.active_job?.id ?? '',
     d.active_job?.status ?? '',
@@ -85,10 +86,10 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
       // Songsterr data is fetched async — poll until backend reports a result
       const songsterrPending = !detail.songsterr_status  // null = still fetching
-      // Poll while community chord sheets are being fetched
-      const communityChordsPending = !detail.chord_options?.some(
+      // Community chord sheets are fetched async — poll until at least one appears
+      const hasCommunityChords = detail.chord_options?.some(
         (o) => o.description?.startsWith('Community chord sheet'),
-      ) && !detail.songsterr_status
+      ) ?? false
 
       // Keep polling while data is still missing (background retries may fill it in).
       // But only poll up to a reasonable interval — lyrics/tabs may have failed.
@@ -100,8 +101,8 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       // Songsterr data (strumming patterns, tabs, sections) fetched async — poll until done.
       if (songsterrPending) return 5000
 
-      // Community chord sheets still loading — poll until they appear
-      if (communityChordsPending) return 5000
+      // Community chord sheets still loading — keep polling until they arrive
+      if (!hasCommunityChords) return 6000
 
       // Ver 1 lyrics are meant to appear ASAP.
       if (missingVer1Lyrics) return 5000
