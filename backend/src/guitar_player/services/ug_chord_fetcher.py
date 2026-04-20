@@ -1,25 +1,24 @@
 """Fetch chord sheets from Ultimate Guitar.
 
-Uses Ultimate Guitar's public-facing endpoints to:
+Uses curl_cffi with Chrome TLS impersonation to bypass Cloudflare.
 1. Search for a matching song by artist + title
 2. Fetch the highest-rated chord sheet
-3. Parse the chord content into structured StaticChordLine data
+3. Parse the [ch]...[/ch] content into structured StaticChordLine data
 
 All errors are non-fatal — returns None on failure.
 """
 
+import html as html_mod
 import json
 import logging
 import re
 from dataclasses import dataclass, field
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-_UG_SEARCH_URL = "https://www.ultimate-guitar.com/api/v1/tab/search"
-_UG_TAB_URL = "https://tabs.ultimate-guitar.com/tab/fetch"
-_REQUEST_TIMEOUT = 15.0
+_REQUEST_TIMEOUT = 15
 
 # Section header patterns: [Verse 1], [Chorus], [Intro], etc.
 _SECTION_PATTERN = re.compile(r"^\[([^\]]+)\]$")
@@ -29,6 +28,9 @@ _CHORD_TAG_PATTERN = re.compile(r"\[ch\](.*?)\[/ch\]")
 
 # Tab tag wrapping: [tab]...[/tab]
 _TAB_WRAPPER = re.compile(r"\[/?tab\]")
+
+# UG data content attribute
+_DATA_CONTENT_PATTERN = re.compile(r'class="js-store"[^>]*data-content="([^"]+)"')
 
 
 @dataclass
@@ -115,10 +117,7 @@ def _is_chord_only_line(line: str) -> bool:
 
 
 def _extract_chords_with_positions(line: str) -> list[StaticChordPosition]:
-    """Extract chord names and their character positions from a line with [ch] tags.
-
-    Computes the visual position of each chord after removing all tags.
-    """
+    """Extract chord names and their character positions from a line with [ch] tags."""
     chords: list[StaticChordPosition] = []
     visual_pos = 0
     remaining = line
@@ -126,7 +125,6 @@ def _extract_chords_with_positions(line: str) -> list[StaticChordPosition]:
         match = _CHORD_TAG_PATTERN.search(remaining)
         if not match:
             break
-        # Characters before this chord tag contribute to visual position
         before = remaining[:match.start()]
         visual_pos += len(before)
         chord_name = match.group(1)
@@ -148,7 +146,6 @@ def parse_ug_content(raw_content: str) -> list[StaticChordLine]:
     1. Inline: chords mixed with lyrics via [ch]...[/ch] tags
     2. Two-line: chord-only line followed by lyrics line
     """
-    # Remove [tab] wrapper tags
     content = _TAB_WRAPPER.sub("", raw_content)
     raw_lines = content.split("\n")
     lines: list[StaticChordLine] = []
@@ -158,36 +155,26 @@ def parse_ug_content(raw_content: str) -> list[StaticChordLine]:
         line = raw_lines[i]
         stripped = line.rstrip()
 
-        # Empty line
         if not stripped:
             lines.append(StaticChordLine(type="empty", text=""))
             i += 1
             continue
 
-        # Section header: [Verse 1], [Chorus], etc.
         plain = _get_plain_text(stripped)
         section_match = _SECTION_PATTERN.match(plain.strip())
         if section_match:
-            lines.append(StaticChordLine(
-                type="section", text=section_match.group(1),
-            ))
+            lines.append(StaticChordLine(type="section", text=section_match.group(1)))
             i += 1
             continue
 
-        # Chord-only line (no lyrics text, just chord tags)
         if _is_chord_only_line(stripped):
             chord_positions = _extract_chords_with_positions(stripped)
-
-            # Check if next line is a lyrics line (two-line format)
             if i + 1 < len(raw_lines):
                 next_line = raw_lines[i + 1].rstrip()
                 next_plain = _get_plain_text(next_line)
                 next_section = _SECTION_PATTERN.match(next_plain.strip())
-
                 if next_plain and not next_section and not _is_chord_only_line(next_line):
-                    # Two-line format: chord line + lyrics line
                     lyrics_text = next_plain
-                    # If the next line also has inline chords, merge them
                     if _CHORD_TAG_PATTERN.search(next_line):
                         extra_chords = _extract_chords_with_positions(next_line)
                         chord_positions.extend(extra_chords)
@@ -197,43 +184,41 @@ def parse_ug_content(raw_content: str) -> list[StaticChordLine]:
                     ))
                     i += 2
                     continue
-
-            # Standalone chord line (instrumental)
-            lines.append(StaticChordLine(
-                type="instrumental", text="", chords=chord_positions,
-            ))
+            lines.append(StaticChordLine(type="instrumental", text="", chords=chord_positions))
             i += 1
             continue
 
-        # Inline format: lyrics with embedded [ch]...[/ch] tags
         if _CHORD_TAG_PATTERN.search(stripped):
             chord_positions = _extract_chords_with_positions(stripped)
             lyrics_text = _get_plain_text(stripped)
-            lines.append(StaticChordLine(
-                type="lyric", text=lyrics_text, chords=chord_positions,
-            ))
+            lines.append(StaticChordLine(type="lyric", text=lyrics_text, chords=chord_positions))
             i += 1
             continue
 
-        # Plain lyrics line (no chords)
-        lines.append(StaticChordLine(
-            type="lyric", text=stripped, chords=[],
-        ))
+        lines.append(StaticChordLine(type="lyric", text=stripped, chords=[]))
         i += 1
 
     return lines
 
 
-def _find_best_tab(
-    results: list[dict], artist: str, title: str,
-) -> dict | None:
-    """Find the best-matching Chords-type tab from UG search results."""
+def _extract_page_data(page_text: str) -> dict | None:
+    """Extract the JSON store data from a UG page's data-content attribute."""
+    match = _DATA_CONTENT_PATTERN.search(page_text)
+    if not match:
+        return None
+    try:
+        return json.loads(html_mod.unescape(match.group(1)))
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _find_best_chord_tab(tabs: list[dict], artist: str, title: str) -> dict | None:
+    """Find the best-matching Chords-type tab from search results."""
     chord_tabs = [
-        r for r in results
-        if r.get("type", "").lower() in ("chords", "ukulele chords")
+        t for t in tabs
+        if t.get("type", "").lower() == "chords"
     ]
     if not chord_tabs:
-        logger.info("UG: no chord tabs in results for %r by %r", title, artist)
         return None
 
     best_tab = None
@@ -244,15 +229,13 @@ def _find_best_tab(
             artist, title,
             tab.get("artist_name", ""), tab.get("song_name", ""),
         )
-        # Boost by rating (0-5 scale, normalized to 0-0.5 bonus)
         rating = tab.get("rating", 0) or 0
         combined = match + (rating / 10.0)
-
         if combined > best_score:
             best_score = combined
             best_tab = tab
 
-    if best_score < 1.0 or best_tab is None:
+    if best_score < 0.7 or best_tab is None:
         logger.info(
             "UG: no good match for %r by %r (best_score=%.2f)",
             title, artist, best_score,
@@ -270,152 +253,108 @@ def _find_best_tab(
 async def fetch_ug_chord_sheet(
     artist: str,
     title: str,
-    timeout_seconds: float = _REQUEST_TIMEOUT,
+    timeout_seconds: int = _REQUEST_TIMEOUT,
 ) -> UGChordSheet | None:
     """Search Ultimate Guitar and fetch the best chord sheet for a song.
 
+    Uses curl_cffi with Chrome impersonation to bypass Cloudflare.
     Returns a parsed UGChordSheet or None if no match found.
     """
     query = f"{artist} {title}"
     logger.info("UG search: %r", query)
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json",
-    }
-
     try:
-        async with httpx.AsyncClient(
-            timeout=timeout_seconds, follow_redirects=True, headers=headers,
-        ) as client:
-            # Step 1: Search for the song
-            search_resp = await client.get(
-                _UG_SEARCH_URL,
-                params={
-                    "search_type": "title",
-                    "value": query,
-                    "type": "Chords",
-                    "page": 1,
-                },
+        async with AsyncSession() as session:
+            # Step 1: Search
+            search_resp = await session.get(
+                "https://www.ultimate-guitar.com/search.php",
+                params={"search_type": "title", "value": query},
+                impersonate="chrome",
+                timeout=timeout_seconds,
             )
-            search_resp.raise_for_status()
-            search_data = search_resp.json()
+            if search_resp.status_code != 200:
+                logger.warning("UG search returned %d", search_resp.status_code)
+                return None
 
-            # UG wraps results in different structures depending on the endpoint
-            results = search_data
-            if isinstance(search_data, dict):
-                results = (
-                    search_data.get("results", [])
-                    or search_data.get("data", [])
-                    or search_data.get("tabs", [])
-                )
-                # Sometimes nested under "results" -> list of dicts with "results" key
-                if results and isinstance(results[0], dict) and "results" in results[0]:
-                    flat: list[dict] = []
-                    for group in results:
-                        flat.extend(group.get("results", []))
-                    results = flat
+            search_data = _extract_page_data(search_resp.text)
+            if not search_data:
+                logger.info("UG: could not extract page data from search results")
+                return None
 
-            if not results:
+            result_groups = (
+                search_data.get("store", {})
+                .get("page", {})
+                .get("data", {})
+                .get("results", [])
+            )
+
+            # Flatten result groups into a single list of tabs
+            all_tabs: list[dict] = []
+            for group in result_groups:
+                if isinstance(group, dict):
+                    if "results" in group:
+                        all_tabs.extend(group["results"])
+                    elif "song_name" in group:
+                        all_tabs.append(group)
+
+            if not all_tabs:
                 logger.info("UG: no results for %r", query)
                 return None
 
-            best_tab = _find_best_tab(results, artist, title)
+            best_tab = _find_best_chord_tab(all_tabs, artist, title)
             if not best_tab:
                 return None
 
             tab_url = best_tab.get("tab_url", "")
-            tab_id = best_tab.get("id")
-
-            # Step 2: Fetch the tab content
-            content = ""
-            if tab_id:
-                try:
-                    tab_resp = await client.get(
-                        _UG_TAB_URL, params={"id": tab_id},
-                    )
-                    tab_resp.raise_for_status()
-                    tab_data = tab_resp.json()
-                    content = (
-                        tab_data.get("content", "")
-                        or tab_data.get("wiki_tab", {}).get("content", "")
-                    )
-                except Exception:
-                    logger.debug("UG: tab fetch by ID failed, trying URL", exc_info=True)
-
-            # Fallback: try fetching the tab page directly
-            if not content and tab_url:
-                try:
-                    page_resp = await client.get(tab_url)
-                    page_resp.raise_for_status()
-                    page_text = page_resp.text
-
-                    # Extract JSON data from the page's data-content attribute or script
-                    json_match = re.search(
-                        r'data-content="([^"]+)"', page_text,
-                    )
-                    if json_match:
-                        import html as html_mod
-                        decoded = html_mod.unescape(json_match.group(1))
-                        try:
-                            page_data = json.loads(decoded)
-                            content = (
-                                page_data.get("store", {})
-                                .get("page", {})
-                                .get("data", {})
-                                .get("tab_view", {})
-                                .get("wiki_tab", {})
-                                .get("content", "")
-                            )
-                        except json.JSONDecodeError:
-                            pass
-
-                    if not content:
-                        # Try JS_DATA pattern
-                        js_match = re.search(
-                            r"window\.__STORE__\s*=\s*(\{.+?\});\s*</script>",
-                            page_text, re.DOTALL,
-                        )
-                        if js_match:
-                            try:
-                                store = json.loads(js_match.group(1))
-                                content = (
-                                    store.get("page", {})
-                                    .get("data", {})
-                                    .get("tab_view", {})
-                                    .get("wiki_tab", {})
-                                    .get("content", "")
-                                )
-                            except json.JSONDecodeError:
-                                pass
-                except Exception:
-                    logger.debug("UG: page fetch failed for %s", tab_url, exc_info=True)
-
-            if not content:
-                # Try using the content directly from search results
-                content = best_tab.get("content", "")
-
-            if not content:
-                logger.info("UG: no content found for tab %s", tab_id)
+            if not tab_url:
+                logger.info("UG: no tab_url for matched tab")
                 return None
 
-            # Step 3: Parse the content
+            # Step 2: Fetch the tab page
+            tab_resp = await session.get(
+                tab_url, impersonate="chrome", timeout=timeout_seconds,
+            )
+            if tab_resp.status_code != 200:
+                logger.warning("UG tab page returned %d for %s", tab_resp.status_code, tab_url)
+                return None
+
+            tab_data = _extract_page_data(tab_resp.text)
+            if not tab_data:
+                logger.info("UG: could not extract page data from tab page")
+                return None
+
+            content = (
+                tab_data.get("store", {})
+                .get("page", {})
+                .get("data", {})
+                .get("tab_view", {})
+                .get("wiki_tab", {})
+                .get("content", "")
+            )
+            if not content:
+                logger.info("UG: no wiki_tab content for %s", tab_url)
+                return None
+
+            # Step 3: Parse
             parsed_lines = parse_ug_content(content)
             if not parsed_lines:
-                logger.info("UG: parsed content is empty for tab %s", tab_id)
+                logger.info("UG: parsed content is empty for %s", tab_url)
                 return None
 
-            # Extract metadata
             capo = 0
             capo_match = re.search(r"capo[:\s]*(\d+)", content, re.IGNORECASE)
             if capo_match:
                 capo = int(capo_match.group(1))
 
             key = best_tab.get("tonality_name", "")
+
+            logger.info(
+                "UG: got %d lines for %r by %r (rating=%.1f)",
+                len(parsed_lines),
+                best_tab.get("song_name", ""),
+                best_tab.get("artist_name", ""),
+                best_tab.get("rating", 0),
+            )
 
             return UGChordSheet(
                 lines=parsed_lines,
@@ -427,12 +366,6 @@ async def fetch_ug_chord_sheet(
                 rating=best_tab.get("rating", 0) or 0,
             )
 
-    except httpx.HTTPStatusError as e:
-        logger.warning("UG HTTP error: %s", e)
-        return None
-    except httpx.TimeoutException:
-        logger.warning("UG request timed out for %r", query)
-        return None
     except Exception:
         logger.warning("UG fetch failed for %r", query, exc_info=True)
         return None
