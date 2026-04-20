@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -64,26 +64,7 @@ export function SongContent({
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const fullscreenRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-
-  const toggleFullscreen = useCallback(() => {
-    if (!isFullscreen && fullscreenRef.current) {
-      fullscreenRef.current.requestFullscreen?.().catch(() => {
-        // Fallback: use CSS fullscreen if API not available
-        setIsFullscreen(true)
-      })
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen?.()
-    } else {
-      setIsFullscreen(false)
-    }
-  }, [isFullscreen])
-
-  // Sync state when native fullscreen changes (e.g. user presses Escape)
-  useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', handler)
-    return () => document.removeEventListener('fullscreenchange', handler)
-  }, [])
+  const toggleFullscreen = useCallback(() => setIsFullscreen((v) => !v), [])
 
   const isEditMode = useChordEditStore((s) => s.isEditMode)
   const editingChords = useChordEditStore((s) => s.editingChords)
@@ -132,23 +113,22 @@ export function SongContent({
                 ref={fullscreenRef}
                 className={cn(
                   'flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch',
-                  isFullscreen && 'bg-charcoal-950 p-4',
+                  isFullscreen && 'fixed inset-0 z-[9999] bg-charcoal-950 p-4 flex-col',
                 )}
               >
                 {!isFullscreen && <CurrentChordPanel chords={displayChords} />}
                 <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
-                  {/* Fullscreen toggle */}
+                  {/* Fullscreen toggle — mobile only */}
                   <button
                     type="button"
                     onClick={toggleFullscreen}
                     className={cn(
-                      'absolute top-2 z-10 p-1.5 rounded-lg',
+                      'absolute top-2 right-2 z-10 p-1.5 rounded-lg lg:hidden',
                       'bg-charcoal-700/80 border border-charcoal-600 text-smoke-300',
                       'hover:text-smoke-100 hover:border-flame-400/30 transition-colors',
-                      isFullscreen ? 'right-2' : 'right-2',
                     )}
                     aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Expand to fullscreen'}
+                    title={isFullscreen ? 'Exit fullscreen' : 'Expand to fullscreen'}
                     data-testid="fullscreen-toggle"
                   >
                     {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
