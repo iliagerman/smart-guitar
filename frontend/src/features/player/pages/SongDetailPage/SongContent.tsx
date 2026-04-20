@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -62,7 +63,6 @@ export function SongContent({
   onOpenTutorial,
 }: SongContentProps) {
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
-  const fullscreenRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const toggleFullscreen = useCallback(() => setIsFullscreen((v) => !v), [])
 
@@ -109,73 +109,94 @@ export function SongContent({
             />
 
             {hasChordSheet ? (
-              <div
-                ref={fullscreenRef}
-                className={cn(
-                  'flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch',
-                  isFullscreen && 'fixed inset-0 z-[9999] bg-charcoal-950 p-4 flex-col',
-                )}
-              >
-                {!isFullscreen && <CurrentChordPanel chords={displayChords} />}
-                <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
-                  {/* Fullscreen toggle — mobile only */}
-                  <button
-                    type="button"
-                    onClick={toggleFullscreen}
-                    className={cn(
-                      'absolute top-2 right-2 z-10 p-1.5 rounded-lg lg:hidden',
-                      'bg-charcoal-700/80 border border-charcoal-600 text-smoke-300',
-                      'hover:text-smoke-100 hover:border-flame-400/30 transition-colors',
-                    )}
-                    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    title={isFullscreen ? 'Exit fullscreen' : 'Expand to fullscreen'}
-                    data-testid="fullscreen-toggle"
-                  >
-                    {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                  </button>
-
-                  {chordsLoading && !hasChords ? (
-                    <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
-                        <span className="text-sm">Detecting chords...</span>
-                      </div>
-                    </div>
-                  ) : sheetMode === 'tabs' && hasTabs ? (
-                    <TabsSheet
-                      tabs={detail.tabs}
-                      lyrics={activeLyrics}
-                      strums={detail.strums}
-                      rhythm={detail.rhythm}
-                      onSeek={onSeek}
-                    />
-                  ) : (
-                    <>
-                      {isEditMode && (
-                        <ChordEditToolbar
-                          onSave={onSaveChords}
-                          isSaving={isSavingChords}
+              <>
+                {isFullscreen && createPortal(
+                  <div className="fixed inset-0 z-[9999] bg-charcoal-950 flex flex-col">
+                    <div className="flex-1 min-h-0 flex flex-col relative p-4">
+                      <button
+                        type="button"
+                        onClick={toggleFullscreen}
+                        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-charcoal-700/80 border border-charcoal-600 text-smoke-300 hover:text-smoke-100 hover:border-flame-400/30 transition-colors"
+                        aria-label="Exit fullscreen"
+                        data-testid="fullscreen-toggle"
+                      >
+                        <Minimize2 size={18} />
+                      </button>
+                      {sheetMode === 'tabs' && hasTabs ? (
+                        <TabsSheet
+                          tabs={detail.tabs}
+                          lyrics={activeLyrics}
+                          strums={detail.strums}
+                          rhythm={detail.rhythm}
+                          onSeek={onSeek}
+                        />
+                      ) : (
+                        <ChordSheet
+                          chords={isEditMode ? editingChords : displayChords}
+                          lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
+                          onSeek={onSeek}
                         />
                       )}
-                      <ChordSheet
-                        chords={isEditMode ? editingChords : displayChords}
-                        lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
+                    </div>
+                  </div>,
+                  document.body,
+                )}
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
+                  <CurrentChordPanel chords={displayChords} />
+                  <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
+                    {/* Fullscreen toggle — mobile only */}
+                    <button
+                      type="button"
+                      onClick={toggleFullscreen}
+                      className="absolute top-2 right-2 z-10 p-1.5 rounded-lg lg:hidden bg-charcoal-700/80 border border-charcoal-600 text-smoke-300 hover:text-smoke-100 hover:border-flame-400/30 transition-colors"
+                      aria-label="Fullscreen"
+                      title="Expand to fullscreen"
+                      data-testid="fullscreen-toggle"
+                    >
+                      <Maximize2 size={18} />
+                    </button>
+
+                    {chordsLoading && !hasChords ? (
+                      <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
+                          <span className="text-sm">Detecting chords...</span>
+                        </div>
+                      </div>
+                    ) : sheetMode === 'tabs' && hasTabs ? (
+                      <TabsSheet
+                        tabs={detail.tabs}
+                        lyrics={activeLyrics}
+                        strums={detail.strums}
+                        rhythm={detail.rhythm}
                         onSeek={onSeek}
-                        isEditMode={isEditMode}
-                        selectedChordIndex={selectedEditChordIndex}
-                        selectedWordLocation={isEditMode ? selectedWordLocation : undefined}
-                        onChordSelect={selectChord}
-                        onChordRename={updateChordLabel}
-                        onChordDelete={deleteChord}
-                        onChordDrop={moveChordToTime}
-                        onWordClick={isEditMode ? onAddChordAtWord : undefined}
-                        onWordRename={isEditMode ? updateWordText : undefined}
-                        onWordSelect={isEditMode ? selectWord : undefined}
                       />
-                    </>
-                  )}
-                </div>
-                {!isFullscreen && (
+                    ) : (
+                      <>
+                        {isEditMode && (
+                          <ChordEditToolbar
+                            onSave={onSaveChords}
+                            isSaving={isSavingChords}
+                          />
+                        )}
+                        <ChordSheet
+                          chords={isEditMode ? editingChords : displayChords}
+                          lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
+                          onSeek={onSeek}
+                          isEditMode={isEditMode}
+                          selectedChordIndex={selectedEditChordIndex}
+                          selectedWordLocation={isEditMode ? selectedWordLocation : undefined}
+                          onChordSelect={selectChord}
+                          onChordRename={updateChordLabel}
+                          onChordDelete={deleteChord}
+                          onChordDrop={moveChordToTime}
+                          onWordClick={isEditMode ? onAddChordAtWord : undefined}
+                          onWordRename={isEditMode ? updateWordText : undefined}
+                          onWordSelect={isEditMode ? selectWord : undefined}
+                        />
+                      </>
+                    )}
+                  </div>
                   <div className="hidden lg:flex w-full lg:w-80 lg:shrink-0 min-h-0 flex-col">
                     <ChordMap
                       chords={chordNamesForMap}
@@ -190,8 +211,8 @@ export function SongContent({
                       onOpenTutorial={onOpenTutorial}
                     />
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             ) : null}
           </>
         )}
