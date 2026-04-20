@@ -590,6 +590,7 @@ export function SongDetailPage() {
         hasChords={hasChords}
         hasAnyLyrics={hasAnyLyrics}
         hasTabs={hasTabs}
+        onTogglePlay={handleTogglePlay}
         displayChords={displayChords}
         activeLyrics={activeLyrics}
         chordNamesForMap={chordNamesForMap}

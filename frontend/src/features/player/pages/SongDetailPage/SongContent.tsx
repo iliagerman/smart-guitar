@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2, Play, Pause, Circle, Minus, Plus, ChevronsDown } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 import { ProcessButton } from '../../components/ProcessButton'
 import { BackgroundProcessingCard } from '../../components/BackgroundProcessingCard'
@@ -30,6 +31,7 @@ interface SongContentProps {
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
   chordsLoading: boolean
+  onTogglePlay: () => void
   onSeek: (time: number) => void
   onSaveChords: () => void
   isSavingChords: boolean
@@ -56,6 +58,7 @@ export function SongContent({
   representativeStrumPattern,
   sectionStrumPatterns,
   chordsLoading,
+  onTogglePlay,
   onSeek,
   onSaveChords,
   isSavingChords,
@@ -111,34 +114,16 @@ export function SongContent({
             {hasChordSheet ? (
               <>
                 {isFullscreen && createPortal(
-                  <div className="fixed inset-0 z-[9999] bg-charcoal-950 flex flex-col">
-                    <div className="flex-1 min-h-0 flex flex-col relative p-4">
-                      <button
-                        type="button"
-                        onClick={toggleFullscreen}
-                        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-charcoal-700/80 border border-charcoal-600 text-smoke-300 hover:text-smoke-100 hover:border-flame-400/30 transition-colors"
-                        aria-label="Exit fullscreen"
-                        data-testid="fullscreen-toggle"
-                      >
-                        <Minimize2 size={18} />
-                      </button>
-                      {sheetMode === 'tabs' && hasTabs ? (
-                        <TabsSheet
-                          tabs={detail.tabs}
-                          lyrics={activeLyrics}
-                          strums={detail.strums}
-                          rhythm={detail.rhythm}
-                          onSeek={onSeek}
-                        />
-                      ) : (
-                        <ChordSheet
-                          chords={isEditMode ? editingChords : displayChords}
-                          lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
-                          onSeek={onSeek}
-                        />
-                      )}
-                    </div>
-                  </div>,
+                  <FullscreenOverlay
+                    sheetMode={sheetMode}
+                    hasTabs={hasTabs}
+                    detail={detail}
+                    activeLyrics={activeLyrics}
+                    displayChords={displayChords}
+                    onSeek={onSeek}
+                    onTogglePlay={onTogglePlay}
+                    onClose={toggleFullscreen}
+                  />,
                   document.body,
                 )}
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
@@ -215,6 +200,106 @@ export function SongContent({
               </>
             ) : null}
           </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const SPEED_STEP = 10
+
+interface FullscreenOverlayProps {
+  sheetMode: string
+  hasTabs: boolean
+  detail: SongDetail
+  activeLyrics: LyricsSegment[]
+  displayChords: { chord: string; start_time: number; end_time: number }[]
+  onSeek: (time: number) => void
+  onTogglePlay: () => void
+  onClose: () => void
+}
+
+function FullscreenOverlay({
+  sheetMode,
+  hasTabs,
+  detail,
+  activeLyrics,
+  displayChords,
+  onSeek,
+  onTogglePlay,
+  onClose,
+}: FullscreenOverlayProps) {
+  const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
+  const autoScrollSpeed = usePlayerPrefsStore((s) => s.autoScrollSpeed)
+  const setAutoScrollSpeed = usePlayerPrefsStore((s) => s.setAutoScrollSpeed)
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-charcoal-950 flex flex-col">
+      {/* Compact toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-charcoal-800 shrink-0">
+        <button
+          type="button"
+          onClick={onTogglePlay}
+          className="p-2 rounded-full bg-flame-400 text-charcoal-950 hover:bg-flame-300 transition-colors"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          data-testid="fullscreen-play-pause"
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+
+        {!showHighlight && (
+          <div className="flex items-center gap-1 ml-auto mr-auto rounded-lg px-1.5 py-1 bg-charcoal-700 border border-charcoal-600">
+            <button
+              type="button"
+              onClick={() => setAutoScrollSpeed(autoScrollSpeed - SPEED_STEP)}
+              className="p-1 rounded text-smoke-300 hover:text-smoke-100 transition-colors"
+              aria-label="Slower scroll"
+            >
+              <Minus size={14} />
+            </button>
+            <ChevronsDown size={14} className="text-smoke-400" />
+            <span className="font-mono text-xs text-smoke-200 min-w-[3ch] text-center">
+              {autoScrollSpeed}
+            </span>
+            <button
+              type="button"
+              onClick={() => setAutoScrollSpeed(autoScrollSpeed + SPEED_STEP)}
+              className="p-1 rounded text-smoke-300 hover:text-smoke-100 transition-colors"
+              aria-label="Faster scroll"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto p-1.5 rounded-lg bg-charcoal-700/80 border border-charcoal-600 text-smoke-300 hover:text-smoke-100 transition-colors"
+          aria-label="Exit fullscreen"
+          data-testid="fullscreen-close"
+        >
+          <Minimize2 size={18} />
+        </button>
+      </div>
+
+      {/* Chord sheet content */}
+      <div className="flex-1 min-h-0 flex flex-col p-4 pt-2">
+        {sheetMode === 'tabs' && hasTabs ? (
+          <TabsSheet
+            tabs={detail.tabs}
+            lyrics={activeLyrics}
+            strums={detail.strums}
+            rhythm={detail.rhythm}
+            onSeek={onSeek}
+          />
+        ) : (
+          <ChordSheet
+            chords={displayChords}
+            lyrics={activeLyrics}
+            onSeek={onSeek}
+          />
         )}
       </div>
     </div>
