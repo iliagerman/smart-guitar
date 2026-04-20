@@ -56,6 +56,8 @@ class SongRecord(BaseModel):
     external_strums_failed: bool = False
     web_chords_failed: bool = False
     web_chords_key: str | None = None
+    static_chords_failed: bool = False
+    static_chords_key: str | None = None
 
     # Cooldown timestamps
     lyrics_attempted_at: datetime | None = None
@@ -63,6 +65,7 @@ class SongRecord(BaseModel):
     merge_attempted_at: datetime | None = None
     external_strums_attempted_at: datetime | None = None
     web_chords_attempted_at: datetime | None = None
+    static_chords_attempted_at: datetime | None = None
     download_requested_at: datetime | None = None
 
     downloaded_by: uuid.UUID | None = None
