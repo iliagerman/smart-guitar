@@ -34,7 +34,12 @@ function getVer3Source(detail: SongDetail): string | null {
 }
 
 function usesCustomLyrics(activeVersion: ChordOption | undefined): boolean {
-  return !!activeVersion?.version_key?.includes('chords_user') && (activeVersion?.lyrics?.length ?? 0) > 0
+  if (!activeVersion || !activeVersion.lyrics?.length) return false
+  // User-created versions have custom lyrics
+  if (activeVersion.version_key?.includes('chords_user')) return true
+  // Community chord sheets have paired lyrics (chords positioned relative to these lyrics)
+  if (activeVersion.lyrics_source === 'community') return true
+  return false
 }
 
 function isLikelyNonLatin(detail: SongDetail): boolean {
@@ -57,10 +62,11 @@ function isLikelyNonLatin(detail: SongDetail): boolean {
 
 function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefined): LyricsSourceOption | null {
   if (usesCustomLyrics(activeVersion)) {
+    const isCommunity = activeVersion?.lyrics_source === 'community'
     return {
       key: 'auto',
       label: 'Auto',
-      description: 'Following your custom lyrics',
+      description: isCommunity ? 'Lyrics from chord sheet' : 'Following your custom lyrics',
       segments: activeVersion?.lyrics ?? [],
       source: activeVersion?.lyrics_source ?? null,
     }
