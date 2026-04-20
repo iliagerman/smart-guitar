@@ -26,7 +26,6 @@ interface PlayerControlsProps {
   headerArtist: string
   hasChords: boolean
   hasTabs: boolean
-  hasStaticChords: boolean
   isFavorited: boolean
   showAudioStatus: boolean
   audioStatusMessage?: string
@@ -88,7 +87,6 @@ export function PlayerControls({
   headerArtist,
   hasChords,
   hasTabs,
-  hasStaticChords,
   isFavorited,
   showAudioStatus,
   audioStatusMessage,
@@ -149,7 +147,6 @@ export function PlayerControls({
               selectedVersionIndex={selectedVersionIndex}
               activeChords={activeChords}
               hasTabs={hasTabs}
-              hasStaticChords={hasStaticChords}
               currentUserEmail={userEmail ?? undefined}
               upgrading={chordsUpgrading}
               onSelectVersionIndex={onSetVersionIndex}

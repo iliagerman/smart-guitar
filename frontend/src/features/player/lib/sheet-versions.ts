@@ -2,16 +2,12 @@ import type { ChordOption } from '@/types/song'
 
 const USER_VERSION_KEY = 'chords_user'
 
-function isAutoOption(option: ChordOption): boolean {
+function isCommunityOption(option: ChordOption): boolean {
+  return option.description.startsWith('Community chord sheet')
+}
+
+function isDetectedOption(option: ChordOption): boolean {
   return option.description === 'Auto-detected chords'
-}
-
-function isAiOption(option: ChordOption): boolean {
-  return option.description === 'Gemini-detected chords'
-}
-
-function isHybridOption(option: ChordOption): boolean {
-  return option.description === 'Hybrid chords'
 }
 
 function isUserOption(option: ChordOption): boolean {
@@ -19,50 +15,42 @@ function isUserOption(option: ChordOption): boolean {
 }
 
 /**
- * Collapses backend chord options into distinct sheet sources for the mobile UI.
- * Auto-detected options differ only by paired lyrics, so we keep the best one.
+ * Collapses backend chord options into distinct sheet sources for the player UI.
+ * Community versions (from external sources) come first, then detected, then user.
  */
 export function buildSheetVersions(
   options: ChordOption[],
-  preferredSource: 'gemini' | 'autochord' | 'hybrid' | null = null,
+  _preferredSource: string | null = null,
 ): ChordOption[] {
   const visible = options.filter((option) => !option.hidden && !option.is_variant)
-  const picked = new Set<ChordOption>()
   const result: ChordOption[] = []
+  const picked = new Set<ChordOption>()
 
-  const autoOptions = visible.filter(isAutoOption)
-  const autoOption = autoOptions[autoOptions.length - 1]
-  const hybridOptions = visible.filter(isHybridOption)
-  const hybridOption = hybridOptions[hybridOptions.length - 1]
-  const aiOptions = visible.filter(isAiOption)
-  const aiOption = aiOptions[aiOptions.length - 1]
-  const preferredSystemOptions = preferredSource === 'gemini'
-    ? [aiOption, hybridOption, autoOption]
-    : preferredSource === 'hybrid'
-      ? [hybridOption, autoOption, aiOption]
-      : [autoOption, hybridOption, aiOption]
-
-  for (const option of preferredSystemOptions) {
-    if (!option) {
-      continue
-    }
+  // Community options first (Sheet 1, Sheet 2, Sheet 3)
+  for (const option of visible.filter(isCommunityOption)) {
     picked.add(option)
     result.push(option)
   }
 
+  // Detected chords (autochord) as fallback
+  const detectedOptions = visible.filter(isDetectedOption)
+  const detectedOption = detectedOptions[detectedOptions.length - 1]
+  if (detectedOption) {
+    picked.add(detectedOption)
+    result.push(detectedOption)
+  }
+
+  // User-created versions
   for (const option of visible.filter(isUserOption)) {
     picked.add(option)
     result.push(option)
   }
 
+  // Any remaining options not yet picked
   for (const option of visible) {
-    if (picked.has(option)) {
-      continue
+    if (!picked.has(option)) {
+      result.push(option)
     }
-    if (isAutoOption(option) || isAiOption(option) || isHybridOption(option) || isUserOption(option)) {
-      continue
-    }
-    result.push(option)
   }
 
   return result
@@ -80,15 +68,10 @@ export function getSheetVersionLabel(
     const name = option.name.trim()
     return name.length > 0 ? name : 'Custom'
   }
-  if (isAiOption(option)) {
-    return 'AI'
-  }
-  if (isHybridOption(option)) {
-    return 'Hybrid'
-  }
-  if (isAutoOption(option)) {
+  if (isDetectedOption(option)) {
     return 'Detected'
   }
+  // Community or other — use the name from backend (e.g. "Sheet 1", "Sheet 2")
   const name = option.name.trim()
   return name.length > 0 ? name : `Sheet ${index + 1}`
 }
@@ -101,14 +84,11 @@ export function getSheetVersionDescription(option: ChordOption | undefined): str
   if (isUserOption(option)) {
     return 'Your saved chord edit'
   }
-  if (isAiOption(option)) {
-    return 'AI-detected chord names'
+  if (isDetectedOption(option)) {
+    return 'Audio-detected chord timeline'
   }
-  if (isHybridOption(option)) {
-    return 'AI chord names on detected timing'
-  }
-  if (isAutoOption(option)) {
-    return 'Classic detected chord timeline'
+  if (isCommunityOption(option)) {
+    return 'Community chord sheet'
   }
   return option.description || 'Choose a sheet source'
 }

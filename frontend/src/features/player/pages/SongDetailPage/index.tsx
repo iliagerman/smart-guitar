@@ -541,7 +541,6 @@ export function SongDetailPage() {
             headerArtist={headerArtist}
             hasChords={hasChords}
             hasTabs={hasTabs}
-            hasStaticChords={(detail.static_chords?.length ?? 0) > 0}
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
             audioStatusMessage={audioStatusMessage}
@@ -591,8 +590,6 @@ export function SongDetailPage() {
         hasChords={hasChords}
         hasAnyLyrics={hasAnyLyrics}
         hasTabs={hasTabs}
-        hasStaticChords={(detail.static_chords?.length ?? 0) > 0}
-        staticChords={detail.static_chords ?? []}
         displayChords={displayChords}
         activeLyrics={activeLyrics}
         chordNamesForMap={chordNamesForMap}

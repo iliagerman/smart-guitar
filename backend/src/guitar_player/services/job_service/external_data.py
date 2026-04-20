@@ -241,7 +241,7 @@ def extract_measure_pattern(
 
 
 async def fetch_static_chords(song_id: uuid.UUID) -> None:
-    """Fetch a static chord sheet from Ultimate Guitar and store it."""
+    """Fetch chord sheets and tab from Ultimate Guitar and store them."""
     try:
         storage = get_storage()
     except Exception:
@@ -266,7 +266,7 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
 
     t0 = time.monotonic()
     try:
-        from guitar_player.services.ug_chord_fetcher import fetch_ug_chord_sheet
+        from guitar_player.services.ug_chord_fetcher import fetch_ug_data
 
         logger.info(
             "Static chords fetch starting song_id=%s artist=%r title=%r",
@@ -277,8 +277,8 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                 "song_id": str(song_id),
             },
         )
-        result = await fetch_ug_chord_sheet(artist, title)
-        if not result or not result.lines:
+        result = await fetch_ug_data(artist, title)
+        if not result or (not result.chord_sheets and not result.tab_content):
             elapsed_s = time.monotonic() - t0
             logger.info(
                 "Static chords: no match found (%.1fs) song_id=%s",
@@ -290,38 +290,45 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                 await song_dao.commit()
             return
 
-        output = {
-            "source": "ultimate_guitar",
-            "source_url": result.source_url,
-            "capo": result.capo,
-            "key": result.key,
-            "matched_artist": result.matched_artist,
-            "matched_title": result.matched_title,
-            "rating": result.rating,
-            "lines": [
+        output: dict = {
+            "source": "community",
+            "versions": [
                 {
-                    "type": line.type,
-                    "text": line.text,
-                    "chords": [
-                        {"chord": c.chord, "position": c.position}
-                        for c in line.chords
+                    "capo": sheet.capo,
+                    "key": sheet.key,
+                    "rating": sheet.rating,
+                    "lines": [
+                        {
+                            "type": line.type,
+                            "text": line.text,
+                            "chords": [
+                                {"chord": c.chord, "position": c.position}
+                                for c in line.chords
+                            ],
+                        }
+                        for line in sheet.lines
                     ],
                 }
-                for line in result.lines
+                for sheet in result.chord_sheets
             ],
         }
+        if result.tab_content:
+            output["tab_content"] = result.tab_content
+
         storage.write_json(static_key, output)
 
         elapsed_s = time.monotonic() - t0
         logger.info(
-            "Static chords: wrote %d lines (%.1fs) song_id=%s",
-            len(result.lines), elapsed_s, song_id,
+            "Static chords: wrote %d chord versions + %s tab (%.1fs) song_id=%s",
+            len(result.chord_sheets),
+            "1" if result.tab_content else "0",
+            elapsed_s, song_id,
             extra={
                 "event_type": "background_task_done",
                 "task": "static_chords",
                 "song_id": str(song_id),
                 "elapsed_s": round(elapsed_s, 1),
-                "line_count": len(result.lines),
+                "version_count": len(result.chord_sheets),
             },
         )
 
@@ -556,10 +563,11 @@ async def _fetch_strum_patterns(
     try:
         from guitar_player.services.llm_service import LlmService
 
-        tavily_api_key = settings.tavily.api_key
+        # Tavily disabled — pass None so LLM works without web search context.
+        # YouTube fallback below still provides tutorial links.
         llm = LlmService(settings)
         llm_result = await llm.lookup_strum_patterns(
-            artist, title, tavily_api_key=tavily_api_key,
+            artist, title, tavily_api_key=None,
         )
         if llm_result and llm_result.sections:
             for llm_sec in llm_result.sections:

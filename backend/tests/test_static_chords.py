@@ -1,6 +1,7 @@
-"""Tests for static chord sheet (Ultimate Guitar) integration.
+"""Tests for community chord sheet integration (from external sources).
 
-Covers the SongRecord DTO, song detail assembly, and UG content parsing.
+Covers the SongRecord DTO, song detail assembly with community chords
+converted to ChordOption objects, and UG content parsing.
 """
 
 from __future__ import annotations
@@ -26,40 +27,55 @@ def _make_song_service(session, storage):
     return SongService(session, storage, MagicMock(), MagicMock(), MagicMock())
 
 
-SAMPLE_STATIC_CHORDS = {
-    "source": "ultimate_guitar",
-    "source_url": "https://tabs.ultimate-guitar.com/tab/test/test-chords-12345",
-    "capo": 0,
-    "key": "G",
-    "matched_artist": "Test Artist",
-    "matched_title": "Test Song",
-    "rating": 4.5,
-    "lines": [
-        {"type": "section", "text": "Intro", "chords": []},
+SAMPLE_STATIC_CHORDS_MULTI = {
+    "source": "community",
+    "versions": [
         {
-            "type": "instrumental",
-            "text": "",
-            "chords": [
-                {"chord": "G", "position": 0},
-                {"chord": "D", "position": 6},
+            "capo": 0,
+            "key": "G",
+            "rating": 4.9,
+            "lines": [
+                {"type": "section", "text": "Intro", "chords": []},
+                {
+                    "type": "instrumental",
+                    "text": "",
+                    "chords": [
+                        {"chord": "G", "position": 0},
+                        {"chord": "D", "position": 6},
+                    ],
+                },
+                {"type": "empty", "text": "", "chords": []},
+                {"type": "section", "text": "Verse 1", "chords": []},
+                {
+                    "type": "lyric",
+                    "text": "When I find myself in times of trouble",
+                    "chords": [
+                        {"chord": "Am", "position": 0},
+                        {"chord": "C", "position": 18},
+                    ],
+                },
+                {
+                    "type": "lyric",
+                    "text": "Mother Mary comes to me",
+                    "chords": [{"chord": "G", "position": 0}],
+                },
             ],
         },
-        {"type": "empty", "text": "", "chords": []},
-        {"type": "section", "text": "Verse 1", "chords": []},
         {
-            "type": "lyric",
-            "text": "When I find myself in times of trouble",
-            "chords": [
-                {"chord": "Am", "position": 0},
-                {"chord": "C", "position": 18},
+            "capo": 2,
+            "key": "Em",
+            "rating": 4.7,
+            "lines": [
+                {"type": "section", "text": "Verse 1", "chords": []},
+                {
+                    "type": "lyric",
+                    "text": "When I find myself in times of trouble",
+                    "chords": [{"chord": "Em", "position": 0}],
+                },
             ],
-        },
-        {
-            "type": "lyric",
-            "text": "Mother Mary comes to me",
-            "chords": [{"chord": "G", "position": 0}],
         },
     ],
+    "tab_content": "E|---0---|\nB|---1---|",
 }
 
 
@@ -74,12 +90,7 @@ def _write_static_chords_to_storage(settings, key: str, data: dict) -> Path:
 
 
 class TestSongRecordHasStaticChordsFields:
-    """SongRecord must mirror the Song model's static_chords columns.
-
-    This class of bugs is caught here: if a new column is added to the Song
-    model but not to SongRecord, the DAO silently drops it and any service
-    code that reads the attribute will crash with AttributeError.
-    """
+    """SongRecord must mirror the Song model's static_chords columns."""
 
     def test_song_record_has_static_chords_key(self):
         """SongRecord must have static_chords_key field."""
@@ -132,26 +143,27 @@ class TestSongRecordHasStaticChordsFields:
 
 
 @pytest.mark.asyncio
-async def test_song_detail_includes_static_chords(settings, storage):
-    """Song with a static_chords_key returns static chord data in the detail response."""
+async def test_song_detail_converts_community_chords_to_options(settings, storage):
+    """Community chord versions appear as ChordOption objects in the detail response."""
     factory = init_db(settings)
     set_storage(storage)
 
-    song_name = f"test_static_{uuid.uuid4().hex[:8]}/test_song"
+    song_name = f"test_community_{uuid.uuid4().hex[:8]}/test_song"
     static_key = f"{song_name}/static_chords.json"
     created_dirs: list[Path] = []
 
     try:
-        chords_path = _write_static_chords_to_storage(settings, static_key, SAMPLE_STATIC_CHORDS)
+        chords_path = _write_static_chords_to_storage(settings, static_key, SAMPLE_STATIC_CHORDS_MULTI)
         created_dirs.append(chords_path.parent.parent)
 
         async with factory() as session:
             song_dao = SongDAO(session)
             song = await song_dao.create(
-                title="Test Song With Static Chords",
+                title="Test Song With Community Chords",
                 artist="Test Artist",
                 song_name=song_name,
                 audio_key=f"{song_name}/audio.mp3",
+                duration_seconds=240,
                 static_chords_key=static_key,
             )
             await song_dao.commit()
@@ -161,26 +173,31 @@ async def test_song_detail_includes_static_chords(settings, storage):
             song_service = _make_song_service(session, storage)
             detail = await song_service.get_song_detail(song_id)
 
-        assert len(detail.static_chords) == 6
-        assert detail.static_chords_source == "ultimate_guitar"
-        assert detail.static_chords_pending is False
+        # Should have community versions as ChordOption objects
+        community_opts = [
+            o for o in detail.chord_options
+            if o.description.startswith("Community chord sheet")
+        ]
+        assert len(community_opts) == 2
 
-        # Verify section line
-        assert detail.static_chords[0].type == "section"
-        assert detail.static_chords[0].text == "Intro"
+        # First version: Sheet 1
+        sheet1 = community_opts[0]
+        assert sheet1.name == "Sheet 1"
+        assert sheet1.capo == 0
+        assert len(sheet1.chords) > 0
+        assert sheet1.chords[0].chord == "G"  # First chord from instrumental line
+        assert sheet1.lyrics is not None
+        assert len(sheet1.lyrics) > 0
+        assert sheet1.lyrics[0].text == "When I find myself in times of trouble"
 
-        # Verify instrumental line with chords
-        assert detail.static_chords[1].type == "instrumental"
-        assert len(detail.static_chords[1].chords) == 2
-        assert detail.static_chords[1].chords[0].chord == "G"
-        assert detail.static_chords[1].chords[0].position == 0
+        # Second version: Sheet 2
+        sheet2 = community_opts[1]
+        assert sheet2.name == "Sheet 2"
+        assert sheet2.capo == 2
 
-        # Verify lyric line with chords
-        assert detail.static_chords[4].type == "lyric"
-        assert detail.static_chords[4].text == "When I find myself in times of trouble"
-        assert detail.static_chords[4].chords[0].chord == "Am"
-        assert detail.static_chords[4].chords[1].chord == "C"
-        assert detail.static_chords[4].chords[1].position == 18
+        # Primary chords should be from community source
+        assert detail.chord_source == "community"
+        assert len(detail.chords) > 0
 
     finally:
         async with factory() as session:
@@ -195,18 +212,18 @@ async def test_song_detail_includes_static_chords(settings, storage):
 
 
 @pytest.mark.asyncio
-async def test_song_detail_empty_static_chords_when_missing(settings, storage):
-    """Song without static_chords_key returns empty static chords list."""
+async def test_song_detail_empty_when_no_community_chords(settings, storage):
+    """Song without static_chords_key has no community chord options."""
     factory = init_db(settings)
     set_storage(storage)
 
-    song_name = f"test_no_static_{uuid.uuid4().hex[:8]}/test_song"
+    song_name = f"test_no_community_{uuid.uuid4().hex[:8]}/test_song"
 
     try:
         async with factory() as session:
             song_dao = SongDAO(session)
             song = await song_dao.create(
-                title="Test Song Without Static Chords",
+                title="Test Song Without Community Chords",
                 artist="Test Artist",
                 song_name=song_name,
                 audio_key=f"{song_name}/audio.mp3",
@@ -218,8 +235,11 @@ async def test_song_detail_empty_static_chords_when_missing(settings, storage):
             song_service = _make_song_service(session, storage)
             detail = await song_service.get_song_detail(song_id)
 
-        assert detail.static_chords == []
-        assert detail.static_chords_source is None
+        community_opts = [
+            o for o in detail.chord_options
+            if o.description.startswith("Community chord sheet")
+        ]
+        assert len(community_opts) == 0
 
     finally:
         async with factory() as session:
@@ -228,6 +248,72 @@ async def test_song_detail_empty_static_chords_when_missing(settings, storage):
             if song:
                 await song_dao.delete_by_id(song.id)
                 await session.commit()
+        await close_db()
+
+
+@pytest.mark.asyncio
+async def test_community_chords_have_timing(settings, storage):
+    """Community chords converted to ChordEntry should have estimated timing."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_timing_{uuid.uuid4().hex[:8]}/test_song"
+    static_key = f"{song_name}/static_chords.json"
+    created_dirs: list[Path] = []
+
+    try:
+        chords_path = _write_static_chords_to_storage(settings, static_key, SAMPLE_STATIC_CHORDS_MULTI)
+        created_dirs.append(chords_path.parent.parent)
+
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.create(
+                title="Test Timing",
+                artist="Test Artist",
+                song_name=song_name,
+                audio_key=f"{song_name}/audio.mp3",
+                duration_seconds=180,
+                static_chords_key=static_key,
+            )
+            await song_dao.commit()
+            song_id = song.id
+
+        async with factory() as session:
+            song_service = _make_song_service(session, storage)
+            detail = await song_service.get_song_detail(song_id)
+
+        community_opts = [
+            o for o in detail.chord_options
+            if o.description.startswith("Community chord sheet")
+        ]
+        assert len(community_opts) >= 1
+
+        # Check that chords have proper timing
+        chords = community_opts[0].chords
+        assert len(chords) > 0
+        for chord in chords:
+            assert chord.start_time >= 0
+            assert chord.end_time > chord.start_time
+            assert chord.chord != ""
+
+        # Check that lyrics have timing
+        lyrics = community_opts[0].lyrics
+        assert lyrics is not None
+        assert len(lyrics) > 0
+        for segment in lyrics:
+            assert segment.start >= 0
+            assert segment.end > segment.start
+            assert len(segment.words) > 0
+
+    finally:
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.get_by_song_name(song_name)
+            if song:
+                await song_dao.delete_by_id(song.id)
+                await session.commit()
+        for d in created_dirs:
+            shutil.rmtree(d, ignore_errors=True)
         await close_db()
 
 
@@ -303,7 +389,6 @@ class TestUGContentParser:
         assert "lyric" in types
         assert "empty" in types
 
-        # Find the first lyric line and check it has chords
         lyric_lines = [line for line in lines if line.type == "lyric"]
         assert len(lyric_lines) >= 1
         assert lyric_lines[0].chords[0].chord in ("Am", "G")

@@ -1,8 +1,8 @@
-"""Fetch chord sheets from Ultimate Guitar.
+"""Fetch chord sheets and tabs from Ultimate Guitar.
 
 Uses curl_cffi with Chrome TLS impersonation to bypass Cloudflare.
 1. Search for a matching song by artist + title
-2. Fetch the highest-rated chord sheet
+2. Fetch the top-rated chord sheets (up to 3) and best tab
 3. Parse the [ch]...[/ch] content into structured StaticChordLine data
 
 All errors are non-fatal — returns None on failure.
@@ -19,6 +19,7 @@ from curl_cffi.requests import AsyncSession
 logger = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 15
+_MAX_CHORD_VERSIONS = 3
 
 # Section header patterns: [Verse 1], [Chorus], [Intro], etc.
 _SECTION_PATTERN = re.compile(r"^\[([^\]]+)\]$")
@@ -52,7 +53,7 @@ class StaticChordLine:
 
 @dataclass
 class UGChordSheet:
-    """Result of fetching a chord sheet from Ultimate Guitar."""
+    """A single chord sheet version from Ultimate Guitar."""
 
     lines: list[StaticChordLine]
     source_url: str = ""
@@ -61,6 +62,15 @@ class UGChordSheet:
     matched_artist: str = ""
     matched_title: str = ""
     rating: float = 0.0
+
+
+@dataclass
+class UGFetchResult:
+    """Result of fetching all data for a song from Ultimate Guitar."""
+
+    chord_sheets: list[UGChordSheet] = field(default_factory=list)
+    tab_content: str | None = None
+    tab_source_url: str = ""
 
 
 def _normalize(text: str) -> str:
@@ -140,12 +150,7 @@ def _get_plain_text(line: str) -> str:
 
 
 def parse_ug_content(raw_content: str) -> list[StaticChordLine]:
-    """Parse Ultimate Guitar chord content into structured lines.
-
-    Handles two formats:
-    1. Inline: chords mixed with lyrics via [ch]...[/ch] tags
-    2. Two-line: chord-only line followed by lyrics line
-    """
+    """Parse Ultimate Guitar chord content into structured lines."""
     content = _TAB_WRAPPER.sub("", raw_content)
     raw_lines = content.split("\n")
     lines: list[StaticChordLine] = []
@@ -212,53 +217,73 @@ def _extract_page_data(page_text: str) -> dict | None:
         return None
 
 
-def _find_best_chord_tab(tabs: list[dict], artist: str, title: str) -> dict | None:
-    """Find the best-matching Chords-type tab from search results."""
-    chord_tabs = [
-        t for t in tabs
-        if t.get("type", "").lower() == "chords"
+def _find_matching_tabs(
+    all_tabs: list[dict], artist: str, title: str, tab_type: str, limit: int,
+) -> list[dict]:
+    """Find top matching tabs of a given type, sorted by match score + rating."""
+    type_lower = tab_type.lower()
+    filtered = [
+        t for t in all_tabs
+        if t.get("type", "").lower() == type_lower
     ]
-    if not chord_tabs:
-        return None
+    if not filtered:
+        return []
 
-    best_tab = None
-    best_score = 0.0
-
-    for tab in chord_tabs:
+    scored: list[tuple[dict, float]] = []
+    for tab in filtered:
         match = _match_score(
             artist, title,
             tab.get("artist_name", ""), tab.get("song_name", ""),
         )
+        if match < 0.7:
+            continue
         rating = tab.get("rating", 0) or 0
         combined = match + (rating / 10.0)
-        if combined > best_score:
-            best_score = combined
-            best_tab = tab
+        scored.append((tab, combined))
 
-    if best_score < 0.7 or best_tab is None:
-        logger.info(
-            "UG: no good match for %r by %r (best_score=%.2f)",
-            title, artist, best_score,
-        )
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [tab for tab, _ in scored[:limit]]
+
+
+async def _fetch_tab_content(
+    session: AsyncSession, tab: dict, timeout: int,
+) -> str | None:
+    """Fetch the wiki_tab content for a single tab."""
+    tab_url = tab.get("tab_url", "")
+    if not tab_url:
         return None
 
-    logger.info(
-        "UG: matched %r by %r (id=%s, rating=%.1f, score=%.2f)",
-        best_tab.get("song_name", ""), best_tab.get("artist_name", ""),
-        best_tab.get("id", ""), best_tab.get("rating", 0), best_score,
-    )
-    return best_tab
+    try:
+        resp = await session.get(tab_url, impersonate="chrome", timeout=timeout)
+        if resp.status_code != 200:
+            return None
+
+        page_data = _extract_page_data(resp.text)
+        if not page_data:
+            return None
+
+        return (
+            page_data.get("store", {})
+            .get("page", {})
+            .get("data", {})
+            .get("tab_view", {})
+            .get("wiki_tab", {})
+            .get("content", "")
+        ) or None
+    except Exception:
+        logger.debug("Failed to fetch tab content from %s", tab_url, exc_info=True)
+        return None
 
 
-async def fetch_ug_chord_sheet(
+async def fetch_ug_data(
     artist: str,
     title: str,
     timeout_seconds: int = _REQUEST_TIMEOUT,
-) -> UGChordSheet | None:
-    """Search Ultimate Guitar and fetch the best chord sheet for a song.
+) -> UGFetchResult | None:
+    """Search Ultimate Guitar and fetch top chord sheets + best tab.
 
     Uses curl_cffi with Chrome impersonation to bypass Cloudflare.
-    Returns a parsed UGChordSheet or None if no match found.
+    Returns up to 3 chord versions and 1 tab, or None if no match found.
     """
     query = f"{artist} {title}"
     logger.info("UG search: %r", query)
@@ -288,7 +313,6 @@ async def fetch_ug_chord_sheet(
                 .get("results", [])
             )
 
-            # Flatten result groups into a single list of tabs
             all_tabs: list[dict] = []
             for group in result_groups:
                 if isinstance(group, dict):
@@ -301,71 +325,74 @@ async def fetch_ug_chord_sheet(
                 logger.info("UG: no results for %r", query)
                 return None
 
-            best_tab = _find_best_chord_tab(all_tabs, artist, title)
-            if not best_tab:
-                return None
-
-            tab_url = best_tab.get("tab_url", "")
-            if not tab_url:
-                logger.info("UG: no tab_url for matched tab")
-                return None
-
-            # Step 2: Fetch the tab page
-            tab_resp = await session.get(
-                tab_url, impersonate="chrome", timeout=timeout_seconds,
+            # Step 2: Find top chord matches and best tab match
+            chord_matches = _find_matching_tabs(
+                all_tabs, artist, title, "Chords", _MAX_CHORD_VERSIONS,
             )
-            if tab_resp.status_code != 200:
-                logger.warning("UG tab page returned %d for %s", tab_resp.status_code, tab_url)
+            tab_matches = _find_matching_tabs(all_tabs, artist, title, "Tabs", 1)
+
+            if not chord_matches and not tab_matches:
+                logger.info("UG: no matching chords or tabs for %r", query)
                 return None
 
-            tab_data = _extract_page_data(tab_resp.text)
-            if not tab_data:
-                logger.info("UG: could not extract page data from tab page")
+            result = UGFetchResult()
+
+            # Step 3: Fetch each chord version
+            for tab_meta in chord_matches:
+                content = await _fetch_tab_content(session, tab_meta, timeout_seconds)
+                if not content:
+                    continue
+
+                parsed_lines = parse_ug_content(content)
+                if not parsed_lines:
+                    continue
+
+                capo = 0
+                capo_match = re.search(r"capo[:\s]*(\d+)", content, re.IGNORECASE)
+                if capo_match:
+                    capo = int(capo_match.group(1))
+
+                result.chord_sheets.append(UGChordSheet(
+                    lines=parsed_lines,
+                    source_url=tab_meta.get("tab_url", ""),
+                    capo=capo,
+                    key=tab_meta.get("tonality_name", ""),
+                    matched_artist=tab_meta.get("artist_name", ""),
+                    matched_title=tab_meta.get("song_name", ""),
+                    rating=tab_meta.get("rating", 0) or 0,
+                ))
+
+            # Step 4: Fetch tab
+            if tab_matches:
+                tab_meta = tab_matches[0]
+                tab_content = await _fetch_tab_content(session, tab_meta, timeout_seconds)
+                if tab_content:
+                    result.tab_content = tab_content
+                    result.tab_source_url = tab_meta.get("tab_url", "")
+
+            if not result.chord_sheets and not result.tab_content:
+                logger.info("UG: fetched pages but no parseable content for %r", query)
                 return None
-
-            content = (
-                tab_data.get("store", {})
-                .get("page", {})
-                .get("data", {})
-                .get("tab_view", {})
-                .get("wiki_tab", {})
-                .get("content", "")
-            )
-            if not content:
-                logger.info("UG: no wiki_tab content for %s", tab_url)
-                return None
-
-            # Step 3: Parse
-            parsed_lines = parse_ug_content(content)
-            if not parsed_lines:
-                logger.info("UG: parsed content is empty for %s", tab_url)
-                return None
-
-            capo = 0
-            capo_match = re.search(r"capo[:\s]*(\d+)", content, re.IGNORECASE)
-            if capo_match:
-                capo = int(capo_match.group(1))
-
-            key = best_tab.get("tonality_name", "")
 
             logger.info(
-                "UG: got %d lines for %r by %r (rating=%.1f)",
-                len(parsed_lines),
-                best_tab.get("song_name", ""),
-                best_tab.get("artist_name", ""),
-                best_tab.get("rating", 0),
+                "UG: got %d chord versions + %s tab for %r by %r",
+                len(result.chord_sheets),
+                "1" if result.tab_content else "0",
+                title, artist,
             )
-
-            return UGChordSheet(
-                lines=parsed_lines,
-                source_url=tab_url,
-                capo=capo,
-                key=key,
-                matched_artist=best_tab.get("artist_name", ""),
-                matched_title=best_tab.get("song_name", ""),
-                rating=best_tab.get("rating", 0) or 0,
-            )
+            return result
 
     except Exception:
         logger.warning("UG fetch failed for %r", query, exc_info=True)
         return None
+
+
+# Backward-compatible alias
+async def fetch_ug_chord_sheet(
+    artist: str, title: str, timeout_seconds: int = _REQUEST_TIMEOUT,
+) -> UGChordSheet | None:
+    """Fetch only the best chord sheet (legacy interface)."""
+    result = await fetch_ug_data(artist, title, timeout_seconds)
+    if result and result.chord_sheets:
+        return result.chord_sheets[0]
+    return None

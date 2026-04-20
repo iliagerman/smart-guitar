@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type SheetMode = 'chords' | 'tabs' | 'static'
+export type SheetMode = 'chords' | 'tabs'
 export type ChordDisplayMode = 'standard' | 'beginner' | 'capo'
 
 interface PlaybackState {

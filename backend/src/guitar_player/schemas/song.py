@@ -184,9 +184,6 @@ class SongDetailResponse(BaseModel):
     song_key: str | None = None  # e.g. "Em", "G"
     web_chords_failed: bool = False
     web_chords_pending: bool = False
-    static_chords: list[StaticChordLine] = []
-    static_chords_source: str | None = None
-    static_chords_pending: bool = False
     active_job: ActiveJobInfo | None = None
     download_pending: bool = False
 

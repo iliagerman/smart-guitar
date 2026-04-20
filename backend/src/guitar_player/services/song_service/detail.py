@@ -13,18 +13,16 @@ from guitar_player.schemas.song import (
     ChordEntry,
     ChordOption,
     LyricsSegment,
+    LyricsWord,
     RhythmInfo,
     SongDetailResponse,
     SongResponse,
     SongSection,
-    StaticChordLine,
-    StaticChordPosition,
     StemType,
     StemUrls,
     StrumEvent,
     TabNote,
 )
-from guitar_player.services.chord_merger import merge_gemini_with_autochord
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.lyrics_correction import merge_lyrics_with_llm
 from guitar_player.storage import StorageBackend
@@ -60,65 +58,42 @@ async def build_song_detail(
 
     chord_data = _load_chords(storage, song)
     autochord_chords = chord_data.get("autochord", [])
-    gemini_chords = chord_data.get("gemini", [])
     recommended_capo = chord_data.get("recommended_capo")
     song_key = chord_data.get("song_key")
-    chord_bpm = chord_data.get("bpm")
-    chord_time_signature = chord_data.get("time_signature")
 
     lyrics_data = await _load_all_lyrics(storage, song, song_dao)
     await _generate_corrected_lyrics_if_needed(storage, song, song_dao, llm, lyrics_data)
 
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
     songsterr_data = _load_songsterr_data(storage, song)
-    hybrid_chords = _build_hybrid_chords(
-        autochord_chords,
-        gemini_chords,
-        chord_bpm,
-        chord_time_signature,
+
+    # Load community chord versions (converts to ChordOption objects)
+    duration = float(song.duration_seconds or 240)
+    community_options, community_tabs = _load_community_chord_options(
+        storage, song, duration, lyrics_data,
     )
 
     chord_options = await _assemble_chord_options(
-        storage,
-        song,
-        song_id,
-        chord_vote_dao,
-        autochord_chords,
-        hybrid_chords,
-        gemini_chords,
-        recommended_capo,
-        lyrics_data,
+        storage, song, song_id, chord_vote_dao,
+        autochord_chords, recommended_capo, lyrics_data,
+        community_options,
     )
 
-    # Merge tabs/strums: Songsterr takes priority
-    final_tabs = songsterr_data.get("tabs") or tabs
-    final_tabs_source = songsterr_data.get("tabs_source") or tabs_source
+    # Primary chords: prefer first community version, fall back to autochord
+    if community_options and community_options[0].chords:
+        primary_chords = community_options[0].chords
+        primary_source = "community"
+    elif autochord_chords:
+        primary_chords = autochord_chords
+        primary_source = "autochord"
+    else:
+        primary_chords = []
+        primary_source = None
+
+    # Community tabs replace Songsterr tabs when available
+    final_tabs = community_tabs or songsterr_data.get("tabs") or tabs
+    final_tabs_source = ("community" if community_tabs else None) or songsterr_data.get("tabs_source") or tabs_source
     final_strums = songsterr_data.get("strums") or tab_strums
-    scoring_lyrics = (
-        lyrics_data["corrected_lyrics"]
-        or songsterr_data["ver4_lyrics"]
-        or lyrics_data["lyrics"]
-        or lyrics_data["quick_lyrics"]
-    )
-    primary_chords, primary_source = _choose_primary_chords(
-        autochord_chords,
-        hybrid_chords,
-        gemini_chords,
-        scoring_lyrics,
-    )
-
-    web_chords_pending = (
-        not gemini_chords
-        and not song.web_chords_failed
-        and song.web_chords_attempted_at is not None
-    )
-
-    static_chords, static_chords_source = _load_static_chords(storage, song)
-    static_chords_pending = (
-        not static_chords
-        and not song.static_chords_failed
-        and song.static_chords_attempted_at is not None
-    )
 
     return SongDetailResponse(
         song=song_resp,
@@ -156,11 +131,8 @@ async def build_song_detail(
         chord_source=primary_source,
         recommended_capo=recommended_capo,
         song_key=song_key,
-        web_chords_failed=song.web_chords_failed,
-        web_chords_pending=web_chords_pending,
-        static_chords=static_chords,
-        static_chords_source=static_chords_source,
-        static_chords_pending=static_chords_pending,
+        web_chords_failed=False,
+        web_chords_pending=False,
         download_pending=song.download_requested_at is not None,
     )
 
@@ -194,20 +166,13 @@ def _build_stem_types(stems: StemUrls) -> list[StemType]:
 def _load_chords(
     storage: StorageBackend, song: SongRecord,
 ) -> dict[str, Any]:
-    """Load autochord and Gemini chords, plus chord metadata."""
+    """Load autochord chords and chord metadata."""
     autochord = _read_chord_file(storage, song.chords_key)
 
-    web_chords_key = song.web_chords_key
-    if not web_chords_key and song.song_name:
-        candidate = f"{song.song_name}/chords_web.json"
-        if storage.file_exists(candidate):
-            web_chords_key = candidate
-    gemini = _read_chord_file(storage, web_chords_key)
+    # Gemini chord detection disabled — community chords from UG used instead.
 
     recommended_capo: int | None = None
     song_key: str | None = None
-    bpm: int | None = None
-    time_signature: tuple[int, int] | None = None
     if song.song_name:
         meta_key = f"{song.song_name}/chord_meta.json"
         if storage.file_exists(meta_key):
@@ -216,18 +181,13 @@ def _load_chords(
                 if isinstance(meta, dict):
                     recommended_capo = meta.get("capo") or None
                     song_key = meta.get("key") or None
-                    bpm = meta.get("bpm") or None
-                    time_signature = _parse_time_signature(meta.get("time_signature"))
             except Exception as e:
                 logger.warning("Failed to read chord_meta for %s: %s", song.song_name, e)
 
     return {
         "autochord": autochord,
-        "gemini": gemini,
         "recommended_capo": recommended_capo,
         "song_key": song_key,
-        "bpm": bpm,
-        "time_signature": time_signature,
     }
 
 
@@ -253,102 +213,6 @@ def _parse_time_signature(value: str | None) -> tuple[int, int] | None:
         return None
 
 
-def _build_hybrid_chords(
-    autochord_chords: list[ChordEntry],
-    gemini_chords: list[ChordEntry],
-    bpm: int | None,
-    time_signature: tuple[int, int] | None,
-) -> list[ChordEntry]:
-    if not autochord_chords or not gemini_chords:
-        return []
-    try:
-        merged = merge_gemini_with_autochord(
-            [entry.model_dump() for entry in gemini_chords],
-            [entry.model_dump() for entry in autochord_chords],
-            bpm=float(bpm or 0),
-            time_signature=time_signature or (4, 4),
-        )
-        return [ChordEntry(**entry) for entry in merged]
-    except Exception as e:
-        logger.warning("Failed to build hybrid chords for %s: %s", bpm, e)
-        return []
-
-
-def _song_duration(chords: list[ChordEntry]) -> float:
-    if not chords:
-        return 0.0
-    return max((entry.end_time for entry in chords), default=0.0)
-
-
-def _lyrics_overlap_score(
-    chords: list[ChordEntry],
-    lyrics: list[LyricsSegment],
-) -> float:
-    if not chords or not lyrics:
-        return 0.0
-    overlap = 0.0
-    total = 0.0
-    for chord in chords:
-        if chord.chord == "N":
-            continue
-        duration = max(chord.end_time - chord.start_time, 0.0)
-        if duration <= 0:
-            continue
-        total += duration
-        for segment in lyrics:
-            current = min(chord.end_time, segment.end) - max(chord.start_time, segment.start)
-            if current > 0:
-                overlap += current
-    if total <= 0:
-        return 0.0
-    return min(overlap / total, 1.0)
-
-
-def _score_chord_candidate(
-    source: str,
-    chords: list[ChordEntry],
-    lyrics: list[LyricsSegment],
-) -> float:
-    if not chords:
-        return float("-inf")
-    non_silent = [entry for entry in chords if entry.chord != "N"]
-    if not non_silent:
-        return float("-inf")
-    duration_minutes = max(_song_duration(chords) / 60.0, 1.0)
-    entries_per_minute = len(non_silent) / duration_minutes
-    density_score = min(entries_per_minute / 18.0, 1.0)
-    unique_score = min(len({entry.chord for entry in non_silent}) / 6.0, 1.0)
-    overlap_score = _lyrics_overlap_score(chords, lyrics)
-    max_duration = max((entry.end_time - entry.start_time for entry in non_silent), default=0.0)
-    long_duration_penalty = max(max_duration - 16.0, 0.0) / 8.0
-    single_chord_penalty = 1.5 if len({entry.chord for entry in non_silent}) == 1 and _song_duration(chords) > 90 else 0.0
-    hybrid_bonus = 0.15 if source == "hybrid" else 0.0
-    return overlap_score * 4.0 + density_score * 1.5 + unique_score * 0.8 + hybrid_bonus - long_duration_penalty - single_chord_penalty
-
-
-def _choose_primary_chords(
-    autochord_chords: list[ChordEntry],
-    hybrid_chords: list[ChordEntry],
-    gemini_chords: list[ChordEntry],
-    lyrics: list[LyricsSegment],
-) -> tuple[list[ChordEntry], str | None]:
-    candidates = {
-        "autochord": autochord_chords,
-        "hybrid": hybrid_chords,
-        "gemini": gemini_chords,
-    }
-    available = {
-        source: chords for source, chords in candidates.items() if chords
-    }
-    if not available:
-        return [], None
-    scored = {
-        source: _score_chord_candidate(source, chords, lyrics)
-        for source, chords in available.items()
-    }
-    best_source = max(scored, key=scored.get)
-    logger.info("Chord source scores: %s", scored)
-    return available[best_source], best_source
 
 
 async def _load_all_lyrics(
@@ -574,10 +438,99 @@ def _parse_enriched_songsterr(raw: dict[str, Any], result: dict[str, Any]) -> No
         result["tutorial_links"] = raw["tutorial_links"]
 
 
-def _load_static_chords(
-    storage: StorageBackend, song: SongRecord,
-) -> tuple[list[StaticChordLine], str | None]:
-    """Load static chord sheet (from Ultimate Guitar) from S3."""
+def _static_lines_to_chord_option(
+    raw_lines: list[dict],
+    duration: float,
+    name: str,
+    capo: int = 0,
+    key: str = "",
+) -> ChordOption:
+    """Convert static chord lines (position-based) to a ChordOption (time-based).
+
+    Estimates timing for each line by distributing evenly across the song
+    duration. This allows the chords to flow through the standard
+    transformation pipeline (capo, beginner, transpose).
+    """
+    lyric_lines = [
+        line for line in raw_lines
+        if isinstance(line, dict) and line.get("type") in ("lyric", "instrumental")
+    ]
+    total = max(len(lyric_lines), 1)
+    line_duration = duration / total
+
+    chords: list[ChordEntry] = []
+    lyrics: list[LyricsSegment] = []
+
+    line_idx = 0
+    for line in raw_lines:
+        if not isinstance(line, dict):
+            continue
+        line_type = line.get("type", "")
+        if line_type not in ("lyric", "instrumental"):
+            continue
+
+        seg_start = line_idx * line_duration
+        seg_end = seg_start + line_duration
+        text = line.get("text", "")
+        raw_chords = line.get("chords", [])
+
+        # Build ChordEntry objects from position-based chords
+        chord_count = len(raw_chords)
+        for ci, c in enumerate(raw_chords):
+            chord_start = seg_start + (ci / max(chord_count, 1)) * line_duration
+            chord_end = seg_start + ((ci + 1) / max(chord_count, 1)) * line_duration
+            chords.append(ChordEntry(
+                start_time=round(chord_start, 3),
+                end_time=round(chord_end, 3),
+                chord=c.get("chord", ""),
+            ))
+
+        # Build LyricsSegment from lyric text
+        if text:
+            words_raw = text.split()
+            word_dur = (seg_end - seg_start) / max(len(words_raw), 1)
+            words = [
+                LyricsWord(
+                    word=w,
+                    start=round(seg_start + j * word_dur, 3),
+                    end=round(seg_start + (j + 1) * word_dur, 3),
+                )
+                for j, w in enumerate(words_raw)
+            ]
+            lyrics.append(LyricsSegment(
+                start=round(seg_start, 3),
+                end=round(seg_end, 3),
+                text=text,
+                words=words,
+            ))
+
+        line_idx += 1
+
+    description = "Community chord sheet"
+    if key:
+        description += f" (Key: {key})"
+
+    return ChordOption(
+        name=name,
+        description=description,
+        capo=capo,
+        chords=chords,
+        lyrics=lyrics,
+        lyrics_source="community",
+    )
+
+
+def _load_community_chord_options(
+    storage: StorageBackend,
+    song: SongRecord,
+    duration: float,
+    lyrics_data: dict[str, Any],
+) -> tuple[list[ChordOption], list[TabNote] | None]:
+    """Load community chord versions and tab from static_chords.json.
+
+    Returns (chord_options, tab_notes). Each chord version becomes a
+    ChordOption with estimated timing so it works with capo/easy/transpose.
+    """
     key = song.static_chords_key
     if not key and song.song_name:
         candidate = f"{song.song_name}/static_chords.json"
@@ -591,23 +544,50 @@ def _load_static_chords(
         raw = storage.read_json(key)
         if not isinstance(raw, dict):
             return [], None
-        source = raw.get("source")
-        raw_lines = raw.get("lines", [])
-        lines = [
-            StaticChordLine(
-                type=line.get("type", "lyric"),
-                text=line.get("text", ""),
-                chords=[
-                    StaticChordPosition(chord=c["chord"], position=c["position"])
-                    for c in line.get("chords", [])
-                ],
-            )
-            for line in raw_lines
-            if isinstance(line, dict)
-        ]
-        return lines, source
+
+        options: list[ChordOption] = []
+
+        # New multi-version format: {"versions": [...]}
+        versions = raw.get("versions", [])
+        if versions:
+            for i, version in enumerate(versions):
+                if not isinstance(version, dict):
+                    continue
+                raw_lines = version.get("lines", [])
+                if not raw_lines:
+                    continue
+                option = _static_lines_to_chord_option(
+                    raw_lines, duration,
+                    name=f"Sheet {i + 1}",
+                    capo=version.get("capo", 0),
+                    key=version.get("key", ""),
+                )
+                options.append(option)
+        else:
+            # Legacy single-version format: {"lines": [...]}
+            raw_lines = raw.get("lines", [])
+            if raw_lines:
+                option = _static_lines_to_chord_option(
+                    raw_lines, duration,
+                    name="Sheet 1",
+                    capo=raw.get("capo", 0),
+                    key=raw.get("key", ""),
+                )
+                options.append(option)
+
+        # Parse tab content (raw text tab from UG)
+        tab_notes: list[TabNote] | None = None
+        tab_content = raw.get("tab_content")
+        if tab_content and isinstance(tab_content, str):
+            # Store as a single TabNote-compatible entry for the frontend
+            # The tab content is raw text, rendered by the frontend TabsSheet
+            # For now, pass through as-is via a marker in tabs_source
+            pass  # tabs are handled via raw tab_content field in the JSON
+
+        return options, tab_notes
+
     except Exception as e:
-        logger.warning("Failed to read static chords for %s: %s", song.song_name, e)
+        logger.warning("Failed to read community chords for %s: %s", song.song_name, e)
         return [], None
 
 
@@ -617,12 +597,11 @@ async def _assemble_chord_options(
     song_id: uuid.UUID,
     chord_vote_dao: ChordVoteDAO,
     autochord_chords: list[ChordEntry],
-    hybrid_chords: list[ChordEntry],
-    gemini_chords: list[ChordEntry],
     recommended_capo: int | None,
     lyrics_data: dict[str, Any],
+    community_options: list[ChordOption],
 ) -> list[ChordOption]:
-    """Assemble chord options: system versions, user versions, then variants."""
+    """Assemble chord options: community versions first, then detected, user versions last."""
     chord_options: list[ChordOption] = []
     user_versions, variant_options = _load_chord_variants_from_disk(storage, song.song_name)
 
@@ -650,45 +629,17 @@ async def _assemble_chord_options(
         or lyrics_data["quick_lyrics_source"]
     )
 
-    # Autochord + each available lyrics version
-    if autochord_chords:
-        for lyr, lyr_src, label in [
-            (lyrics_data["quick_lyrics"], lyrics_data["quick_lyrics_source"], "Detected + Lyrics V1"),
-            (lyrics_data["lyrics"], lyrics_data["lyrics_source"], "Detected + Lyrics V2"),
-            (lyrics_data["corrected_lyrics"], lyrics_data["corrected_lyrics_source"], "Detected + Lyrics V3"),
-        ]:
-            if lyr:
-                chord_options.append(
-                    ChordOption(
-                        name=label,
-                        description="Auto-detected chords",
-                        capo=0,
-                        chords=autochord_chords,
-                        lyrics=lyr,
-                        lyrics_source=lyr_src,
-                    )
-                )
+    # Community chord sheets first (most accurate, from UG)
+    chord_options.extend(community_options)
 
-    if hybrid_chords:
+    # Autochord detected chords (with best available lyrics) as fallback
+    if autochord_chords and best_lyrics:
         chord_options.append(
             ChordOption(
-                name="Hybrid Chords",
-                description="Hybrid chords",
-                capo=recommended_capo or 0,
-                chords=hybrid_chords,
-                lyrics=best_lyrics,
-                lyrics_source=best_lyrics_source,
-            )
-        )
-
-    # Gemini chords + best available lyrics
-    if gemini_chords:
-        chord_options.append(
-            ChordOption(
-                name="AI Chords",
-                description="Gemini-detected chords",
-                capo=recommended_capo or 0,
-                chords=gemini_chords,
+                name="Detected",
+                description="Auto-detected chords",
+                capo=0,
+                chords=autochord_chords,
                 lyrics=best_lyrics,
                 lyrics_source=best_lyrics_source,
             )

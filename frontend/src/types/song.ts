@@ -88,17 +88,6 @@ export interface SongSection {
   llm_generated?: boolean
 }
 
-export interface StaticChordPosition {
-  chord: string
-  position: number
-}
-
-export interface StaticChordLine {
-  type: 'lyric' | 'section' | 'instrumental' | 'empty'
-  text: string
-  chords: StaticChordPosition[]
-}
-
 export interface ActiveJobInfo {
   id: string
   status: JobStatus
@@ -143,9 +132,6 @@ export interface SongDetail {
   recommended_capo?: number | null
   song_key?: string | null
   web_chords_failed?: boolean
-  static_chords?: StaticChordLine[]
-  static_chords_source?: string | null
-  static_chords_pending?: boolean
   active_job: ActiveJobInfo | null
   download_pending: boolean
 }

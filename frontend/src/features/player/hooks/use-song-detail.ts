@@ -54,7 +54,6 @@ function contentFingerprint(d: SongDetail): string {
     getVer1Source(d),
     getVer2Source(d),
     getVer3Source(d),
-    d.static_chords?.length ?? 0,
   ].join('|')
 }
 
@@ -86,7 +85,10 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
       // Songsterr data is fetched async — poll until backend reports a result
       const songsterrPending = !detail.songsterr_status  // null = still fetching
-      const staticChordsPending = detail.static_chords_pending === true
+      // Poll while community chord sheets are being fetched
+      const communityChordsPending = !detail.chord_options?.some(
+        (o) => o.description?.startsWith('Community chord sheet'),
+      ) && !detail.songsterr_status
 
       // Keep polling while data is still missing (background retries may fill it in).
       // But only poll up to a reasonable interval — lyrics/tabs may have failed.
@@ -98,8 +100,8 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
       // Songsterr data (strumming patterns, tabs, sections) fetched async — poll until done.
       if (songsterrPending) return 5000
 
-      // Static chord sheet from Ultimate Guitar — poll while backend is fetching.
-      if (staticChordsPending) return 5000
+      // Community chord sheets still loading — poll until they appear
+      if (communityChordsPending) return 5000
 
       // Ver 1 lyrics are meant to appear ASAP.
       if (missingVer1Lyrics) return 5000

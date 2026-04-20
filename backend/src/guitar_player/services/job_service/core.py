@@ -683,8 +683,9 @@ class JobService:
     async def trigger_web_chords_if_missing(
         self, song_id: uuid.UUID, *, force: bool = False,
     ) -> bool:
-        """If Gemini web chords are missing, enqueue background detection."""
-        song = await self._song_dao.get_by_id(song_id)
+        """Gemini chord detection disabled — community chords from UG used instead."""
+        return False  # disabled, keeping code for future re-enable
+        song = await self._song_dao.get_by_id(song_id)  # pragma: no cover
         if not song or not song.song_name or not song.audio_key:
             return False
 

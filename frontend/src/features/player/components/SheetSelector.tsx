@@ -15,7 +15,6 @@ interface SheetSelectorProps {
   selectedVersionIndex: number
   activeChords: ChordEntry[]
   hasTabs?: boolean
-  hasStaticChords?: boolean
   currentUserEmail?: string
   upgrading?: boolean
   onSelectVersionIndex: (index: number) => void
@@ -37,7 +36,6 @@ export function SheetSelector({
   selectedVersionIndex,
   activeChords,
   hasTabs = false,
-  hasStaticChords = false,
   currentUserEmail,
   upgrading = false,
   onSelectVersionIndex,
@@ -64,23 +62,20 @@ export function SheetSelector({
     return buildViewOptions({
       bestCapoFrets,
       hasTabs,
-      hasStaticChords,
       currentSongId,
       setSongOverride,
       setSheetMode,
       setChordDisplayMode,
       close: () => setOpen(false),
     })
-  }, [bestCapoFrets, currentSongId, hasTabs, hasStaticChords, setChordDisplayMode, setSheetMode, setSongOverride])
+  }, [bestCapoFrets, currentSongId, hasTabs, setChordDisplayMode, setSheetMode, setSongOverride])
 
   const currentViewKey =
-    sheetMode === 'static'
-      ? 'static'
-      : sheetMode === 'tabs'
-        ? 'tabs'
-        : chordDisplayMode === 'capo'
-          ? `capo-${chordCapoFret}`
-          : chordDisplayMode
+    sheetMode === 'tabs'
+      ? 'tabs'
+      : chordDisplayMode === 'capo'
+        ? `capo-${chordCapoFret}`
+        : chordDisplayMode
   const currentView = viewOptions.find((option) => option.key === currentViewKey) ?? viewOptions[0]
   const currentSourceLabel = getSheetVersionLabel(currentVersion, clampedIndex)
   const currentLabel = `${currentSourceLabel} · ${currentView.label}`
@@ -216,7 +211,6 @@ export function SheetSelector({
 interface BuildViewOptionsParams {
   bestCapoFrets: Array<{ fret: number }>
   hasTabs: boolean
-  hasStaticChords: boolean
   currentSongId: string | null
   setSongOverride: ReturnType<typeof usePlayerPrefsStore.getState>['setSongOverride']
   setSheetMode: ReturnType<typeof usePlaybackStore.getState>['setSheetMode']
@@ -227,7 +221,6 @@ interface BuildViewOptionsParams {
 function buildViewOptions({
   bestCapoFrets,
   hasTabs,
-  hasStaticChords,
   currentSongId,
   setSongOverride,
   setSheetMode,
@@ -237,7 +230,7 @@ function buildViewOptions({
   const persist = (
     mode: 'standard' | 'beginner' | 'capo',
     fret: number,
-    sheet: 'chords' | 'tabs' | 'static',
+    sheet: 'chords' | 'tabs',
   ) => {
     if (!currentSongId) {
       return
@@ -250,7 +243,7 @@ function buildViewOptions({
   const applyView = (
     mode: 'standard' | 'beginner' | 'capo',
     fret: number,
-    sheet: 'chords' | 'tabs' | 'static',
+    sheet: 'chords' | 'tabs',
   ) => {
     setSheetMode(sheet)
     setChordDisplayMode(mode, fret)
@@ -273,10 +266,6 @@ function buildViewOptions({
 
   if (hasTabs) {
     options.push({ key: 'tabs', label: 'Tabs', apply: () => applyView('standard', 0, 'tabs') })
-  }
-
-  if (hasStaticChords) {
-    options.push({ key: 'static', label: 'Chord Sheet', apply: () => applyView('standard', 0, 'static') })
   }
 
   return options
