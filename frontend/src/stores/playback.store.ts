@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type SheetMode = 'chords' | 'tabs'
+export type SheetMode = 'chords' | 'tabs' | 'static'
 export type ChordDisplayMode = 'standard' | 'beginner' | 'capo'
 
 interface PlaybackState {
@@ -20,8 +20,6 @@ interface PlaybackState {
   chordDisplayMode: ChordDisplayMode
   chordCapoFret: number
   setCurrentSong: (songId: string) => void
-  /** Toggle a stem on/off. Switches out of full-song mode when enabling a stem. */
-  toggleStem: (stem: string) => void
   /** Bulk-set active stems (e.g. from default preferences). Switches out of full-song mode. */
   setActiveStems: (stems: string[]) => void
   /** Switch to full-song mode (original MP3). Clears individual stems. */
@@ -51,26 +49,6 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   chordCapoFret: 0,
   setCurrentSong: (songId) =>
     set({ currentSongId: songId, currentTime: 0, isPlaying: false, hasPlaybackOccurred: false, sheetMode: 'chords', selectedChordOptionIndex: null, chordDisplayMode: 'standard', chordCapoFret: 0 }),
-  toggleStem: (stem) => {
-    const { activeStems, isFullSong } = get()
-    if (isFullSong) {
-      // Switching from full-song mode: start with just this stem
-      set({ isFullSong: false, activeStems: [stem] })
-      return
-    }
-    const idx = activeStems.indexOf(stem)
-    if (idx >= 0) {
-      const next = activeStems.filter((s) => s !== stem)
-      if (next.length === 0) {
-        // No stems left — switch back to full song
-        set({ isFullSong: true, activeStems: [] })
-      } else {
-        set({ activeStems: next })
-      }
-    } else {
-      set({ activeStems: [...activeStems, stem] })
-    }
-  },
   setActiveStems: (stems) => {
     if (stems.length === 0) {
       set({ isFullSong: true, activeStems: [] })

@@ -14,6 +14,7 @@ LYRICS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 TABS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 EXTERNAL_STRUMS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 WEB_CHORDS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
+STATIC_CHORDS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 
 
 async def _notify_telegram_error(task_label: str, exc: BaseException) -> None:
@@ -130,4 +131,14 @@ def enqueue_web_chords_fetch(song_id: uuid.UUID) -> None:
     _enqueue_singleton(
         WEB_CHORDS_TASKS, song_id, fetch_gemini_chords(song_id),
         label=f"web_chords({song_id})",
+    )
+
+
+def enqueue_static_chords_fetch(song_id: uuid.UUID) -> None:
+    """Fire-and-forget Ultimate Guitar chord sheet fetch in the background."""
+    from .external_data import fetch_static_chords
+
+    _enqueue_singleton(
+        STATIC_CHORDS_TASKS, song_id, fetch_static_chords(song_id),
+        label=f"static_chords({song_id})",
     )

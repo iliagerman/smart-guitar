@@ -240,6 +240,126 @@ def extract_measure_pattern(
     return patterns[best_key]
 
 
+async def fetch_static_chords(song_id: uuid.UUID) -> None:
+    """Fetch a static chord sheet from Ultimate Guitar and store it."""
+    try:
+        storage = get_storage()
+    except Exception:
+        return
+
+    async with safe_session() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_id(song_id)
+        if not song or not song.song_name or not song.artist:
+            return
+        artist = song.artist
+        title = song.title
+        song_name = song.song_name
+
+    static_key = f"{song_name}/static_chords.json"
+    if storage.file_exists(static_key):
+        async with safe_session() as session:
+            song_dao = SongDAO(session)
+            await song_dao.update_by_id(song_id, static_chords_key=static_key)
+            await song_dao.commit()
+        return
+
+    t0 = time.monotonic()
+    try:
+        from guitar_player.services.ug_chord_fetcher import fetch_ug_chord_sheet
+
+        logger.info(
+            "Static chords fetch starting song_id=%s artist=%r title=%r",
+            song_id, artist, title,
+            extra={
+                "event_type": "background_task_start",
+                "task": "static_chords",
+                "song_id": str(song_id),
+            },
+        )
+        result = await fetch_ug_chord_sheet(artist, title)
+        if not result or not result.lines:
+            elapsed_s = time.monotonic() - t0
+            logger.info(
+                "Static chords: no match found (%.1fs) song_id=%s",
+                elapsed_s, song_id,
+            )
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, static_chords_failed=True)
+                await song_dao.commit()
+            return
+
+        output = {
+            "source": "ultimate_guitar",
+            "source_url": result.source_url,
+            "capo": result.capo,
+            "key": result.key,
+            "matched_artist": result.matched_artist,
+            "matched_title": result.matched_title,
+            "rating": result.rating,
+            "lines": [
+                {
+                    "type": line.type,
+                    "text": line.text,
+                    "chords": [
+                        {"chord": c.chord, "position": c.position}
+                        for c in line.chords
+                    ],
+                }
+                for line in result.lines
+            ],
+        }
+        storage.write_json(static_key, output)
+
+        elapsed_s = time.monotonic() - t0
+        logger.info(
+            "Static chords: wrote %d lines (%.1fs) song_id=%s",
+            len(result.lines), elapsed_s, song_id,
+            extra={
+                "event_type": "background_task_done",
+                "task": "static_chords",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+                "line_count": len(result.lines),
+            },
+        )
+
+        async with safe_session() as session:
+            song_dao = SongDAO(session)
+            await song_dao.update_by_id(
+                song_id,
+                static_chords_key=static_key,
+                static_chords_failed=False,
+                static_chords_attempted_at=None,
+            )
+            await song_dao.commit()
+
+    except Exception as e:
+        elapsed_s = time.monotonic() - t0
+        logger.warning(
+            "Static chords fetch failed (%.1fs): %s song_id=%s",
+            elapsed_s, e, song_id,
+            extra={
+                "event_type": "background_task_failed",
+                "task": "static_chords",
+                "song_id": str(song_id),
+                "elapsed_s": round(elapsed_s, 1),
+                "error": str(e),
+            },
+        )
+        try:
+            async with safe_session() as session:
+                song_dao = SongDAO(session)
+                await song_dao.update_by_id(song_id, static_chords_failed=True)
+                await song_dao.commit()
+        except Exception:
+            logger.debug(
+                "Failed to persist static_chords_failed for %s",
+                song_id, exc_info=True,
+            )
+
+
 async def fetch_external_strums(song_id: uuid.UUID) -> None:
     """Fetch tab data from Songsterr, align to audio, and store."""
     try:

@@ -1,11 +1,9 @@
-import { useCallback } from 'react'
 import { Heart, Pencil } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
-import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { SongDetail, ChordOption } from '@/types/song'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 
@@ -28,6 +26,7 @@ interface PlayerControlsProps {
   headerArtist: string
   hasChords: boolean
   hasTabs: boolean
+  hasStaticChords: boolean
   isFavorited: boolean
   showAudioStatus: boolean
   audioStatusMessage?: string
@@ -50,6 +49,9 @@ interface PlayerControlsProps {
   onSetLyricsSource: (mode: LyricsSourceMode) => void
   onDeleteChords: () => void
   onOpenTutorial: () => void
+  onSetStemVolume: (stemName: string, volume: number) => void
+  stemVolumes?: Record<string, number>
+  getRecordingTap: () => { context: AudioContext; node: GainNode } | null
 }
 
 interface AudioStatusBannerProps {
@@ -86,6 +88,7 @@ export function PlayerControls({
   headerArtist,
   hasChords,
   hasTabs,
+  hasStaticChords,
   isFavorited,
   showAudioStatus,
   audioStatusMessage,
@@ -108,6 +111,9 @@ export function PlayerControls({
   onSetLyricsSource,
   onDeleteChords,
   onOpenTutorial,
+  onSetStemVolume,
+  stemVolumes,
+  getRecordingTap,
 }: PlayerControlsProps) {
   return (
     <div className="flex flex-col gap-4" data-testid="player-controls">
@@ -131,15 +137,19 @@ export function PlayerControls({
             onToggleFavorite={onToggleFavorite}
             onEnterEditMode={onEnterEditMode}
             onOpenTutorial={onOpenTutorial}
+            onSetStemVolume={onSetStemVolume}
+            stemVolumes={stemVolumes}
+            getRecordingTap={getRecordingTap}
           />
         }
-        secondaryControls={
+        pinnedControls={
           <>
             <SheetSelector
               versions={sheetVersions}
               selectedVersionIndex={selectedVersionIndex}
               activeChords={activeChords}
               hasTabs={hasTabs}
+              hasStaticChords={hasStaticChords}
               currentUserEmail={userEmail ?? undefined}
               upgrading={chordsUpgrading}
               onSelectVersionIndex={onSetVersionIndex}
@@ -150,6 +160,10 @@ export function PlayerControls({
               selected={selectedLyricsSource}
               onSelect={onSetLyricsSource}
             />
+          </>
+        }
+        secondaryControls={
+          <>
             <PlaybackSpeedSelector />
             <LyricsSyncControl />
             <ScrollModeControl />
@@ -158,11 +172,6 @@ export function PlayerControls({
       />
     </div>
   )
-}
-
-interface StemSelection {
-  isFullSong: boolean
-  stems: string[]
 }
 
 interface PrimaryControlsProps {
@@ -179,6 +188,9 @@ interface PrimaryControlsProps {
   onToggleFavorite: () => void
   onEnterEditMode: () => void
   onOpenTutorial: () => void
+  onSetStemVolume: (stemName: string, volume: number) => void
+  stemVolumes?: Record<string, number>
+  getRecordingTap: () => { context: AudioContext; node: GainNode } | null
 }
 
 function PrimaryControls({
@@ -195,24 +207,11 @@ function PrimaryControls({
   onToggleFavorite,
   onEnterEditMode,
   onOpenTutorial,
+  onSetStemVolume,
+  stemVolumes,
+  getRecordingTap,
 }: PrimaryControlsProps) {
-  const activeStems = usePlaybackStore((s) => s.activeStems)
-  const isFullSong = usePlaybackStore((s) => s.isFullSong)
-  const setActiveStems = usePlaybackStore((s) => s.setActiveStems)
-  const selectFullSong = usePlaybackStore((s) => s.selectFullSong)
-  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
   const isEditMode = useChordEditStore((s) => s.isEditMode)
-
-  const handleApplyStemSelection = useCallback((selection: StemSelection) => {
-    if (selection.isFullSong || selection.stems.length === 0) {
-      selectFullSong()
-      setSongOverride(songId, 'activeStems', 'fullSong')
-      return
-    }
-
-    setActiveStems(selection.stems)
-    setSongOverride(songId, 'activeStems', selection.stems)
-  }, [selectFullSong, setActiveStems, setSongOverride, songId])
 
   return (
     <>
@@ -236,7 +235,7 @@ function PrimaryControls({
           )}
         />
       </button>
-      <RecordButton songTitle={headerTitle} artist={headerArtist} />
+      <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
       <div className="contents" data-tour="chord-edit">
         {hasChords && !isEditMode && (
           <button
@@ -257,9 +256,8 @@ function PrimaryControls({
       </div>
       <div className="contents" data-tour="stem-selector">
         <TrackSelector
-          activeStems={activeStems}
-          isFullSong={isFullSong}
-          onApplySelection={handleApplyStemSelection}
+          onSetStemVolume={onSetStemVolume}
+          stemVolumes={stemVolumes}
           availableStems={detail.stems}
           stemTypes={detail.stem_types}
           isDisabled={isStemSelectionDisabled}

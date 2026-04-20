@@ -9,6 +9,7 @@ import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../.
 import { OnboardingTour } from '../../components/OnboardingTour'
 import { LyricsSyncDebug } from '../../components/LyricsSyncDebug'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
+import { BlockingErrorState } from '@/components/shared/BlockingErrorState'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -37,19 +38,24 @@ import { TutorialOverlay } from './TutorialOverlay'
 import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
 import { buildSheetVersions } from '../../lib/sheet-versions'
 
-const STEM_MIX_DEBOUNCE_MS = 400
-
 function getAudioUrl(
   songId: string,
   stem: string,
   detail: { audio_url: string | null; stems: Record<string, string | null> },
 ): string | null {
   if (env.isLocal) {
-    const stemName = stem === 'full_mix' ? 'audio' : stem
-    return `${env.apiBaseUrl}/api/v1/songs/${songId}/stream?stem=${stemName}`
+    if (stem === 'full_mix') {
+      return detail.audio_url ? `${env.apiBaseUrl}/api/v1/songs/${songId}/stream?stem=audio` : null
+    }
+    if (!detail.stems[stem]) return null
+    return `${env.apiBaseUrl}/api/v1/songs/${songId}/stream?stem=${stem}`
   }
   if (stem === 'full_mix') return detail.audio_url
   return detail.stems[stem] || null
+}
+
+function formatStemList(stems: string[]): string {
+  return stems.map((stem) => stem.replaceAll('_', ' ')).join(', ')
 }
 
 /**
@@ -58,7 +64,28 @@ function getAudioUrl(
  */
 export function SongDetailPage() {
   const { songId } = useParams<{ songId: string }>()
-  const { loadStems, loadFullSong, togglePlay, seek } = useAudioPlayer()
+  const lastPlaybackPopupRef = useRef<{ message: string; time: number } | null>(null)
+  const showPlaybackErrorPopup = useCallback((message: string) => {
+    if (typeof window === 'undefined') return
+    const now = Date.now()
+    const lastPopup = lastPlaybackPopupRef.current
+    if (lastPopup && lastPopup.message === message && now - lastPopup.time < 2500) {
+      return
+    }
+    lastPlaybackPopupRef.current = { message, time: now }
+    window.alert(message)
+  }, [])
+  const {
+    clear,
+    loadStems,
+    getRecordingTap,
+    loadFullSong,
+    togglePlay,
+    seek,
+    setStemVolume,
+    isLoading: isLoadingStemAudio,
+    prepareForPlaybackGesture,
+  } = useAudioPlayer({ onPlaybackError: showPlaybackErrorPopup })
   const hasRecordedPlayRef = useRef(false)
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
@@ -69,7 +96,13 @@ export function SongDetailPage() {
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   useWakeLock(isPlaying)
-  const { data: detail, isLoading } = useSongDetail(songId!, { pollForTabs: true })
+  const {
+    data: detail,
+    error: songDetailError,
+    isError: isSongDetailError,
+    isLoading,
+    refetch: refetchSongDetail,
+  } = useSongDetail(songId!, { pollForTabs: true })
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
   const globalTranspose = usePlayerPrefsStore((s) => s.transposeSemitones)
@@ -105,7 +138,6 @@ export function SongDetailPage() {
   useEffect(() => { setGlobalStrumSource(strumSource) }, [strumSource, setGlobalStrumSource])
 
   const [showTutorial, setShowTutorial] = useState(false)
-  const [isPreparingSyncedMix, setIsPreparingSyncedMix] = useState(false)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
@@ -117,6 +149,11 @@ export function SongDetailPage() {
   const removeViewingSong = useJobWatcherStore((s) => s.removeViewingSong)
 
   const hasStemsProcessed = detail?.stem_types.some(({ name }) => !!detail.stems[name]) ?? false
+  const missingSelectedStems = useMemo(
+    () => (!detail || isFullSong ? [] : activeStems.filter((stem) => !detail.stems[stem])),
+    [detail, isFullSong, activeStems],
+  )
+  const isWaitingForSelectedStems = missingSelectedStems.length > 0
 
   useEffect(() => {
     if (!songId) return
@@ -125,16 +162,6 @@ export function SongDetailPage() {
 
     const prefs = usePlayerPrefsStore.getState()
     const overrides = prefs.songOverrides[songId]
-
-    if (overrides?.activeStems !== undefined) {
-      if (overrides.activeStems === 'fullSong') {
-        selectFullSong()
-      } else {
-        setActiveStems(overrides.activeStems)
-      }
-    } else if (prefs.defaultStems.length > 0) {
-      setActiveStems(prefs.defaultStems)
-    }
 
     // Restore per-song playback rate
     if (overrides?.playbackRate !== undefined) {
@@ -153,7 +180,27 @@ export function SongDetailPage() {
     if (overrides?.sheetMode !== undefined) {
       usePlaybackStore.getState().setSheetMode(overrides.sheetMode)
     }
-  }, [songId, setCurrentSong, setActiveStems, selectFullSong])
+  }, [songId, setCurrentSong])
+
+  // Default all available stems to active once stems become processed.
+  // Users adjust per-stem volume in the mixer; there's no on/off selection.
+  useEffect(() => {
+    if (!detail) return
+    const availableStems = detail.stem_types
+      .map(({ name }) => name)
+      .filter((name) => !!detail.stems[name])
+    if (availableStems.length === 0) {
+      if (!isFullSong) selectFullSong()
+      return
+    }
+    const sameSelection =
+      !isFullSong
+      && activeStems.length === availableStems.length
+      && availableStems.every((name) => activeStems.includes(name))
+    if (!sameSelection) {
+      setActiveStems(availableStems)
+    }
+  }, [detail, activeStems, isFullSong, setActiveStems, selectFullSong])
 
   useEffect(() => {
     if (!songId) return
@@ -172,92 +219,55 @@ export function SongDetailPage() {
     }
   }, [hasPlaybackOccurred, songId])
 
-  // Load audio when stems or full-song mode changes.
-  // In production, multi-stem playback is resolved to a single pre-mixed track
-  // so the browser only plays one timeline and cannot drift between stems.
+  // Load audio when stems or full-song mode changes. Multi-stem playback uses
+  // the client-side buffered mixer; single-stem / full-mix use the HTMLAudio path.
   useEffect(() => {
     if (!detail || !songId) return
 
-    let cancelled = false
-    let debounceTimer: number | null = null
-    const controller = new AbortController()
-    const shouldPrepareSyncedMix = !env.isLocal && !isFullSong && activeStems.length > 1
-
-    const loadSelectedAudio = async () => {
-      if (isFullSong) {
-        setIsPreparingSyncedMix(false)
-        const url = getAudioUrl(songId, 'full_mix', detail)
-        if (url) loadFullSong(url)
-        return
-      }
-
-      if (activeStems.length === 0) {
-        setIsPreparingSyncedMix(false)
-        return
-      }
-
-      if (activeStems.length === 1) {
-        setIsPreparingSyncedMix(false)
-        const url = getAudioUrl(songId, activeStems[0], detail)
-        if (url) loadFullSong(url)
-        return
-      }
-
-      if (shouldPrepareSyncedMix) {
-        try {
-          const response = await songsApi.playbackSource(
-            songId,
-            [...activeStems].sort(),
-            controller.signal,
-          )
-          if (!cancelled) {
-            loadFullSong(response.url)
-          }
-          return
-        } catch {
-          if (cancelled || controller.signal.aborted) {
-            return
-          }
-          // Fall back to legacy multi-element playback if mix resolution fails.
-        } finally {
-          if (!cancelled) {
-            setIsPreparingSyncedMix(false)
-          }
-        }
-      }
-
-      setIsPreparingSyncedMix(false)
-      const urls = new Map<string, string>()
-      for (const stem of activeStems) {
-        const url = getAudioUrl(songId, stem, detail)
-        if (url) urls.set(stem, url)
-      }
-      if (!cancelled && urls.size > 0) {
-        loadStems(urls)
-      }
+    if (isFullSong) {
+      const url = getAudioUrl(songId, 'full_mix', detail)
+      if (url) loadFullSong(url)
+      else clear()
+      return
     }
 
-    setIsPreparingSyncedMix(shouldPrepareSyncedMix)
-    if (shouldPrepareSyncedMix) {
-      debounceTimer = window.setTimeout(() => {
-        void loadSelectedAudio()
-      }, STEM_MIX_DEBOUNCE_MS)
-    } else {
-      void loadSelectedAudio()
+    if (activeStems.length === 0) {
+      clear()
+      return
     }
 
-    return () => {
-      cancelled = true
-      controller.abort()
-      if (debounceTimer !== null) {
-        window.clearTimeout(debounceTimer)
-      }
+    const missingSelectedStems = activeStems.filter((stem) => !detail.stems[stem])
+    if (missingSelectedStems.length > 0) {
+      clear()
+      return
     }
-  }, [detail, songId, isFullSong, activeStems, loadStems, loadFullSong])
+
+    if (activeStems.length === 1) {
+      const url = getAudioUrl(songId, activeStems[0], detail)
+      if (url) loadFullSong(url)
+      else clear()
+      return
+    }
+
+    const urls = new Map<string, string>()
+    for (const stem of activeStems) {
+      const url = getAudioUrl(songId, stem, detail)
+      if (url) urls.set(stem, url)
+    }
+    if (urls.size === activeStems.length) {
+      const overrides = usePlayerPrefsStore.getState().songOverrides[songId]
+      loadStems(urls, overrides?.stemVolumes)
+      return
+    }
+    clear()
+  }, [activeStems, clear, detail, isFullSong, loadFullSong, loadStems, songId])
 
   // If the backend no longer offers a selected stem, remove it from activeStems.
+  // Keep the user's selection intact while a processing job is still running so
+  // the UI can continue showing "preparing selected stems" instead of bouncing
+  // back to the full mix mid-job.
   useEffect(() => {
-    if (!detail || isFullSong) return
+    if (!detail || isFullSong || detail.active_job) return
     const offered = new Set(detail.stem_types.map((s) => s.name))
     const valid = activeStems.filter((s) => offered.has(s))
     if (valid.length !== activeStems.length) {
@@ -270,7 +280,8 @@ export function SongDetailPage() {
   }, [detail, isFullSong, activeStems, setActiveStems, selectFullSong])
 
   const handleTogglePlay = useCallback(() => {
-    if (isPreparingSyncedMix) return
+    if (isLoadingStemAudio || isWaitingForSelectedStems) return
+    prepareForPlaybackGesture()
     if (songId && !isPlaying && !hasRecordedPlayRef.current) {
       hasRecordedPlayRef.current = true
       trackCustomEvent('PlaySong', { song_id: songId })
@@ -279,12 +290,12 @@ export function SongDetailPage() {
       })
     }
     togglePlay()
-  }, [isPlaying, isPreparingSyncedMix, songId, togglePlay])
+  }, [isLoadingStemAudio, isPlaying, isWaitingForSelectedStems, prepareForPlaybackGesture, songId, togglePlay])
 
   const handleSeek = useCallback((time: number) => {
-    if (isPreparingSyncedMix) return
+    if (isLoadingStemAudio || isWaitingForSelectedStems) return
     seek(time)
-  }, [isPreparingSyncedMix, seek])
+  }, [isLoadingStemAudio, isWaitingForSelectedStems, seek])
 
   const handleToggleFavorite = () => {
     if (!songId) return
@@ -297,7 +308,9 @@ export function SongDetailPage() {
 
   // --- Simplified sheet + independent lyrics selection ---
   const preferredChordSource =
-    detail?.chord_source === 'gemini' || detail?.chord_source === 'autochord'
+    detail?.chord_source === 'gemini'
+    || detail?.chord_source === 'autochord'
+    || detail?.chord_source === 'hybrid'
       ? detail.chord_source
       : null
   const sheetVersions = useMemo(
@@ -445,10 +458,25 @@ export function SongDetailPage() {
     [addChordAtTime]
   )
 
-  // --- Loading state ---
-  if (isLoading || !detail) {
+  // --- Loading / blocking error state ---
+  if (isLoading && !detail) {
     return (
       <LoadingSpinner size="lg" label={loadingLabel} className="flex-1 min-h-screen" />
+    )
+  }
+
+  if (isSongDetailError || !detail) {
+    const errorMessage = songDetailError instanceof Error
+      ? songDetailError.message
+      : 'The song details could not be loaded. Please try again.'
+
+    return (
+      <BlockingErrorState
+        title="Could not load this song"
+        description={errorMessage}
+        onRetry={() => void refetchSongDetail()}
+        retryTestId="song-detail-retry-button"
+      />
     )
   }
 
@@ -460,8 +488,14 @@ export function SongDetailPage() {
   const hasChords = activeChords.length > 0
   const chordsLoading = !hasChords && !detail?.chord_source && hasStemsProcessed
   const chordsUpgrading = hasChords && detail?.chord_source === 'autochord' && !detail?.web_chords_failed
-  const showAudioStatus = isPreparingSyncedMix || (!audioUrl && hasStemsProcessed)
-  const audioStatusMessage = isPreparingSyncedMix ? 'Preparing synced mix...' : undefined
+  const showAudioStatus = isLoadingStemAudio || isWaitingForSelectedStems || (!audioUrl && hasStemsProcessed)
+  const audioStatusMessage = isLoadingStemAudio
+    ? 'Loading selected stems...'
+    : isWaitingForSelectedStems
+      ? detail.active_job
+        ? `Preparing ${formatStemList(missingSelectedStems)}… ${detail.active_job.progress}%`
+        : `Selected stems are not ready yet: ${formatStemList(missingSelectedStems)}`
+      : undefined
 
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
@@ -494,7 +528,7 @@ export function SongDetailPage() {
             thumbnailSrc={thumbnailSrc}
             isAdmin={isAdmin}
             isPlaying={isPlaying}
-            isPlaybackDisabled={isPreparingSyncedMix}
+            isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
             onTogglePlay={handleTogglePlay}
             onSeek={handleSeek}
             onThumbnailError={() => songId && markThumbnailFailed(songId)}
@@ -507,10 +541,11 @@ export function SongDetailPage() {
             headerArtist={headerArtist}
             hasChords={hasChords}
             hasTabs={hasTabs}
+            hasStaticChords={(detail.static_chords?.length ?? 0) > 0}
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
             audioStatusMessage={audioStatusMessage}
-            isPlaybackDisabled={isPreparingSyncedMix}
+            isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
             sheetVersions={sheetVersions}
             activeChords={activeChords}
             selectedVersionIndex={selectedVersionIndex}
@@ -533,6 +568,15 @@ export function SongDetailPage() {
               }
             }}
             onOpenTutorial={() => setShowTutorial(true)}
+            getRecordingTap={getRecordingTap}
+            onSetStemVolume={(stemName: string, volume: number) => {
+              setStemVolume(stemName, volume)
+              setSongOverride(songId!, 'stemVolumes', {
+                ...songOverrides?.stemVolumes,
+                [stemName]: volume,
+              })
+            }}
+            stemVolumes={songOverrides?.stemVolumes}
           />
         </div>
       </div>
@@ -547,6 +591,8 @@ export function SongDetailPage() {
         hasChords={hasChords}
         hasAnyLyrics={hasAnyLyrics}
         hasTabs={hasTabs}
+        hasStaticChords={(detail.static_chords?.length ?? 0) > 0}
+        staticChords={detail.static_chords ?? []}
         displayChords={displayChords}
         activeLyrics={activeLyrics}
         chordNamesForMap={chordNamesForMap}

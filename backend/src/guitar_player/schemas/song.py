@@ -135,6 +135,17 @@ class SongSection(BaseModel):
     llm_generated: bool = False
 
 
+class StaticChordPosition(BaseModel):
+    chord: str
+    position: int
+
+
+class StaticChordLine(BaseModel):
+    type: str  # "lyric" | "section" | "instrumental" | "empty"
+    text: str
+    chords: list[StaticChordPosition] = []
+
+
 class SongDetailResponse(BaseModel):
     song: SongResponse
     thumbnail_url: str | None = None
@@ -168,11 +179,14 @@ class SongDetailResponse(BaseModel):
     tutorial_url: str | None = None  # YouTube tutorial link (best match)
     tutorial_links: list[dict] = []  # All tutorial links [{"url": str, "title": str}]
     songsterr_status: str | None = None  # null=pending, "ready", "failed", "unavailable"
-    chord_source: str | None = None  # "gemini" | "autochord"
+    chord_source: str | None = None  # "gemini" | "autochord" | "hybrid"
     recommended_capo: int | None = None  # from chord_meta.json
     song_key: str | None = None  # e.g. "Em", "G"
     web_chords_failed: bool = False
     web_chords_pending: bool = False
+    static_chords: list[StaticChordLine] = []
+    static_chords_source: str | None = None
+    static_chords_pending: bool = False
     active_job: ActiveJobInfo | None = None
     download_pending: bool = False
 

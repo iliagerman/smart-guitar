@@ -7,18 +7,25 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.admin import require_admin_user
 from guitar_player.auth.schemas import CurrentUser
 from guitar_player.auth.subscription_guard import require_active_subscription
+from guitar_player.database import safe_session
 from guitar_player.dependencies import (
+    get_artwork_service,
+    get_db,
     get_job_service,
+    get_llm_service,
     get_processing_service,
     get_recommendation_service,
     get_song_service,
     get_storage,
     get_telegram_service,
+    get_youtube_service,
 )
+from guitar_player.schemas.admin import AdminDropSongsResponse
 from guitar_player.schemas.job import ActiveJobInfo
 from guitar_player.schemas.song import (
     ChordVersionVoteRequest,
@@ -45,9 +52,12 @@ from guitar_player.services.analytics_helpers import (
     track_event,
 )
 from guitar_player.services.job_service import JobService
+from guitar_player.services.artwork_service import ArtworkService
+from guitar_player.services.llm_service import LlmService
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.song_service import SongService
 from guitar_player.services.telegram_service import TelegramService
+from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 
 logger = logging.getLogger(__name__)
@@ -92,6 +102,54 @@ def _parse_playback_stems(raw: str | None) -> list[str]:
     if not raw:
         return []
     return [part.strip() for part in raw.split(",") if part.strip() and part.strip() != "full_mix"]
+
+
+async def _get_stream_storage_key(
+    song_id: uuid.UUID,
+    col_name: str,
+    storage: StorageBackend,
+    youtube: YoutubeService,
+    llm: LlmService,
+    artwork: ArtworkService,
+) -> str | None:
+    """Resolve a song storage key without keeping a request DB session open."""
+    async with safe_session() as session:
+        song_service = SongService(session, storage, youtube, llm, artwork)
+        return await song_service.get_file_key(song_id, col_name)
+
+
+async def _clear_stream_storage_key(
+    song_id: uuid.UUID,
+    col_name: str,
+    storage: StorageBackend,
+    youtube: YoutubeService,
+    llm: LlmService,
+    artwork: ArtworkService,
+) -> None:
+    """Clear a stale song storage key and commit immediately."""
+    async with safe_session() as session:
+        song_service = SongService(session, storage, youtube, llm, artwork)
+        await song_service.clear_file_key(song_id, col_name)
+        await session.commit()
+
+
+async def _trigger_stream_reprocess(
+    song_id: uuid.UUID,
+    user: CurrentUser,
+    processing: ProcessingService,
+    storage: StorageBackend,
+) -> uuid.UUID | None:
+    """Trigger stem healing without tying DB sessions to the file response."""
+    async with safe_session() as session:
+        job_service = JobService(session, storage)
+        job_id = await job_service.trigger_reprocess(
+            user_sub=user.sub,
+            user_email=user.email,
+            song_id=song_id,
+            processing=processing,
+        )
+        await session.commit()
+        return job_id
 
 
 # Stems eligible for admin reprocessing (not audio or thumbnail)
@@ -342,10 +400,11 @@ async def stream_song_file(
         description="File type: audio, thumbnail, vocals, guitar, guitar_removed, vocals_guitar",
     ),
     user: CurrentUser = Depends(require_active_subscription),
-    song_service: SongService = Depends(get_song_service),
-    job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
     storage: StorageBackend = Depends(get_storage),
+    youtube: YoutubeService = Depends(get_youtube_service),
+    llm: LlmService = Depends(get_llm_service),
+    artwork: ArtworkService = Depends(get_artwork_service),
 ) -> FileResponse:
     """Stream a song file (audio, thumbnail, or stem) for local development."""
     col_name = _STEM_KEY_MAP.get(stem)
@@ -355,13 +414,15 @@ async def stream_song_file(
             detail=f"Unknown stem: {stem}",
         )
 
-    storage_key = await song_service.get_file_key(song_id, col_name)
-    file_missing = not storage_key or not Path(storage.get_url(storage_key)).is_file()
+    storage_key = await _get_stream_storage_key(
+        song_id, col_name, storage, youtube, llm, artwork,
+    )
+    file_missing = not storage_key or not storage.file_exists(storage_key)
 
     if file_missing and stem in _REPROCESSABLE_STEMS:
         return await _handle_missing_stem(
             song_id, stem, col_name, storage_key,
-            song_service, job_service, processing, storage, user,
+            processing, storage, user, youtube, llm, artwork,
         )
 
     if file_missing:
@@ -370,7 +431,7 @@ async def stream_song_file(
             detail=f"No {stem} file for this song",
         )
 
-    file_path = Path(storage.get_url(storage_key))
+    file_path = Path(storage.resolve_service_path(storage_key))
     return FileResponse(file_path, media_type=_media_type_for(stem, file_path))
 
 
@@ -379,28 +440,28 @@ async def _handle_missing_stem(
     stem: str,
     col_name: str,
     storage_key: str | None,
-    song_service: SongService,
-    job_service: JobService,
     processing: ProcessingService,
     storage: StorageBackend,
     user: CurrentUser,
+    youtube: YoutubeService,
+    llm: LlmService,
+    artwork: ArtworkService,
 ) -> FileResponse:
     """Handle a missing reprocessable stem: clear key, trigger reprocess, retry."""
     if storage_key:
-        await song_service.clear_file_key(song_id, col_name)
+        await _clear_stream_storage_key(
+            song_id, col_name, storage, youtube, llm, artwork,
+        )
 
-    triggered = await job_service.trigger_reprocess(
-        user_sub=user.sub,
-        user_email=user.email,
-        song_id=song_id,
-        processing=processing,
-    )
+    triggered = await _trigger_stream_reprocess(song_id, user, processing, storage)
 
     if not triggered:
         # Keys were fixed from existing files on disk -- retry serving
-        storage_key = await song_service.get_file_key(song_id, col_name)
-        if storage_key and Path(storage.get_url(storage_key)).is_file():
-            file_path = Path(storage.get_url(storage_key))
+        storage_key = await _get_stream_storage_key(
+            song_id, col_name, storage, youtube, llm, artwork,
+        )
+        if storage_key and storage.file_exists(storage_key):
+            file_path = Path(storage.resolve_service_path(storage_key))
             return FileResponse(file_path, media_type=_media_type_for(stem, file_path))
 
         raise HTTPException(
@@ -478,6 +539,7 @@ async def _run_background_healing(
         ("tabs", lambda: job_service.trigger_tabs_generation_if_missing(song_id)),
         ("external strums", lambda: job_service.trigger_external_strums_if_missing(song_id)),
         ("web chords", lambda: job_service.trigger_web_chords_if_missing(song_id)),
+        ("static chords", lambda: job_service.trigger_static_chords_if_missing(song_id)),
     ]
     for label, task_fn in healing_tasks:
         try:
@@ -547,6 +609,25 @@ async def regenerate_song_components(
         song_id, admin.email, enqueued, skipped, errors,
     )
     return RegenerateResponse(enqueued=enqueued, skipped=skipped, errors=errors)
+
+
+@router.delete("/{song_id}", response_model=AdminDropSongsResponse)
+async def delete_song(
+    song_id: uuid.UUID,
+    admin: CurrentUser = Depends(require_admin_user),
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> AdminDropSongsResponse:
+    """Admin-only: permanently delete a song, its DB records, and S3 files."""
+    from guitar_player.services.admin_service import AdminService
+
+    service = AdminService(session, storage)
+    result = await service.drop_song(song_id)
+    logger.info(
+        "Admin deleted song_id=%s user=%s deleted=%d storage_errors=%s",
+        song_id, admin.email, result.songs_deleted, result.storage_errors,
+    )
+    return result
 
 
 def _delete_stem_files(

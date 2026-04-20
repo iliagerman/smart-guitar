@@ -5,6 +5,7 @@ from .background_tasks import (
     enqueue_external_strums_fetch,
     enqueue_job_processing,
     enqueue_lyrics_transcription,
+    enqueue_static_chords_fetch,
     enqueue_tabs_generation,
     enqueue_vocals_guitar_merge,
     enqueue_web_chords_fetch,
@@ -28,6 +29,7 @@ _enqueue_vocals_guitar_merge = enqueue_vocals_guitar_merge
 _enqueue_job_processing = enqueue_job_processing
 _enqueue_external_strums_fetch = enqueue_external_strums_fetch
 _enqueue_web_chords_fetch = enqueue_web_chords_fetch
+_enqueue_static_chords_fetch = enqueue_static_chords_fetch
 
 __all__ = [
     "JobService",
@@ -46,4 +48,5 @@ __all__ = [
     "_enqueue_job_processing",
     "_enqueue_external_strums_fetch",
     "_enqueue_web_chords_fetch",
+    "_enqueue_static_chords_fetch",
 ]

@@ -88,6 +88,17 @@ export interface SongSection {
   llm_generated?: boolean
 }
 
+export interface StaticChordPosition {
+  chord: string
+  position: number
+}
+
+export interface StaticChordLine {
+  type: 'lyric' | 'section' | 'instrumental' | 'empty'
+  text: string
+  chords: StaticChordPosition[]
+}
+
 export interface ActiveJobInfo {
   id: string
   status: JobStatus
@@ -128,10 +139,13 @@ export interface SongDetail {
   tutorial_url?: string | null
   tutorial_links?: { url: string; title: string }[]
   songsterr_status?: string | null  // null=pending, "ready", "failed", "unavailable"
-  chord_source?: string | null  // "gemini" | "autochord"
+  chord_source?: string | null  // "gemini" | "autochord" | "hybrid"
   recommended_capo?: number | null
   song_key?: string | null
   web_chords_failed?: boolean
+  static_chords?: StaticChordLine[]
+  static_chords_source?: string | null
+  static_chords_pending?: boolean
   active_job: ActiveJobInfo | null
   download_pending: boolean
 }

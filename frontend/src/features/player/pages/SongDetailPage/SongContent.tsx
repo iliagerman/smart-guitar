@@ -3,11 +3,12 @@ import { useChordEditStore } from '@/stores/chord-edit.store'
 import { ProcessButton } from '../../components/ProcessButton'
 import { BackgroundProcessingCard } from '../../components/BackgroundProcessingCard'
 import { ChordSheet } from '../../components/ChordSheet'
+import { StaticChordSheet } from '../../components/StaticChordSheet'
 import { ChordEditToolbar } from '../../components/ChordEditToolbar'
 import { TabsSheet } from '../../components/TabsSheet'
 import { ChordMap } from '../../components/ChordMap'
 import { CurrentChordPanel } from './CurrentChordPanel'
-import type { SongDetail, LyricsSegment } from '@/types/song'
+import type { SongDetail, LyricsSegment, StaticChordLine } from '@/types/song'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
 
 interface SongContentProps {
@@ -19,6 +20,8 @@ interface SongContentProps {
   hasChords: boolean
   hasAnyLyrics: boolean
   hasTabs: boolean
+  hasStaticChords: boolean
+  staticChords: StaticChordLine[]
   displayChords: { chord: string; start_time: number; end_time: number }[]
   activeLyrics: LyricsSegment[]
   chordNamesForMap: string[]
@@ -45,6 +48,8 @@ export function SongContent({
   hasChords,
   hasAnyLyrics,
   hasTabs,
+  hasStaticChords,
+  staticChords,
   displayChords,
   activeLyrics,
   chordNamesForMap,
@@ -111,6 +116,8 @@ export function SongContent({
                         <span className="text-sm">Detecting chords...</span>
                       </div>
                     </div>
+                  ) : sheetMode === 'static' && hasStaticChords ? (
+                    <StaticChordSheet lines={staticChords} />
                   ) : sheetMode === 'tabs' && hasTabs ? (
                     <TabsSheet
                       tabs={detail.tabs}

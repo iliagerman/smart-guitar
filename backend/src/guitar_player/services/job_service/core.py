@@ -17,6 +17,7 @@ from .background_tasks import (
     EXTERNAL_STRUMS_TASKS,
     LYRICS_TASKS,
     MERGE_TASKS,
+    STATIC_CHORDS_TASKS,
     TABS_TASKS,
     WEB_CHORDS_TASKS,
 )
@@ -199,6 +200,10 @@ class JobService:
         missing_any = await self._fix_keys_from_disk(song)
 
         if not missing_any:
+            logger.info(
+                "Admin: reprocess not needed for song %s -- all stems/chords present or fixed from disk",
+                song_id,
+            )
             return None
 
         # Files truly missing -- trigger reprocess if no non-stale active job.
@@ -216,6 +221,12 @@ class JobService:
                         song.id, processing_job_id=None,
                     )
             else:
+                logger.info(
+                    "Admin: reprocess already active for song %s -- job_id=%s status=%s",
+                    song_id,
+                    active_job.id,
+                    active_job.status,
+                )
                 return None
 
         song = await self._song_dao.get_by_id(song_id)
@@ -712,6 +723,51 @@ class JobService:
             song_id, song.artist, song.title,
         )
         _pkg_enqueue("_enqueue_web_chords_fetch", song_id)
+        return True
+
+    async def trigger_static_chords_if_missing(
+        self, song_id: uuid.UUID, *, force: bool = False,
+    ) -> bool:
+        """If static chord sheet is missing, enqueue background UG fetch."""
+        song = await self._song_dao.get_by_id(song_id)
+        if not song or not song.song_name or not song.artist:
+            return False
+
+        if not force:
+            if (
+                song.static_chords_key
+                and self._storage.file_exists(song.static_chords_key)
+            ):
+                return False
+
+            candidate = f"{song.song_name}/static_chords.json"
+            if self._storage.file_exists(candidate):
+                await self._song_dao.update_by_id(
+                    song.id, static_chords_key=candidate,
+                )
+                return False
+
+        if not self._should_enqueue_by_cooldown(
+            song.static_chords_failed,
+            song.static_chords_attempted_at,
+            force,
+        ):
+            return False
+
+        existing_task = STATIC_CHORDS_TASKS.get(song_id)
+        if existing_task and not existing_task.done():
+            return False
+
+        update_kwargs: dict = {"static_chords_attempted_at": utcnow()}
+        if force or song.static_chords_failed:
+            update_kwargs["static_chords_failed"] = False
+        await self._song_dao.update_by_id(song.id, **update_kwargs)
+
+        logger.info(
+            "Static chords: enqueuing UG fetch for %s (%s - %s)",
+            song_id, song.artist, song.title,
+        )
+        _pkg_enqueue("_enqueue_static_chords_fetch", song_id)
         return True
 
     def _should_enqueue_by_cooldown(

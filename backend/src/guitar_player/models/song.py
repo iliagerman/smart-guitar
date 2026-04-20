@@ -84,9 +84,17 @@ class Song(UUIDMixin, TimestampMixin, Base):
     web_chords_failed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
+    static_chords_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Storage key for Gemini-detected chords (chords_web.json)
     web_chords_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
+
+    # Storage key for static chord sheet from Ultimate Guitar
+    static_chords_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )
 
@@ -105,6 +113,9 @@ class Song(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     web_chords_attempted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    static_chords_attempted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

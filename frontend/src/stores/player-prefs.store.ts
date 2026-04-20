@@ -9,20 +9,23 @@ function clampInt(n: number, min: number, max: number): number {
 
 /** Whether lyrics highlighting is active or disabled (auto-scroll). */
 export type LyricsHighlightMode = 'highlight' | 'none'
+export type LyricsSourceMode = 'auto' | 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'off'
 export type StrumSource = 'songsterr' | 'ai'
 
 export interface SongOverrides {
-  /** Index into the unified chord_options array (each entry has chords + lyrics). */
+  /** Index into the simplified sheet source list shown in the player. */
   selectedVersionIndex?: number
+  /** Manual lyrics source override. Undefined means: follow the automatic default. */
+  selectedLyricsSource?: LyricsSourceMode
   transposeSemitones?: number
   lyricsOffsetMs?: number
   strumSource?: StrumSource
-  /** Per-song stem selection. undefined = use global default, string[] = specific stems, 'fullSong' = full song mode. */
-  activeStems?: string[] | 'fullSong'
   playbackRate?: number
   chordDisplayMode?: 'standard' | 'beginner' | 'capo'
   chordCapoFret?: number
-  sheetMode?: 'chords' | 'tabs'
+  sheetMode?: 'chords' | 'tabs' | 'static'
+  /** Per-stem volume levels (0–1). Key is stem name (e.g. 'vocals', 'drums'). */
+  stemVolumes?: Record<string, number>
 }
 
 export interface CameraPreviewPosition {
@@ -55,8 +58,13 @@ export interface PlayerPrefsState {
   cameraPreviewPosition: CameraPreviewPosition | null
   /** Whether the camera preview is minimized to a small FAB. */
   cameraPreviewMinimized: boolean
-  /** Which stems are enabled by default when opening a song (e.g. ['vocals', 'drums']). */
-  defaultStems: string[]
+  /** When true, the recorder mixes the backing track digitally into the output
+   *  instead of relying on the mic to pick it up from speakers. Requires headphones. */
+  headphonesMode: boolean
+  /** Gain applied to the guitar (mic) input in the recording mix (0–5). */
+  recordingGuitarGain: number
+  /** Gain applied to the backing track in the recording mix (0–1). */
+  recordingBackingGain: number
   /** Per-song setting overrides. Key is songId. */
   songOverrides: Record<string, SongOverrides>
   setSongOverride: <K extends keyof SongOverrides>(songId: string, key: K, value: SongOverrides[K]) => void
@@ -77,7 +85,9 @@ export interface PlayerPrefsState {
   setRecordVideo: (enabled: boolean) => void
   setCameraPreviewPosition: (pos: CameraPreviewPosition) => void
   setCameraPreviewMinimized: (minimized: boolean) => void
-  setDefaultStems: (stems: string[]) => void
+  setHeadphonesMode: (enabled: boolean) => void
+  setRecordingGuitarGain: (gain: number) => void
+  setRecordingBackingGain: (gain: number) => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -94,7 +104,9 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       recordVideo: false,
       cameraPreviewPosition: null,
       cameraPreviewMinimized: false,
-      defaultStems: ['vocals', 'drums', 'bass', 'piano', 'other'],
+      headphonesMode: false,
+      recordingGuitarGain: 3.0,
+      recordingBackingGain: 0.5,
       songOverrides: {},
       setSongOverride: (songId, key, value) =>
         set((state) => ({
@@ -135,7 +147,9 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setRecordVideo: (enabled) => set({ recordVideo: !!enabled }),
       setCameraPreviewPosition: (pos) => set({ cameraPreviewPosition: pos }),
       setCameraPreviewMinimized: (minimized) => set({ cameraPreviewMinimized: minimized }),
-      setDefaultStems: (stems) => set({ defaultStems: stems }),
+      setHeadphonesMode: (enabled) => set({ headphonesMode: !!enabled }),
+      setRecordingGuitarGain: (gain) => set({ recordingGuitarGain: Math.max(0, Math.min(5, gain)) }),
+      setRecordingBackingGain: (gain) => set({ recordingBackingGain: Math.max(0, Math.min(1, gain)) }),
     }),
     {
       name: 'player-prefs',
@@ -190,11 +204,6 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.cameraPreviewMinimized = false
         }
 
-        // Default stem preferences (v6 → v7)
-        if (state && state.defaultStems === undefined) {
-          state.defaultStems = ['vocals', 'drums']
-        }
-
         // Default per-song overrides (v7 → v8)
         if (state && state.songOverrides === undefined) {
           state.songOverrides = {}
@@ -217,25 +226,33 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           }
         }
 
-        // Default stems update (v9 → v10): switch from ['vocals', 'drums'] to all except guitar
+        // Default headphones mode + recording gain settings (v11 → v12)
+        if (state && state.headphonesMode === undefined) {
+          state.headphonesMode = false
+        }
+        if (state && state.recordingGuitarGain === undefined) {
+          state.recordingGuitarGain = 3.0
+        }
+        if (state && state.recordingBackingGain === undefined) {
+          state.recordingBackingGain = 0.5
+        }
+
+        // v12 → v13: stems are always all-on; drop global defaultStems and
+        // any per-song activeStems selection. Only stemVolumes persist.
         if (state) {
-          const current = state.defaultStems as string[] | undefined
-          if (current !== undefined && Array.isArray(current)) {
-            const oldDefault = ['vocals', 'drums']
-            const isOldDefault =
-              current.length === oldDefault.length &&
-              oldDefault.every((s) => current.includes(s))
-            if (isOldDefault) {
-              state.defaultStems = ['vocals', 'drums', 'bass', 'piano', 'other']
-            }
+          delete state.defaultStems
+        }
+        if (state && typeof state.songOverrides === 'object') {
+          for (const overrides of Object.values(
+            state.songOverrides as Record<string, Record<string, unknown>>,
+          )) {
+            delete overrides.activeStems
           }
         }
 
         return state as unknown as PlayerPrefsState
       },
-      // v10 → v11: per-song playbackRate, chordDisplayMode, chordCapoFret, sheetMode
-      // No migration needed — new SongOverrides fields are optional (default undefined).
-      version: 11,
+      version: 13,
     }
   )
 )
