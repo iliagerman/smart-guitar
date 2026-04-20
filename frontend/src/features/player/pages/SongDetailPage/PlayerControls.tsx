@@ -11,6 +11,7 @@ import { ChordMapDialog } from '../../components/ChordMapDialog'
 import { LyricsSourceSelector } from '../../components/LyricsSourceSelector'
 import { LyricsSyncControl } from '../../components/LyricsSyncControl'
 import { ChordDisplayControls } from '../../components/ChordDisplayControls'
+import { HighlightToggle } from '../../components/HighlightToggle'
 import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
 import { RecordButton } from '../../components/RecordButton'
 import { ScrollModeControl } from '../../components/ScrollModeControl'
@@ -163,6 +164,7 @@ export function PlayerControls({
         secondaryControls={
           <>
             <ChordDisplayControls />
+            <HighlightToggle />
             <PlaybackSpeedSelector />
             <LyricsSyncControl />
             <ScrollModeControl />
