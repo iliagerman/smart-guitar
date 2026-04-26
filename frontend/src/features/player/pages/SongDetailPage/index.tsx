@@ -307,15 +307,9 @@ export function SongDetailPage() {
   }
 
   // --- Simplified sheet + independent lyrics selection ---
-  const preferredChordSource =
-    detail?.chord_source === 'gemini'
-    || detail?.chord_source === 'autochord'
-    || detail?.chord_source === 'hybrid'
-      ? detail.chord_source
-      : null
   const sheetVersions = useMemo(
-    () => buildSheetVersions(detail?.chord_options ?? [], preferredChordSource),
-    [detail?.chord_options, preferredChordSource],
+    () => buildSheetVersions(detail?.chord_options ?? []),
+    [detail?.chord_options],
   )
 
   const variantOptions = useMemo(

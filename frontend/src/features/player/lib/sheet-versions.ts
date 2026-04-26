@@ -16,28 +16,26 @@ function isUserOption(option: ChordOption): boolean {
 
 /**
  * Collapses backend chord options into distinct sheet sources for the player UI.
- * Community versions (from external sources) come first, then detected, then user.
+ * Detected chords come first so they are the default selection; community
+ * sheets follow, then user-created versions.
  */
-export function buildSheetVersions(
-  options: ChordOption[],
-  _preferredSource: string | null = null,
-): ChordOption[] {
+export function buildSheetVersions(options: ChordOption[]): ChordOption[] {
   const visible = options.filter((option) => !option.hidden && !option.is_variant)
   const result: ChordOption[] = []
   const picked = new Set<ChordOption>()
 
-  // Community options first (Sheet 1, Sheet 2, Sheet 3)
-  for (const option of visible.filter(isCommunityOption)) {
-    picked.add(option)
-    result.push(option)
-  }
-
-  // Detected chords (autochord) as fallback
+  // Detected chords (autochord) first — default sheet for every song.
   const detectedOptions = visible.filter(isDetectedOption)
   const detectedOption = detectedOptions[detectedOptions.length - 1]
   if (detectedOption) {
     picked.add(detectedOption)
     result.push(detectedOption)
+  }
+
+  // Community options (Sheet 1, Sheet 2, Sheet 3)
+  for (const option of visible.filter(isCommunityOption)) {
+    picked.add(option)
+    result.push(option)
   }
 
   // User-created versions

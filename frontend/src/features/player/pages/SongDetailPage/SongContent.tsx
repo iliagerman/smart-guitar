@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2, Play, Pause, Circle, Minus, Plus, ChevronsDown } from 'lucide-react'
+import { Maximize2, Minimize2, Play, Pause, Minus, Plus, ChevronsDown } from 'lucide-react'
 
-import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
