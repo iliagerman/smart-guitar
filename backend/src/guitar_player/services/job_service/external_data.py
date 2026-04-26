@@ -290,13 +290,27 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                 await song_dao.commit()
             return
 
+        # Pull the best-version's matched names to the top level so that
+        # later validation can verify the file actually corresponds to the
+        # song's current artist/title. (Per-version metadata also stored.)
+        top_artist = ""
+        top_title = ""
+        if result.chord_sheets:
+            top_artist = result.chord_sheets[0].matched_artist
+            top_title = result.chord_sheets[0].matched_title
+
         output: dict = {
             "source": "community",
+            "matched_artist": top_artist,
+            "matched_title": top_title,
             "versions": [
                 {
                     "capo": sheet.capo,
                     "key": sheet.key,
                     "rating": sheet.rating,
+                    "matched_artist": sheet.matched_artist,
+                    "matched_title": sheet.matched_title,
+                    "source_url": sheet.source_url,
                     "lines": [
                         {
                             "type": line.type,
@@ -314,6 +328,7 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
         }
         if result.tab_content:
             output["tab_content"] = result.tab_content
+            output["tab_source_url"] = result.tab_source_url
 
         storage.write_json(static_key, output)
 

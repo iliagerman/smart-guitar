@@ -12,10 +12,11 @@ All errors are non-fatal — returns None on failure.
 import gzip
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 
 import httpx
+
+from guitar_player.services.source_match import accept_match, match_components
 
 logger = logging.getLogger(__name__)
 
@@ -74,51 +75,6 @@ class SongsterrResult:
 SongsterrStrumResult = SongsterrResult
 
 
-def _normalize(text: str) -> str:
-    """Normalize text for fuzzy matching."""
-    text = text.lower().strip()
-    text = re.sub(r"\s*\(.*?\)\s*", " ", text)
-    text = re.sub(r"\s*\[.*?\]\s*", " ", text)
-    text = re.sub(r"\b(feat\.?|ft\.?|featuring)\b.*", "", text)
-    text = re.sub(r"[^a-z0-9\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
-def _match_score(
-    query_artist: str, query_title: str, result_artist: str, result_title: str
-) -> float:
-    """Score a Songsterr result against our query. Higher = better."""
-    q_artist = _normalize(query_artist)
-    q_title = _normalize(query_title)
-    r_artist = _normalize(result_artist)
-    r_title = _normalize(result_title)
-
-    score = 0.0
-
-    if q_artist == r_artist:
-        score += 1.0
-    elif q_artist in r_artist or r_artist in q_artist:
-        score += 0.7
-    else:
-        q_words = set(q_artist.split())
-        r_words = set(r_artist.split())
-        overlap = len(q_words & r_words)
-        if overlap > 0:
-            score += 0.4 * (overlap / max(len(q_words), 1))
-
-    if q_title == r_title:
-        score += 1.0
-    elif q_title in r_title or r_title in q_title:
-        score += 0.7
-    else:
-        q_words = set(q_title.split())
-        r_words = set(r_title.split())
-        overlap = len(q_words & r_words)
-        if overlap > 0:
-            score += 0.4 * (overlap / max(len(q_words), 1))
-
-    return score
 
 
 def _rank_guitar_track_indices(song_data: dict, max_tracks: int = 3) -> list[int]:
@@ -360,23 +316,37 @@ async def _download_track_json(
 def _find_best_match(
     results: list[dict], artist: str, title: str, query: str,
 ) -> dict | None:
-    """Find the best-matching Songsterr result by artist/title similarity."""
+    """Find the best-matching Songsterr result by artist/title similarity.
+
+    Both components (artist + title) must independently clear the gate.
+    """
     best_result = None
-    best_score = 0.0
+    best_artist = 0.0
+    best_title = 0.0
+    best_combined = -1.0
     for r in results:
-        score = _match_score(artist, title, r.get("artist", ""), r.get("title", ""))
-        if score > best_score:
-            best_score = score
+        a_score, t_score = match_components(
+            artist, title, r.get("artist", ""), r.get("title", ""),
+        )
+        if not accept_match(a_score, t_score):
+            continue
+        combined = a_score + t_score
+        if combined > best_combined:
+            best_combined = combined
+            best_artist, best_title = a_score, t_score
             best_result = r
 
-    if best_score < 1.0 or best_result is None:
-        logger.info("Songsterr: no good match for %r (best_score=%.2f)", query, best_score)
+    if best_result is None:
+        logger.info(
+            "Songsterr: no good match for %r (no result cleared the gate)",
+            query,
+        )
         return None
 
     logger.info(
-        "Songsterr: matched %r by %r (id=%d, score=%.2f)",
+        "Songsterr: matched %r by %r (id=%d, artist=%.2f, title=%.2f)",
         best_result.get("title", ""), best_result.get("artist", ""),
-        best_result["songId"], best_score,
+        best_result["songId"], best_artist, best_title,
     )
     return best_result
 

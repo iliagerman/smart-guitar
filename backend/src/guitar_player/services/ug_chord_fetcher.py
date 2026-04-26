@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 from curl_cffi.requests import AsyncSession
 
+from guitar_player.services.source_match import accept_match, match_components
+
 logger = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 15
@@ -73,51 +75,6 @@ class UGFetchResult:
     tab_source_url: str = ""
 
 
-def _normalize(text: str) -> str:
-    """Normalize text for fuzzy matching."""
-    text = text.lower().strip()
-    text = re.sub(r"\s*\(.*?\)\s*", " ", text)
-    text = re.sub(r"\s*\[.*?\]\s*", " ", text)
-    text = re.sub(r"\b(feat\.?|ft\.?|featuring)\b.*", "", text)
-    text = re.sub(r"[^a-z0-9\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
-def _match_score(
-    query_artist: str, query_title: str, result_artist: str, result_title: str,
-) -> float:
-    """Score a UG result against our query. Higher = better."""
-    q_artist = _normalize(query_artist)
-    q_title = _normalize(query_title)
-    r_artist = _normalize(result_artist)
-    r_title = _normalize(result_title)
-
-    score = 0.0
-
-    if q_artist == r_artist:
-        score += 1.0
-    elif q_artist in r_artist or r_artist in q_artist:
-        score += 0.7
-    else:
-        q_words = set(q_artist.split())
-        r_words = set(r_artist.split())
-        overlap = len(q_words & r_words)
-        if overlap > 0:
-            score += 0.4 * (overlap / max(len(q_words), 1))
-
-    if q_title == r_title:
-        score += 1.0
-    elif q_title in r_title or r_title in q_title:
-        score += 0.7
-    else:
-        q_words = set(q_title.split())
-        r_words = set(r_title.split())
-        overlap = len(q_words & r_words)
-        if overlap > 0:
-            score += 0.4 * (overlap / max(len(q_words), 1))
-
-    return score
 
 
 def _is_chord_only_line(line: str) -> bool:
@@ -220,7 +177,12 @@ def _extract_page_data(page_text: str) -> dict | None:
 def _find_matching_tabs(
     all_tabs: list[dict], artist: str, title: str, tab_type: str, limit: int,
 ) -> list[dict]:
-    """Find top matching tabs of a given type, sorted by match score + rating."""
+    """Find top matching tabs of a given type, sorted by match score + rating.
+
+    Both artist *and* title must independently clear the per-component gate;
+    a perfect title alone is no longer enough. Rejections are logged so we
+    can see what was skipped.
+    """
     type_lower = tab_type.lower()
     filtered = [
         t for t in all_tabs
@@ -231,14 +193,21 @@ def _find_matching_tabs(
 
     scored: list[tuple[dict, float]] = []
     for tab in filtered:
-        match = _match_score(
-            artist, title,
-            tab.get("artist_name", ""), tab.get("song_name", ""),
+        r_artist = tab.get("artist_name", "")
+        r_title = tab.get("song_name", "")
+        artist_score, title_score = match_components(
+            artist, title, r_artist, r_title,
         )
-        if match < 0.7:
+        if not accept_match(artist_score, title_score):
+            logger.info(
+                "UG: rejecting %s match for %r/%r against %r/%r "
+                "(artist=%.2f, title=%.2f)",
+                tab_type, artist, title, r_artist, r_title,
+                artist_score, title_score,
+            )
             continue
         rating = tab.get("rating", 0) or 0
-        combined = match + (rating / 10.0)
+        combined = (artist_score + title_score) + (rating / 10.0)
         scored.append((tab, combined))
 
     scored.sort(key=lambda x: x[1], reverse=True)

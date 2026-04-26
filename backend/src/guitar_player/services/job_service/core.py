@@ -28,6 +28,8 @@ from .constants import (
     LIGHTWEIGHT_TASK_COOLDOWN_SECONDS,
     STEM_FILE_VARIANTS,
 )
+from guitar_player.services.source_match import accept_match, match_components
+
 from .helpers import (
     active_job_stale_reason,
     find_stem,
@@ -635,32 +637,120 @@ class JobService:
             return None
         return (utcnow() - to_aware_utc(attempted_at)).total_seconds()
 
+    def _sheet_match_is_valid(
+        self, key: str, song_artist: str, song_title: str, label: str,
+    ) -> bool:
+        """Read a stored sheet's matched_artist/matched_title and verify it
+        still corresponds to the song. Legacy files without metadata are
+        treated as untrusted (return False)."""
+        try:
+            data = self._storage.read_json(key)
+        except Exception:
+            logger.warning(
+                "%s: could not read %s for validation; treating as invalid",
+                label, key,
+            )
+            return False
+        if not isinstance(data, dict):
+            return False
+
+        matched_artist = data.get("matched_artist")
+        matched_title = data.get("matched_title")
+        if not matched_artist or not matched_title:
+            logger.info(
+                "%s: %s lacks matched_artist/matched_title (legacy file); "
+                "marking invalid for refetch",
+                label, key,
+            )
+            return False
+
+        a_score, t_score = match_components(
+            song_artist, song_title, matched_artist, matched_title,
+        )
+        if not accept_match(a_score, t_score):
+            logger.info(
+                "%s: %s mismatch — song=%r/%r vs stored=%r/%r "
+                "(artist=%.2f, title=%.2f); marking invalid for refetch",
+                label, key, song_artist, song_title,
+                matched_artist, matched_title, a_score, t_score,
+            )
+            return False
+        return True
+
+    def _delete_invalid_static_chords(self, key: str) -> None:
+        """Delete a stale static_chords.json. No derived files to remove."""
+        try:
+            self._storage.delete_file(key)
+        except Exception:
+            logger.warning("Failed to delete stale static chords %s", key, exc_info=True)
+
+    def _delete_invalid_external_strums(self, key: str, song_name: str) -> None:
+        """Delete a stale Songsterr file plus its derived lyrics file.
+
+        ``lyrics_songsterr.json`` is built from the same matched track, so
+        if the match was wrong, that lyrics file is wrong too.
+        """
+        for path in (key, f"{song_name}/lyrics_songsterr.json"):
+            try:
+                if self._storage.file_exists(path):
+                    self._storage.delete_file(path)
+            except Exception:
+                logger.warning(
+                    "Failed to delete stale Songsterr artifact %s",
+                    path, exc_info=True,
+                )
+
     async def trigger_external_strums_if_missing(
         self, song_id: uuid.UUID, *, force: bool = False,
     ) -> bool:
-        """If external strums are missing, enqueue background Songsterr fetch."""
+        """If external strums are missing or stale, enqueue Songsterr fetch.
+
+        A previously-stored file is now also re-validated against the song's
+        current artist/title; mismatched or legacy files are deleted (along
+        with their derived ``lyrics_songsterr.json``) and re-fetched.
+        """
         song = await self._song_dao.get_by_id(song_id)
         if not song or not song.song_name or not song.artist:
             return False
 
+        invalidated = False
+
         if not force:
-            if (
-                song.external_strums_key
-                and self._storage.file_exists(song.external_strums_key)
-            ):
-                return False
-
-            candidate = f"{song.song_name}/external_strums.json"
-            if self._storage.file_exists(candidate):
+            current_key = song.external_strums_key
+            if current_key and self._storage.file_exists(current_key):
+                if self._sheet_match_is_valid(
+                    current_key, song.artist, song.title, "External strums",
+                ):
+                    return False
+                self._delete_invalid_external_strums(current_key, song.song_name)
                 await self._song_dao.update_by_id(
-                    song.id, external_strums_key=candidate,
+                    song.id,
+                    external_strums_key=None,
+                    external_strums_failed=False,
+                    external_strums_attempted_at=None,
                 )
-                return False
+                invalidated = True
 
+            else:
+                candidate = f"{song.song_name}/external_strums.json"
+                if self._storage.file_exists(candidate):
+                    if self._sheet_match_is_valid(
+                        candidate, song.artist, song.title, "External strums",
+                    ):
+                        await self._song_dao.update_by_id(
+                            song.id, external_strums_key=candidate,
+                        )
+                        return False
+                    self._delete_invalid_external_strums(candidate, song.song_name)
+                    invalidated = True
+
+        # If we just deleted a stale file, bypass the cooldown so the
+        # refetch happens immediately rather than waiting for the timer.
+        effective_force = force or invalidated
         if not self._should_enqueue_by_cooldown(
             song.external_strums_failed,
             song.external_strums_attempted_at,
-            force,
+            effective_force,
         ):
             return False
 
@@ -669,7 +759,7 @@ class JobService:
             return False
 
         update_kwargs: dict = {"external_strums_attempted_at": utcnow()}
-        if force or song.external_strums_failed:
+        if effective_force or song.external_strums_failed:
             update_kwargs["external_strums_failed"] = False
         await self._song_dao.update_by_id(song.id, **update_kwargs)
 
@@ -729,29 +819,52 @@ class JobService:
     async def trigger_static_chords_if_missing(
         self, song_id: uuid.UUID, *, force: bool = False,
     ) -> bool:
-        """If static chord sheet is missing, enqueue background UG fetch."""
+        """If static chord sheet is missing or stale, enqueue UG fetch.
+
+        Existing files are now also re-validated against the song's current
+        artist/title; mismatched or legacy (no metadata) files are deleted
+        and re-fetched.
+        """
         song = await self._song_dao.get_by_id(song_id)
         if not song or not song.song_name or not song.artist:
             return False
 
+        invalidated = False
+
         if not force:
-            if (
-                song.static_chords_key
-                and self._storage.file_exists(song.static_chords_key)
-            ):
-                return False
-
-            candidate = f"{song.song_name}/static_chords.json"
-            if self._storage.file_exists(candidate):
+            current_key = song.static_chords_key
+            if current_key and self._storage.file_exists(current_key):
+                if self._sheet_match_is_valid(
+                    current_key, song.artist, song.title, "Static chords",
+                ):
+                    return False
+                self._delete_invalid_static_chords(current_key)
                 await self._song_dao.update_by_id(
-                    song.id, static_chords_key=candidate,
+                    song.id,
+                    static_chords_key=None,
+                    static_chords_failed=False,
+                    static_chords_attempted_at=None,
                 )
-                return False
+                invalidated = True
 
+            else:
+                candidate = f"{song.song_name}/static_chords.json"
+                if self._storage.file_exists(candidate):
+                    if self._sheet_match_is_valid(
+                        candidate, song.artist, song.title, "Static chords",
+                    ):
+                        await self._song_dao.update_by_id(
+                            song.id, static_chords_key=candidate,
+                        )
+                        return False
+                    self._delete_invalid_static_chords(candidate)
+                    invalidated = True
+
+        effective_force = force or invalidated
         if not self._should_enqueue_by_cooldown(
             song.static_chords_failed,
             song.static_chords_attempted_at,
-            force,
+            effective_force,
         ):
             return False
 
@@ -760,7 +873,7 @@ class JobService:
             return False
 
         update_kwargs: dict = {"static_chords_attempted_at": utcnow()}
-        if force or song.static_chords_failed:
+        if effective_force or song.static_chords_failed:
             update_kwargs["static_chords_failed"] = False
         await self._song_dao.update_by_id(song.id, **update_kwargs)
 
