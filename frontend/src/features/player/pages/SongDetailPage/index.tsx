@@ -36,7 +36,7 @@ import { SongContent } from './SongContent'
 import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
 import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
-import { buildSheetVersions } from '../../lib/sheet-versions'
+import { buildSheetVersions, lyricsModeForActiveVersion } from '../../lib/sheet-versions'
 
 function getAudioUrl(
   songId: string,
@@ -319,6 +319,19 @@ export function SongDetailPage() {
 
   const activeVersion = sheetVersions[selectedVersionIndex] ?? sheetVersions[0]
   const baseChords = useMemo(() => activeVersion?.chords ?? [], [activeVersion])
+
+  // Community/UG sheets only have estimated word timing, so per-word
+  // tracking looks broken. Auto-disable tracking when one is active and
+  // re-enable it when switching back to a detected/user sheet. Within a
+  // single selection the user can still toggle manually.
+  const setLyricsMode = usePlayerPrefsStore((s) => s.setLyricsMode)
+  const activeSheetSource = activeVersion?.lyrics_source ?? null
+  useEffect(() => {
+    setLyricsMode(lyricsModeForActiveVersion(activeVersion))
+    // Depend on lyrics_source — switching between two non-community sheets
+    // shouldn't clobber a manual highlight toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSheetSource, setLyricsMode])
 
   const activeChords = useMemo(() => {
     if (!detail) return []
