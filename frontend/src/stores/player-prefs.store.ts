@@ -13,7 +13,9 @@ export type LyricsSourceMode = 'auto' | 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'off
 export type StrumSource = 'songsterr' | 'ai'
 
 export interface SongOverrides {
-  /** Index into the simplified sheet source list shown in the player. */
+  /** Stable key for the selected sheet source shown in the player. */
+  selectedVersionKey?: string
+  /** Legacy index into the simplified sheet source list shown in the player. */
   selectedVersionIndex?: number
   /** Manual lyrics source override. Undefined means: follow the automatic default. */
   selectedLyricsSource?: LyricsSourceMode
@@ -252,7 +254,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
 
         return state as unknown as PlayerPrefsState
       },
-      version: 13,
+      version: 14,
     }
   )
 )

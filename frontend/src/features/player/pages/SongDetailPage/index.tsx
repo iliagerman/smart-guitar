@@ -36,7 +36,11 @@ import { SongContent } from './SongContent'
 import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
 import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
-import { buildSheetVersions, lyricsModeForActiveVersion } from '../../lib/sheet-versions'
+import {
+  buildSheetVersions,
+  getSheetVersionPreferenceKey,
+  lyricsModeForActiveVersion,
+} from '../../lib/sheet-versions'
 
 function getAudioUrl(
   songId: string,
@@ -122,7 +126,6 @@ export function SongDetailPage() {
   const userEmail = useAuthStore((s) => s.email)
 
   // Per-song values with global fallback
-  const selectedVersionIndex = songOverrides?.selectedVersionIndex ?? 0
   const selectedLyricsSource = songOverrides?.selectedLyricsSource ?? 'auto'
   const transposeSemitones = songOverrides?.transposeSemitones ?? globalTranspose
   const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? globalLyricsOffset
@@ -316,6 +319,17 @@ export function SongDetailPage() {
     () => (detail?.chord_options ?? []).filter((o) => o.is_variant),
     [detail?.chord_options],
   )
+
+  const selectedVersionKey = songOverrides?.selectedVersionKey
+  const selectedVersionIndex = useMemo(() => {
+    if (selectedVersionKey) {
+      const keyedIndex = sheetVersions.findIndex(
+        (option, index) => getSheetVersionPreferenceKey(option, index) === selectedVersionKey,
+      )
+      return keyedIndex === -1 ? 0 : keyedIndex
+    }
+    return songOverrides?.selectedVersionIndex ?? 0
+  }, [sheetVersions, songOverrides?.selectedVersionIndex, selectedVersionKey])
 
   const activeVersion = sheetVersions[selectedVersionIndex] ?? sheetVersions[0]
   const baseChords = useMemo(() => activeVersion?.chords ?? [], [activeVersion])
@@ -566,7 +580,14 @@ export function SongDetailPage() {
             onSeek={handleSeek}
             onToggleFavorite={handleToggleFavorite}
             onEnterEditMode={handleEnterEditMode}
-            onSetVersionIndex={(idx: number) => setSongOverride(songId!, 'selectedVersionIndex', idx)}
+            onSetVersionIndex={(idx: number) => {
+              setSongOverride(songId!, 'selectedVersionIndex', idx)
+              setSongOverride(
+                songId!,
+                'selectedVersionKey',
+                getSheetVersionPreferenceKey(sheetVersions[idx], idx),
+              )
+            }}
             onSetLyricsSource={(mode) => setSongOverride(songId!, 'selectedLyricsSource', mode)}
             onDeleteChords={() => {
               if (songId && confirm('Delete your chord version?')) {

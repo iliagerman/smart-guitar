@@ -25,7 +25,7 @@ export function scrollToCenter(
 export function isElementVisible(
   container: HTMLElement,
   target: HTMLElement,
-  margin = 40,
+  margin = 0,
 ): boolean {
   const cRect = container.getBoundingClientRect()
   const tRect = target.getBoundingClientRect()

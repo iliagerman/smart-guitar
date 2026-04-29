@@ -48,15 +48,19 @@ function computeLookAheadWord(
     return { lineIndex: activeLineIndex, wordIndex: activeWordIndex + remaining }
   }
   remaining -= wordsLeftInLine
+  let lastWordLocation: { lineIndex: number; wordIndex: number } | null = null
   for (let li = activeLineIndex + 1; li < lines.length; li++) {
     const lineWords = lines[li].words.length
     if (lineWords === 0) continue
+    lastWordLocation = { lineIndex: li, wordIndex: lineWords - 1 }
     if (remaining <= lineWords) {
       return { lineIndex: li, wordIndex: remaining - 1 }
     }
     remaining -= lineWords
   }
-  return null
+  // Fewer than LOOK_AHEAD_WORDS remain — anchor to the last word so proactive scrolling
+  // continues through the final stretch instead of silently stopping.
+  return lastWordLocation
 }
 
 

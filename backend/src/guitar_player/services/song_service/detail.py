@@ -79,13 +79,14 @@ async def build_song_detail(
         community_options,
     )
 
-    # Primary chords: prefer first community version, fall back to autochord
-    if community_options and community_options[0].chords:
-        primary_chords = community_options[0].chords
-        primary_source = "community"
-    elif autochord_chords:
+    # Primary chords: detected audio timing is the default. Community sheets are
+    # available as alternate sheet sources when the user explicitly chooses them.
+    if autochord_chords:
         primary_chords = autochord_chords
         primary_source = "autochord"
+    elif community_options and community_options[0].chords:
+        primary_chords = community_options[0].chords
+        primary_source = "community"
     else:
         primary_chords = []
         primary_source = None
@@ -601,7 +602,7 @@ async def _assemble_chord_options(
     lyrics_data: dict[str, Any],
     community_options: list[ChordOption],
 ) -> list[ChordOption]:
-    """Assemble chord options: community versions first, then detected, user versions last."""
+    """Assemble chord options with detected chords as the default source."""
     chord_options: list[ChordOption] = []
     user_versions, variant_options = _load_chord_variants_from_disk(storage, song.song_name)
 
@@ -629,11 +630,10 @@ async def _assemble_chord_options(
         or lyrics_data["quick_lyrics_source"]
     )
 
-    # Community chord sheets first (most accurate, from UG)
-    chord_options.extend(community_options)
-
-    # Autochord detected chords (with best available lyrics) as fallback
-    if autochord_chords and best_lyrics:
+    # Autochord detected chords first so every new song opens on the audio
+    # timeline. Lyrics are optional; without them the frontend still renders an
+    # instrumental chord timeline.
+    if autochord_chords:
         chord_options.append(
             ChordOption(
                 name="Detected",
@@ -644,6 +644,9 @@ async def _assemble_chord_options(
                 lyrics_source=best_lyrics_source,
             )
         )
+
+    # Community chord sheets remain selectable alternatives.
+    chord_options.extend(community_options)
 
     # User-created versions (auto-pair legacy saves that have no lyrics)
     for opt in user_versions:

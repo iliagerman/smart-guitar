@@ -3,13 +3,17 @@ import type { LyricsHighlightMode } from '@/stores/player-prefs.store'
 
 const USER_VERSION_KEY = 'chords_user'
 
+function getOptionDescription(option: ChordOption): string {
+  return option.description ?? ''
+}
+
 function isCommunityOption(option: ChordOption): boolean {
-  return option.description.startsWith('Community chord sheet')
+  return getOptionDescription(option).startsWith('Community chord sheet')
     || option.lyrics_source === 'community'
 }
 
 function isDetectedOption(option: ChordOption): boolean {
-  return option.description === 'Auto-detected chords'
+  return getOptionDescription(option) === 'Auto-detected chords'
 }
 
 function isUserOption(option: ChordOption): boolean {
@@ -54,6 +58,26 @@ export function buildSheetVersions(options: ChordOption[]): ChordOption[] {
   }
 
   return result
+}
+
+/** Returns a stable preference key for a sheet source selection. */
+export function getSheetVersionPreferenceKey(
+  option: ChordOption | undefined,
+  index: number,
+): string {
+  if (!option) {
+    return `sheet:${index}`
+  }
+  if (isDetectedOption(option)) {
+    return 'detected'
+  }
+  if (option.version_key) {
+    return option.version_key
+  }
+  if (isCommunityOption(option)) {
+    return `community:${option.name}:${option.description}:${option.capo}`
+  }
+  return `sheet:${option.name}:${option.description}:${option.capo}:${index}`
 }
 
 /** Returns a compact, user-facing label for a sheet source. */

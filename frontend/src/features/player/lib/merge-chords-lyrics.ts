@@ -40,27 +40,57 @@ function isValidLyricsSegment(segment: LyricsSegment): boolean {
 
 /**
  * Compute the character offset for a chord within a lyrics line.
- * Finds the word whose onset is nearest to the chord's start_time.
- * This handles inter-word gaps (where chord timing falls between words)
- * by snapping to the closest word rather than falling through to end-of-line.
+ * Chords in inter-word gaps attach to the upcoming word instead of the
+ * previous word, which keeps successive chord changes visually separated.
  */
+function getWordStartOffsets(words: LyricsWord[]): number[] {
+  let offset = 0
+  return words.map((word) => {
+    const current = offset
+    offset += word.word.length + 1
+    return current
+  })
+}
+
 function computeCharOffset(chord: ChordEntry, words: LyricsWord[]): number {
   if (words.length === 0) return 0
 
-  let bestOffset = 0
-  let bestDist = Infinity
-  let offset = 0
-
-  for (const word of words) {
-    const dist = Math.abs(chord.start_time - word.start)
-    if (dist < bestDist) {
-      bestDist = dist
-      bestOffset = offset
+  const offsets = getWordStartOffsets(words)
+  for (let i = 0; i < words.length; i++) {
+    if (chord.start_time <= words[i].end) {
+      return offsets[i]
     }
-    offset += word.word.length + 1
   }
 
-  return bestOffset
+  return offsets[offsets.length - 1]
+}
+
+function spreadCoincidentChords(chords: PositionedChord[], words: LyricsWord[]): PositionedChord[] {
+  if (chords.length < 2 || words.length < 2) return chords
+
+  const offsets = getWordStartOffsets(words)
+  const occupied = new Set(chords.map((chord) => chord.charOffset))
+  const sorted = [...chords].sort((a, b) => a.start_time - b.start_time)
+  const previousByOffset = new Map<number, PositionedChord>()
+
+  for (const chord of sorted) {
+    const previous = previousByOffset.get(chord.charOffset)
+    previousByOffset.set(chord.charOffset, chord)
+    if (!previous || chord.start_time - previous.start_time < 0.25) continue
+
+    const currentOffsetIndex = offsets.indexOf(chord.charOffset)
+    if (currentOffsetIndex === -1) continue
+
+    const nextOffset = offsets
+      .slice(currentOffsetIndex + 1)
+      .find((offset) => !occupied.has(offset))
+    if (nextOffset === undefined) continue
+
+    chord.charOffset = nextOffset
+    occupied.add(nextOffset)
+  }
+
+  return chords
 }
 
 function getLineDirection(segment: LyricsSegment, words: LyricsWord[]): TextDirection {
@@ -119,7 +149,7 @@ export function mergeChordLyrics(
     lines.push({
       text: segment.text,
       words,
-      chords: segmentChords,
+      chords: spreadCoincidentChords(segmentChords, words),
       startTime: segment.start,
       endTime: segment.end,
       segmentIndex: si,
@@ -191,6 +221,7 @@ export function mergeChordLyrics(
             })
           }
           targetLine.chords.sort((a, b) => a.start_time - b.start_time)
+          spreadCoincidentChords(targetLine.chords, targetLine.words)
           // IMPORTANT: do NOT expand lyric line time bounds based on chords.
           // Highlight sync should be driven strictly by lyrics.json timestamps.
         }
