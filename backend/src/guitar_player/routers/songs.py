@@ -489,13 +489,16 @@ async def get_recommendations(
 @router.get("/{song_id}", response_model=SongDetailResponse)
 async def get_song_detail(
     song_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
     job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
 ) -> SongDetailResponse:
     """Get full song detail, with best-effort background healing."""
-    await _run_background_healing(song_id, user, song_service, job_service, processing)
+    background_tasks.add_task(
+        _run_background_healing, song_id, user, song_service, job_service, processing
+    )
 
     try:
         await song_service.clear_download_if_audio_ready(song_id)
