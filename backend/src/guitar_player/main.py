@@ -15,7 +15,7 @@ from pythonjsonlogger.json import JsonFormatter
 from starlette.middleware.cors import CORSMiddleware
 
 from guitar_player.config import get_settings
-from guitar_player.middleware import RequestContextMiddleware
+from guitar_player.middleware import RequestContextMiddleware, SlowRequestMiddleware
 from guitar_player.request_context import RequestContextFilter
 from guitar_player.database import close_db, init_db
 from guitar_player.dao.job_dao import JobDAO
@@ -266,6 +266,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(SlowRequestMiddleware)
 
 
 # Exception handlers

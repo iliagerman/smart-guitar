@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 import uuid
 from typing import Any
 
@@ -46,38 +47,58 @@ async def build_song_detail(
     llm: LlmService,
 ) -> SongDetailResponse:
     """Build the full song detail response."""
+    t0 = time.perf_counter()
+
     song = await song_dao.get_by_id(song_id)
     if not song:
         raise NotFoundError("Song", str(song_id))
 
+    t1 = time.perf_counter()
     song_resp = SongResponse.model_validate(song)
     audio_url = _resolve_url(storage, song.audio_key)
     thumbnail_url = _resolve_url(storage, song.thumbnail_key)
     stems = _build_stems(storage, song)
     stem_types = _build_stem_types(stems)
+    t2 = time.perf_counter()
 
     chord_data = _load_chords(storage, song)
     autochord_chords = chord_data.get("autochord", [])
     recommended_capo = chord_data.get("recommended_capo")
     song_key = chord_data.get("song_key")
+    t3 = time.perf_counter()
 
     lyrics_data = await _load_all_lyrics(storage, song, song_dao)
     await _generate_corrected_lyrics_if_needed(storage, song, song_dao, llm, lyrics_data)
+    t4 = time.perf_counter()
 
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
+    t5 = time.perf_counter()
     songsterr_data = _load_songsterr_data(storage, song)
+    t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
     duration = float(song.duration_seconds or 240)
     community_options, community_tabs = _load_community_chord_options(
         storage, song, duration, lyrics_data,
     )
+    t7 = time.perf_counter()
 
     chord_options = await _assemble_chord_options(
         storage, song, song_id, chord_vote_dao,
         autochord_chords, recommended_capo, lyrics_data,
         community_options,
     )
+    t8 = time.perf_counter()
+
+    total = t8 - t0
+    if total >= 1.0:
+        logger.warning(
+            "build_song_detail slow %.2fs song=%s: db=%.2f s3_stems=%.2f chords=%.2f"
+            " lyrics=%.2f tabs=%.2f songsterr=%.2f community=%.2f assemble=%.2f",
+            total, song_id,
+            t1 - t0, t2 - t1, t3 - t2, t4 - t3,
+            t5 - t4, t6 - t5, t7 - t6, t8 - t7,
+        )
 
     # Primary chords: detected audio timing is the default. Community sheets are
     # available as alternate sheet sources when the user explicitly chooses them.
