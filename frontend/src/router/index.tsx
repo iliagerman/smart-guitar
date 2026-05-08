@@ -14,8 +14,7 @@ const ConfirmEmailPage = lazy(() => import('@/features/auth/pages/ConfirmEmailPa
 const CallbackPage = lazy(() => import('@/features/auth/pages/CallbackPage').then(m => ({ default: m.CallbackPage })))
 const ProfilePage = lazy(() => import('@/features/auth/pages/ProfilePage').then(m => ({ default: m.ProfilePage })))
 const AnalyticsDashboardPage = lazy(() => import('@/features/analytics/pages/AnalyticsDashboardPage').then(m => ({ default: m.AnalyticsDashboardPage })))
-const SearchPage = lazy(() => import('@/features/search/pages/SearchPage').then(m => ({ default: m.SearchPage })))
-const LibraryPage = lazy(() => import('@/features/library/pages/LibraryPage').then(m => ({ default: m.LibraryPage })))
+const SongsPage = lazy(() => import('@/features/songs/pages/SongsPage').then(m => ({ default: m.SongsPage })))
 const FavoritesPage = lazy(() => import('@/features/library/pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
 const SongDetailPage = lazy(() => import('@/features/player/pages/SongDetailPage').then(m => ({ default: m.SongDetailPage })))
 const SubscriptionSuccessPage = lazy(() => import('@/features/subscription/pages/SubscriptionSuccessPage').then(m => ({ default: m.SubscriptionSuccessPage })))
@@ -34,27 +33,20 @@ export const router = createBrowserRouter([
 
       // Protected + subscription-gated routes
       {
-        path: ROUTES.SEARCH,
-        element: (
-          <AuthGuard>
-            <SubscriptionGuard>
-              <SuspenseWrapper><SearchPage /></SuspenseWrapper>
-            </SubscriptionGuard>
-          </AuthGuard>
-        ),
-      },
-      {
-        path: ROUTES.LIBRARY,
+        path: ROUTES.SONGS,
         element: (
           <AuthGuard>
             <SubscriptionGuard>
               <OnboardingRedirect>
-                <SuspenseWrapper><LibraryPage /></SuspenseWrapper>
+                <SuspenseWrapper><SongsPage /></SuspenseWrapper>
               </OnboardingRedirect>
             </SubscriptionGuard>
           </AuthGuard>
         ),
       },
+      // Legacy redirects
+      { path: ROUTES.SEARCH, element: <Navigate to={ROUTES.SONGS} replace /> },
+      { path: ROUTES.LIBRARY, element: <Navigate to={ROUTES.SONGS} replace /> },
       {
         path: ROUTES.FAVORITES,
         element: (
@@ -122,7 +114,7 @@ export const router = createBrowserRouter([
       },
 
       // Default redirect
-      { path: '/', element: <Navigate to={ROUTES.LIBRARY} replace /> },
+      { path: '/', element: <Navigate to={ROUTES.SONGS} replace /> },
       { path: '*', element: <Navigate to={ROUTES.LOGIN} replace /> },
     ],
   },

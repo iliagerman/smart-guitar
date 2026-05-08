@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, Settings, BarChart3, Mic } from 'lucide-react'
+import { Music, Heart, Settings, BarChart3, Mic } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
 import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
@@ -7,8 +7,7 @@ import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
 export function BottomNav() {
   const canUseAnalytics = useIsAdmin()
   const navItems = [
-    { to: ROUTES.SEARCH, icon: Search, label: 'Search' },
-    { to: ROUTES.LIBRARY, icon: Library, label: 'Library' },
+    { to: ROUTES.SONGS, icon: Music, label: 'Songs' },
     { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites' },
     { to: ROUTES.TUNER, icon: Mic, label: 'Tuner' },
     ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics' }] : []),

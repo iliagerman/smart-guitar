@@ -3,6 +3,7 @@ export const ROUTES = {
   REGISTER: '/register',
   CONFIRM_EMAIL: '/confirm-email',
   CALLBACK: '/callback',
+  SONGS: '/songs',
   SEARCH: '/search',
   LIBRARY: '/library',
   FAVORITES: '/favorites',

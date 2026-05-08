@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Search, Library, Heart, Settings, BarChart3, Mic } from 'lucide-react'
+import { Music, Heart, Settings, BarChart3, Mic } from 'lucide-react'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
 import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
@@ -7,8 +7,7 @@ import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
 export function SidebarNav() {
     const canUseAnalytics = useIsAdmin()
     const navItems = [
-        { to: ROUTES.SEARCH, icon: Search, label: 'Search', testId: 'sidebar-search' },
-        { to: ROUTES.LIBRARY, icon: Library, label: 'Library', testId: 'sidebar-library' },
+        { to: ROUTES.SONGS, icon: Music, label: 'Songs', testId: 'sidebar-songs' },
         { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites', testId: 'sidebar-favorites' },
         { to: ROUTES.TUNER, icon: Mic, label: 'Tuner', testId: 'sidebar-tuner' },
         ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics', testId: 'sidebar-analytics' }] : []),
@@ -23,7 +22,7 @@ export function SidebarNav() {
             data-testid="sidebar-nav"
         >
             <div className="h-16 px-4 flex items-center border-b border-charcoal-800">
-                <NavLink to={ROUTES.LIBRARY} className="flex items-center gap-3 min-w-0">
+                <NavLink to={ROUTES.SONGS} className="flex items-center gap-3 min-w-0">
                     <video
                         src="/guitar.mp4"
                         autoPlay
