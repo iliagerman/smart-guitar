@@ -181,19 +181,21 @@ async def _do_lyrics(
     song_artist: str | None,
     job_id: uuid.UUID,
     settings,
+    fallback_input_key: str | None = None,
 ) -> None:
-    """Transcribe lyrics from the vocals stem (non-fatal)."""
+    """Transcribe lyrics from the vocals stem, or the full audio as fallback (non-fatal)."""
     vocals_stem_key = find_stem(storage, song_name, "vocals")
+    input_key = vocals_stem_key or fallback_input_key
     t0 = time.monotonic()
     try:
-        if not vocals_stem_key:
+        if not input_key:
             logger.warning(
-                "Skipping lyrics: vocals stem not found",
+                "Skipping lyrics: no audio source available",
                 extra={
                     "event_type": "subtask_skip",
                     "job_id": str(job_id),
                     "subtask": "lyrics",
-                    "reason": "vocals_stem_missing",
+                    "reason": "no_audio_source",
                 },
             )
             return
@@ -204,12 +206,13 @@ async def _do_lyrics(
                 "event_type": "subtask_start",
                 "job_id": str(job_id),
                 "subtask": "lyrics",
-                "input_key": vocals_stem_key,
+                "input_key": input_key,
+                "using_fallback": vocals_stem_key is None,
             },
         )
 
         await processing.transcribe_lyrics(
-            storage.resolve_service_path(vocals_stem_key),
+            storage.resolve_service_path(input_key),
             title=song_title,
             artist=song_artist,
             language=settings.openai.transcription_language,
@@ -568,6 +571,7 @@ async def process_job(job_id: uuid.UUID) -> None:
             return
 
         audio_path = storage.resolve_service_path(song.audio_key)
+        audio_key = song.audio_key
         song_name = song.song_name
         song_title = song.title
         song_artist = song.artist
@@ -586,16 +590,28 @@ async def process_job(job_id: uuid.UUID) -> None:
     # Idempotency: skip expensive work if core artifacts already exist.
     await set_progress(job_id, 10, "separating")
 
+    # Start lyrics immediately in parallel with stem separation.
+    # Uses vocals stem when available (better Whisper accuracy), falls back to
+    # the original audio so transcription overlaps with the ~2-minute demucs run.
+    early_lyrics_task = asyncio.create_task(
+        _do_lyrics(
+            processing, storage, song_name, song_title, song_artist,
+            job_id, settings, fallback_input_key=audio_key,
+        )
+    )
+
     sep_result, chords_result = await _run_separation_and_chords(
         processing, storage, audio_path, song_name, job_id,
         demucs_requested_outputs, job_start_time,
     )
     if sep_result is None:
+        early_lyrics_task.cancel()
+        await asyncio.gather(early_lyrics_task, return_exceptions=True)
         return  # Job was failed inside the helper.
 
-    # Run lyrics/merge/tabs in parallel (all non-fatal).
+    # Lyrics is already running; join it with merge/tabs/quick-lyrics.
     logger.info(
-        "Chords done, starting lyrics/merge in parallel",
+        "Stems+chords done, joining lyrics/merge in parallel",
         extra={
             "job_id": str(job_id),
             "stage": "transcribing",
@@ -606,18 +622,15 @@ async def process_job(job_id: uuid.UUID) -> None:
     )
     await set_progress(job_id, 78, "transcribing")
 
-    async def _all_subtasks() -> None:
+    async def _remaining_subtasks() -> None:
         await asyncio.gather(
-            _do_lyrics(
-                processing, storage, song_name, song_title, song_artist,
-                job_id, settings,
-            ),
+            early_lyrics_task,
             _do_merge(storage, song_name, job_id, settings),
             _do_tabs(processing, storage, song_name, job_id),
             _check_quick_lyrics(storage, song_name, song_id, job_id),
         )
 
-    gather_task = asyncio.create_task(_all_subtasks())
+    gather_task = asyncio.create_task(_remaining_subtasks())
     ltt_tick = asyncio.create_task(
         _tick_until_done(gather_task, start=79, end=89, stage="transcribing", job_id=job_id)
     )
