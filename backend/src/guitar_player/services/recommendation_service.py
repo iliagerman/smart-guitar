@@ -1,5 +1,6 @@
 """Song recommendation engine using weighted multi-factor scoring."""
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -151,11 +152,16 @@ class RecommendationService:
         phase1_scores.sort(key=lambda x: x[1], reverse=True)
         top_candidates = [c for c, _ in phase1_scores[:_PHASE2_ENRICHMENT_LIMIT]]
 
-        # Phase 2: enrich top candidates with storage metadata and re-score
-        seed_meta = self._load_metadata(seed)
+        # Phase 2: enrich top candidates with storage metadata and re-score.
+        # _load_metadata makes synchronous S3 calls, so run all concurrently in
+        # a thread pool to avoid blocking the event loop.
+        loop = asyncio.get_running_loop()
+        all_metas = await asyncio.gather(
+            *[loop.run_in_executor(None, self._load_metadata, s) for s in [seed, *top_candidates]]
+        )
+        seed_meta = all_metas[0]
         scored: list[tuple[SongRecord, float]] = []
-        for c in top_candidates:
-            c_meta = self._load_metadata(c)
+        for c, c_meta in zip(top_candidates, all_metas[1:]):
             score = self._compute_similarity(seed, seed_meta, c, c_meta, max_likes)
             scored.append((c, score))
         scored.sort(key=lambda x: x[1], reverse=True)
