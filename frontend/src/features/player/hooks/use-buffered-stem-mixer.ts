@@ -235,6 +235,18 @@ export function useBufferedStemMixer({
     selectionKeyRef.current = ''
   }, [])
 
+  const getRecordingTapNode = useCallback((ctx: AudioContext) => {
+    if (recordingTapRef.current?.context === ctx) {
+      return recordingTapRef.current
+    }
+
+    recordingTapRef.current?.disconnect()
+    const tap = ctx.createGain()
+    tap.gain.value = 1
+    recordingTapRef.current = tap
+    return tap
+  }, [])
+
   const startTimeLoop = useCallback(() => {
     const tick = () => {
       if (!isPlayingRef.current) return
@@ -308,12 +320,12 @@ export function useBufferedStemMixer({
       if (delta < 0.05) {
         const ctxState = audioContextRef.current?.state ?? 'none'
         const selection = [...activeStemsRef.current.keys()].join(', ')
-        onPlaybackError?.(
-          `[DEBUG-TEMP] buffered stem silent start | ctx=${ctxState} unlocked=${hasUnlockedAudioRef.current} stems=${activeStemsRef.current.size} sources=${sourceNodesRef.current.size} offset=${offset.toFixed(3)} current=${current.toFixed(3)} duration=${durationRef.current.toFixed(3)} selection=[${selection}]`,
+        console.warn(
+          `Buffered stem playback did not advance | ctx=${ctxState} unlocked=${hasUnlockedAudioRef.current} stems=${activeStemsRef.current.size} sources=${sourceNodesRef.current.size} offset=${offset.toFixed(3)} current=${current.toFixed(3)} duration=${durationRef.current.toFixed(3)} selection=[${selection}]`,
         )
       }
     }, 1200)
-  }, [ensureRunningAudioContext, getCurrentPosition, onPlaybackError, playbackRate, setCurrentTime, setPlaying, startTimeLoop, stopSources])
+  }, [ensureRunningAudioContext, getCurrentPosition, playbackRate, setCurrentTime, setPlaying, startTimeLoop, stopSources])
 
   const ensureStemBuffer = useCallback(async (url: string, signal: AbortSignal) => {
     const key = getAudioSourceKey(url)
@@ -404,12 +416,10 @@ export function useBufferedStemMixer({
       const ctx = getAudioContext()
       clearActiveStems()
 
-      // Create (or reuse) a recording tap node so the recorder can
-      // receive a clean digital copy of the stem mix.
-      if (!recordingTapRef.current) {
-        recordingTapRef.current = ctx.createGain()
-        recordingTapRef.current.gain.value = 1
-      }
+      // Create (or reuse) a recording tap node in the same AudioContext as
+      // the current mixer nodes. Web Audio forbids connecting nodes that
+      // belong to different contexts, which can happen after a context reset.
+      const recordingTap = getRecordingTapNode(ctx)
 
       const nextStems = new Map<string, LoadedStemBuffer>()
       const volumes = options.stemVolumes
@@ -417,7 +427,7 @@ export function useBufferedStemMixer({
         const gain = ctx.createGain()
         gain.gain.value = volumes?.[entry.name] ?? 1
         gain.connect(ctx.destination)
-        gain.connect(recordingTapRef.current)
+        gain.connect(recordingTap)
         nextStems.set(entry.name, {
           name: entry.name,
           key: entry.key,
@@ -449,15 +459,13 @@ export function useBufferedStemMixer({
       setDuration(0)
       setCurrentTime(0)
       setPlaying(false)
-      const selection = entries.map(([name]) => name).join(', ')
-      onPlaybackError?.(`[DEBUG-TEMP] buffered stem load failed for [${selection}] | ctx=${audioContextRef.current?.state ?? 'none'} | ${formatMixerError(error)}`)
       throw error
     } finally {
       if (loadRevisionRef.current === revision) {
         setIsLoading(false)
       }
     }
-  }, [clearActiveStems, ensureStemBuffer, getAudioContext, onPlaybackError, pausePlayback, setCurrentTime, setDuration, setPlaying, startPlaybackFrom])
+  }, [clearActiveStems, ensureStemBuffer, getAudioContext, getRecordingTapNode, pausePlayback, setCurrentTime, setDuration, setPlaying, startPlaybackFrom])
 
   const togglePlay = useCallback(async () => {
     if (activeStemsRef.current.size === 0 || isLoading) return
@@ -468,7 +476,7 @@ export function useBufferedStemMixer({
     try {
       await startPlaybackFrom(startOffsetRef.current)
     } catch (error) {
-      onPlaybackError?.(`[DEBUG-TEMP] buffered stem togglePlay failed | ctx=${audioContextRef.current?.state ?? 'none'} | ${formatMixerError(error)}`)
+      onPlaybackError?.(`Could not start stem playback: ${formatMixerError(error)}`)
       throw error
     }
   }, [isLoading, onPlaybackError, pausePlayback, startPlaybackFrom])
@@ -526,7 +534,7 @@ export function useBufferedStemMixer({
       const time = getCurrentPosition()
       void startPlaybackFrom(time).catch((error) => {
         setPlaying(false)
-        onPlaybackError?.(`[DEBUG-TEMP] buffered stem resume-after-visibility failed | ctx=${audioContextRef.current?.state ?? 'none'} | ${formatMixerError(error)}`)
+        onPlaybackError?.(`Could not resume stem playback: ${formatMixerError(error)}`)
       })
     }
 
@@ -546,6 +554,9 @@ export function useBufferedStemMixer({
       stopTimeLoop()
       stopSources()
       clearActiveStems()
+      recordingTapRef.current?.disconnect()
+      recordingTapRef.current = null
+      hasUnlockedAudioRef.current = false
       if (audioContextRef.current) {
         void audioContextRef.current.close()
         audioContextRef.current = null

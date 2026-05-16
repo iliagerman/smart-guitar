@@ -53,7 +53,7 @@ async function playAudio(
     await audio.play()
   } catch (error) {
     setPlaying(false)
-    onPlaybackError?.(`[DEBUG-TEMP] audio.play() failed (${context}): ${formatPlaybackError(error)} | ${getMediaErrorDetails(audio)}`)
+    onPlaybackError?.(`Could not start playback (${context}): ${formatPlaybackError(error)} | ${getMediaErrorDetails(audio)}`)
   }
 }
 
@@ -231,7 +231,7 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
       void playAudio(audio, setPlaying, onPlaybackError, 'source swap auto-play')
     }
     audio.onerror = () => {
-      onPlaybackError?.(`[DEBUG-TEMP] audio element error while loading source: ${getMediaErrorDetails(audio)} | src=${audio.currentSrc || url}`)
+      onPlaybackError?.(`Could not load audio source: ${getMediaErrorDetails(audio)} | src=${audio.currentSrc || url}`)
     }
 
     audio.src = url
@@ -249,7 +249,7 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
     destroySingleTrack()
     void loadBufferedStems(stemUrls, { shouldPlay, startTime: currentTime, stemVolumes }).catch((error) => {
       setPlaying(false)
-      onPlaybackError?.(`[DEBUG-TEMP] buffered stem load failed: ${formatPlaybackError(error)}`)
+      onPlaybackError?.(`Could not load stem audio: ${formatPlaybackError(error)}`)
     })
   }, [destroySingleTrack, loadBufferedStems, onPlaybackError, setPlaying])
 
@@ -261,7 +261,7 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
   const togglePlay = useCallback(() => {
     if (modeRef.current === 'multi') {
       void toggleBufferedStems().catch((error) => {
-        onPlaybackError?.(`[DEBUG-TEMP] multi-stem toggle from useAudioPlayer failed: ${formatPlaybackError(error)}`)
+        onPlaybackError?.(`Could not toggle stem playback: ${formatPlaybackError(error)}`)
       })
       return
     }
@@ -326,7 +326,7 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
 
   const prepareForPlaybackGesture = useCallback(() => {
     void primeAudioContext().catch((error) => {
-      onPlaybackError?.(`[DEBUG-TEMP] prepareForPlaybackGesture failed: ${formatPlaybackError(error)}`)
+      onPlaybackError?.(`Could not prepare audio playback: ${formatPlaybackError(error)}`)
     })
   }, [onPlaybackError, primeAudioContext])
 
