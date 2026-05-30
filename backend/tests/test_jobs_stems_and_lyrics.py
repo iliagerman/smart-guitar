@@ -184,3 +184,33 @@ async def test_job_processing_translates_stems_and_generates_lyrics(
                 pass
 
         await close_db()
+
+
+@pytest.mark.asyncio
+async def test_recognize_chords_accepts_slash_bass_field(settings, monkeypatch):
+    """recognize_chords must accept a ``bass`` key in the /recognize response.
+
+    Regression: the chords service Pydantic schema gained a slash-bass field, so
+    every chord in the response now serializes ``"bass"`` (null at recognition
+    time). The backend ChordInfo dataclass must accept it instead of raising
+    ``ChordInfo.__init__() got an unexpected keyword argument 'bass'`` — which
+    failed song processing at the chord-recognition step.
+    """
+    processing = ProcessingService(settings)
+
+    async def _fake_request(url, payload):
+        return {
+            "chords": [
+                {"start_time": 0.0, "end_time": 1.5, "chord": "C", "bass": "G"},
+                {"start_time": 1.5, "end_time": 3.0, "chord": "G", "bass": None},
+            ],
+            "output_path": "out/chords.json",
+        }
+
+    monkeypatch.setattr(processing, "_request", _fake_request)
+
+    result = await processing.recognize_chords("song.mp3")
+
+    assert len(result.chords) == 2
+    assert result.chords[0].bass == "G"
+    assert result.chords[1].bass is None

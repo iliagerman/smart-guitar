@@ -32,6 +32,10 @@ class ChordInfo:
     start_time: float
     end_time: float
     chord: str
+    # Slash bass note (e.g. "G" for C/G) from the chords service; None at
+    # recognition time and for root-position chords. Added later by /enhance
+    # and /detect-bass, which serialize it into the /recognize response too.
+    bass: str | None = None
 
 
 @dataclass
