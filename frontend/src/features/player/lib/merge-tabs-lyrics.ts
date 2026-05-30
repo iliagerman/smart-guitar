@@ -33,16 +33,17 @@ function computeCharOffset(
   if (words.length > 0) {
     let offset = 0
     for (const word of words) {
+      const wordLen = word.word.length
       if (note.start_time >= word.start && note.start_time < word.end) {
         const wordDuration = Math.max(0.001, word.end - word.start)
         const within = (note.start_time - word.start) / wordDuration
         const local = Math.max(
           0,
-          Math.min(word.word.length - 1, Math.floor(within * Math.max(1, word.word.length - 1)))
+          Math.min(wordLen - 1, Math.floor(within * Math.max(1, wordLen - 1)))
         )
         return offset + local
       }
-      offset += word.word.length + 1
+      offset += wordLen + 1
     }
     return offset
   }

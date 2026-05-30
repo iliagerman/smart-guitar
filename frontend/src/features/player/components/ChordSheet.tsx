@@ -5,7 +5,8 @@ import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { isElementVisible, scrollIntoContainerView } from '../lib/scroll-to-center'
 import { ChordSheetLine } from './ChordSheetLine'
-import { getChordColor, formatChordName } from '@/lib/chord-colors'
+import { ChordVoicingPopover } from './ChordVoicingPopover'
+import { getChordColor, formatChordWithBass } from '@/lib/chord-colors'
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -68,6 +69,7 @@ interface ChordLabelChord {
   chord: string
   start_time: number
   end_time: number
+  bass?: string | null
 }
 
 interface ChordLabelProps {
@@ -81,8 +83,13 @@ interface ChordLabelProps {
   onDelete?: () => void
   globalIndex?: number
   onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
+  onSeek?: (time: number) => void
 }
 
+// Leaf render component: the booleans are independent rendering states of a single chord
+// label (active / rtl / edit-mode / selected), not stackable variants, so compound
+// components would not simplify it.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 function ChordLabel({
   chord,
   isActive,
@@ -94,9 +101,14 @@ function ChordLabel({
   onDelete,
   globalIndex,
   onDragStart,
+  onSeek,
 }: ChordLabelProps) {
   const [isRenaming, setIsRenaming] = useState(false)
+  // Draft value for the rename input, seeded from the prop and reset whenever rename mode
+  // is entered; it intentionally diverges from chord.chord while the user is editing.
+  // oxlint-disable-next-line react-doctor/no-derived-useState
   const [renameValue, setRenameValue] = useState(chord.chord)
+  const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
 
   const handleDoubleClick = () => {
     if (!isEditMode || !onRename) return
@@ -124,54 +136,71 @@ function ChordLabel({
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameValue(e.target.value)}
         onBlur={commitRename}
         onKeyDown={handleKeyDown}
-        autoFocus
+        aria-label="Rename chord"
         className="w-16 rounded bg-charcoal-700 border border-flame-400 px-1 py-0.5 text-lg font-bold text-smoke-100 outline-none"
         data-testid="chord-rename-input"
       />
     )
   }
 
+  const chordButton = (
+    <button
+      type="button"
+      dir="ltr"
+      draggable={isEditMode}
+      onDragStart={onDragStart}
+      className={cn(
+        'inline-flex min-w-0 rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70',
+        isRtl ? 'justify-end text-right' : 'justify-start text-left',
+        isEditMode
+          ? cn(
+              'cursor-grab hover:bg-flame-400/10 border border-transparent',
+              isSelected && 'border-flame-400 bg-flame-400/10'
+            )
+          : 'cursor-pointer hover:bg-charcoal-950/25',
+        !isEditMode && isActive && 'chord-sheet-chord-active'
+      )}
+      style={{ unicodeBidi: 'isolate' }}
+      onClick={onClick}
+      onDoubleClick={handleDoubleClick}
+      aria-current={isActive ? 'true' : undefined}
+      data-chord-index={globalIndex}
+    >
+      <span
+        dir="ltr"
+        className={cn(getChordColor(chord.chord, 'dark'), 'font-bold text-xl md:text-2xl leading-none')}
+        style={{ unicodeBidi: 'isolate' }}
+      >
+        {formatChordWithBass(chord.chord, chord.bass, showBassNotes)}
+      </span>
+    </button>
+  )
+
+  // Playback: tapping a chord opens the "how to play it" voicing browser.
+  if (!isEditMode) {
+    return (
+      <ChordVoicingPopover
+        chordName={chord.chord}
+        onPlayFromHere={onSeek ? () => onSeek(chord.start_time) : undefined}
+      >
+        {chordButton}
+      </ChordVoicingPopover>
+    )
+  }
+
+  // Edit mode: keep select / rename / drag / delete semantics, no popover.
   return (
     <div className="group relative inline-flex">
-      <button
-        type="button"
-        dir="ltr"
-        draggable={isEditMode}
-        onDragStart={onDragStart}
-        className={cn(
-          'inline-flex min-w-0 rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70',
-          isRtl ? 'justify-end text-right' : 'justify-start text-left',
-          isEditMode
-            ? cn(
-                'cursor-grab hover:bg-flame-400/10 border border-transparent',
-                isSelected && 'border-flame-400 bg-flame-400/10'
-              )
-            : 'hover:bg-charcoal-950/25',
-          !isEditMode && isActive && 'chord-sheet-chord-active'
-        )}
-        style={{ unicodeBidi: 'isolate' }}
-        onClick={onClick}
-        onDoubleClick={handleDoubleClick}
-        aria-current={isActive ? 'true' : undefined}
-        data-chord-index={globalIndex}
-      >
-        <span
-          dir="ltr"
-          className={cn(getChordColor(chord.chord, 'dark'), 'font-bold text-xl md:text-2xl leading-none')}
-          style={{ unicodeBidi: 'isolate' }}
-        >
-          {formatChordName(chord.chord)}
-        </span>
-      </button>
-      {isEditMode && onDelete && (
+      {chordButton}
+      {onDelete && (
         <button
           type="button"
           onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
             e.stopPropagation()
             onDelete()
           }}
-          className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white"
+          className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center size-4 rounded-full bg-red-500 text-white"
           aria-label="Delete chord"
           data-testid="chord-delete-btn"
         >
@@ -200,6 +229,9 @@ function EditableWord({
   onSelect,
 }: EditableWordProps) {
   const [isEditing, setIsEditing] = useState(false)
+  // Draft value for the edit input, seeded from the prop and reset whenever editing is
+  // entered; it intentionally diverges from `word` while the user is editing.
+  // oxlint-disable-next-line react-doctor/no-derived-useState
   const [value, setValue] = useState(word)
 
   const handleDoubleClick = () => {
@@ -207,7 +239,7 @@ function EditableWord({
     setIsEditing(true)
   }
 
-  const handleClick = () => {
+  const selectWord = () => {
     onSelect?.(segmentIndex, wordIndex)
   }
 
@@ -231,7 +263,7 @@ function EditableWord({
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
         onBlur={commit}
         onKeyDown={handleKeyDown}
-        autoFocus
+        aria-label="Edit lyric word"
         className="w-20 rounded bg-charcoal-700 border border-flame-400 px-0.5 text-lg text-smoke-100 outline-none"
         data-testid="word-rename-input"
       />
@@ -239,13 +271,23 @@ function EditableWord({
   }
 
   return (
-    <span
+    // Inline clickable lyric word; a <button>'s inline-block box model would disrupt
+    // text flow/wrapping in the sheet, so role="button" with keyboard handling is intentional.
+    // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+    <span role="button"
+      tabIndex={0}
       className={cn(
         'cursor-text hover:bg-flame-400/10 rounded px-0.5 text-smoke-300',
         isSelected && 'ring-2 ring-sky-400 bg-sky-400/10',
       )}
-      onClick={handleClick}
+      onClick={selectWord}
       onDoubleClick={handleDoubleClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          selectWord()
+        }
+      }}
       title="Click to select timing · Double-click to edit text"
       data-testid={`word-edit-${segmentIndex}-${wordIndex}`}
     >
@@ -324,14 +366,14 @@ export function ChordSheet({
   useAutoScroll(scrollRef, !showHighlight || isEditMode)
 
   const handleChordClick = useCallback(
-    (time: number, globalIndex: number) => {
+    (_time: number, globalIndex: number) => {
+      // Playback: tapping opens the voicing popover, which owns "Play from here".
+      // Edit mode: tapping selects the chord for editing.
       if (isEditMode) {
         onChordSelect?.(globalIndex)
-      } else if (showHighlight) {
-        onSeek?.(time)
       }
     },
-    [isEditMode, showHighlight, onChordSelect, onSeek]
+    [isEditMode, onChordSelect]
   )
 
   const handleWordClick = useCallback(
@@ -373,18 +415,37 @@ export function ChordSheet({
 
   const lookAheadWord = computeLookAheadWord(lines, activeLineIndex, activeWordIndex)
 
-  // Build a global chord index map: for each line chord, find its index in the flat chords array
+  // Build a global chord index map: for each line chord, find its index in the flat chords array.
+  // We pre-build a Map<key, number[]> of flat-chord indices grouped by (start_time, chord) so
+  // the inner lookup is O(1) instead of O(n). Indices within each bucket are kept in ascending
+  // order and consumed left-to-right so that duplicate (start_time, chord) pairs are matched
+  // in the same sequential order as the original findIndex(i >= globalIdx) guard.
+  const chordKeyBuckets = new Map<string, number[]>()
+  for (let i = 0; i < chords.length; i++) {
+    const key = `${chords[i].start_time}_${chords[i].chord}`
+    const bucket = chordKeyBuckets.get(key)
+    if (bucket) {
+      bucket.push(i)
+    } else {
+      chordKeyBuckets.set(key, [i])
+    }
+  }
+  const bucketPointers = new Map<string, number>()
   const globalChordIndexMap = new Map<object, number>()
   let globalIdx = 0
   for (const line of lines) {
     for (const chord of line.chords) {
-      // Match by start_time since mergeChordLyrics creates new objects
-      const matchIdx = chords.findIndex(
-        (c, i) => i >= globalIdx && c.start_time === chord.start_time && c.chord === chord.chord
-      )
-      if (matchIdx !== -1) {
+      const key = `${chord.start_time}_${chord.chord}`
+      const bucket = chordKeyBuckets.get(key)
+      if (!bucket) continue
+      let ptr = bucketPointers.get(key) ?? 0
+      // Advance pointer past indices already consumed (< globalIdx)
+      while (ptr < bucket.length && bucket[ptr] < globalIdx) ptr++
+      if (ptr < bucket.length) {
+        const matchIdx = bucket[ptr]
         globalChordIndexMap.set(chord, matchIdx)
         globalIdx = matchIdx + 1
+        bucketPointers.set(key, ptr + 1)
       }
     }
   }
@@ -409,9 +470,10 @@ export function ChordSheet({
         onRename={isEditMode ? (name) => onChordRename?.(gci, name) : undefined}
         onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
         onDragStart={isEditMode ? handleDragStart(gci) : undefined}
+        onSeek={isEditMode ? undefined : onSeek}
       />
     ),
-    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart]
+    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart, onSeek]
   )
 
   const renderEditableWord = useCallback(
@@ -448,8 +510,10 @@ export function ChordSheet({
       data-testid="chord-sheet"
     >
       {lines.map((line, li) => (
-        <ChordSheetLine
-          key={li}
+        // Lines render in fixed positional order and never reorder; the index is also
+        // required as the lineIndex prop, so it is a stable key here.
+        // oxlint-disable-next-line react-doctor/no-array-index-key
+        <ChordSheetLine key={li}
           line={line}
           lineIndex={li}
           isActive={li === activeLineIndex}

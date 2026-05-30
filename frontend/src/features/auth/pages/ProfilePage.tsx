@@ -21,7 +21,7 @@ export function ProfilePage() {
       {/* User info */}
       <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600 mb-4">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-charcoal-700 flex items-center justify-center">
+          <div className="size-16 rounded-full bg-charcoal-700 flex items-center justify-center">
             <User size={32} className="text-smoke-400" />
           </div>
           <div>
@@ -43,6 +43,7 @@ export function ProfilePage() {
 
       {/* Sign out */}
       <button
+        type="button"
         onClick={handleLogout}
         className="w-full py-3 bg-charcoal-700 border border-charcoal-600 text-smoke-300 rounded-lg flex items-center justify-center gap-2 hover:border-red-500 hover:text-red-500 transition-colors"
         data-testid="logout-button"

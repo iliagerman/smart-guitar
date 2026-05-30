@@ -1,13 +1,15 @@
 import type { RecentEvent } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
 
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+})
+
 function formatDateTime(value: string) {
-    return new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    }).format(new Date(value))
+    return dateTimeFormatter.format(new Date(value))
 }
 
 interface RecentEventsTableProps {
@@ -37,13 +39,13 @@ export function RecentEventsTable({ events }: RecentEventsTableProps) {
                         <tbody>
                             {events.map((event) => (
                                 <tr key={event.id} className="border-b border-charcoal-900/80 align-top">
-                                    <td className="px-3 py-3 text-smoke-300">{formatDateTime(event.created_at)}</td>
-                                    <td className="px-3 py-3 text-smoke-200">
+                                    <td className="p-3 text-smoke-300">{formatDateTime(event.created_at)}</td>
+                                    <td className="p-3 text-smoke-200">
                                         <div className="font-medium">{event.event_type}</div>
                                         <div className="text-xs text-smoke-500">{event.event_category} · {event.event_source}</div>
                                     </td>
-                                    <td className="px-3 py-3 text-smoke-300">{event.user_email ?? '—'}</td>
-                                    <td className="px-3 py-3 text-smoke-300">{event.song_title ?? '—'}</td>
+                                    <td className="p-3 text-smoke-300">{event.user_email ?? '—'}</td>
+                                    <td className="p-3 text-smoke-300">{event.song_title ?? '—'}</td>
                                 </tr>
                             ))}
                         </tbody>

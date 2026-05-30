@@ -4,6 +4,9 @@ import { useSongDetail } from '../../hooks/use-song-detail'
 import { useAudioPlayer } from '../../hooks/use-audio-player'
 import { useWakeLock } from '../../hooks/use-wake-lock'
 import { useLyricsSync } from '../../hooks/use-lyrics-sync'
+import { useCountIn } from '../../hooks/use-count-in'
+import { CountInOverlay } from '../../components/CountInOverlay'
+import { resumeTickContext } from '../../lib/count-in-audio'
 import { normalizeWords } from '../../lib/normalize-words'
 import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../../lib/strum-pattern'
 import { OnboardingTour } from '../../components/OnboardingTour'
@@ -66,6 +69,10 @@ function formatStemList(stems: string[]): string {
  * Main page for viewing and playing a song. Composes the song header,
  * player controls, chord/lyrics/tabs content, and tutorial overlay.
  */
+// Composition root that coordinates tightly-coupled playback, editing and processing
+// state; the view is already decomposed into SongHeader / PlayerControls / SongContent /
+// TutorialOverlay, and further splitting the orchestration would scatter shared state.
+// oxlint-disable-next-line react-doctor/no-giant-component
 export function SongDetailPage() {
   const { songId } = useParams<{ songId: string }>()
   const lastPlaybackPopupRef = useRef<{ message: string; time: number } | null>(null)
@@ -89,7 +96,10 @@ export function SongDetailPage() {
     setStemVolume,
     isLoading: isLoadingStemAudio,
     prepareForPlaybackGesture,
+    primeForDelayedStart,
   } = useAudioPlayer({ onPlaybackError: showPlaybackErrorPopup })
+  const countInEnabled = usePlayerPrefsStore((s) => s.countInEnabled)
+  const { count: countInValue, isCounting, start: startCountIn, cancel: cancelCountIn } = useCountIn()
   const hasRecordedPlayRef = useRef(false)
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
@@ -136,8 +146,14 @@ export function SongDetailPage() {
   const setGlobalLyricsOffset = usePlayerPrefsStore((s) => s.setLyricsOffsetMs)
   const setGlobalStrumSource = usePlayerPrefsStore((s) => s.setStrumSource)
 
+  // Mirror the current song's effective settings into the shared player store so
+  // cross-cutting consumers (transport, chord sheet) read the right values. Writing to a
+  // store is a side effect and cannot happen during render, so an effect is required.
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect
   useEffect(() => { setGlobalTranspose(transposeSemitones) }, [transposeSemitones, setGlobalTranspose])
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect
   useEffect(() => { setGlobalLyricsOffset(lyricsOffsetMs) }, [lyricsOffsetMs, setGlobalLyricsOffset])
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect
   useEffect(() => { setGlobalStrumSource(strumSource) }, [strumSource, setGlobalStrumSource])
 
   const [showTutorial, setShowTutorial] = useState(false)
@@ -185,13 +201,19 @@ export function SongDetailPage() {
     }
   }, [songId, setCurrentSong])
 
+  // Abort any in-progress count-in when navigating to a different song so a pending
+  // countdown can't start playback on the newly loaded track.
+  useEffect(() => {
+    cancelCountIn()
+  }, [songId, cancelCountIn])
+
   // Default all available stems to active once stems become processed.
   // Users adjust per-stem volume in the mixer; there's no on/off selection.
   useEffect(() => {
     if (!detail) return
-    const availableStems = detail.stem_types
-      .map(({ name }) => name)
-      .filter((name) => !!detail.stems[name])
+    const availableStems = detail.stem_types.flatMap(({ name }) =>
+      detail.stems[name] ? [name] : [],
+    )
     if (availableStems.length === 0) {
       if (!isFullSong) selectFullSong()
       return
@@ -282,10 +304,10 @@ export function SongDetailPage() {
     }
   }, [detail, isFullSong, activeStems, setActiveStems, selectFullSong])
 
-  const handleTogglePlay = useCallback(() => {
-    if (isLoadingStemAudio || isWaitingForSelectedStems) return
-    prepareForPlaybackGesture()
-    if (songId && !isPlaying && !hasRecordedPlayRef.current) {
+  const beginPlayback = useCallback(() => {
+    // Record the play only when audio actually starts (after any count-in), so a
+    // cancelled count-in is not counted as a play.
+    if (songId && !hasRecordedPlayRef.current) {
       hasRecordedPlayRef.current = true
       trackCustomEvent('PlaySong', { song_id: songId })
       void songsApi.recordPlay(songId).catch(() => {
@@ -293,7 +315,42 @@ export function SongDetailPage() {
       })
     }
     togglePlay()
-  }, [isLoadingStemAudio, isPlaying, isWaitingForSelectedStems, prepareForPlaybackGesture, songId, togglePlay])
+  }, [songId, togglePlay])
+
+  const handleTogglePlay = useCallback(() => {
+    if (isLoadingStemAudio || isWaitingForSelectedStems) return
+    // A second press while counting in aborts the count-in instead of stacking another.
+    if (isCounting) {
+      cancelCountIn()
+      return
+    }
+    // Pausing is always immediate — the count-in only precedes starting playback.
+    if (isPlaying) {
+      togglePlay()
+      return
+    }
+    prepareForPlaybackGesture()
+    if (countInEnabled) {
+      void resumeTickContext()
+      // Unlock the element within this gesture so the delayed start is allowed on mobile.
+      primeForDelayedStart()
+      startCountIn(beginPlayback)
+      return
+    }
+    beginPlayback()
+  }, [
+    isLoadingStemAudio,
+    isWaitingForSelectedStems,
+    isCounting,
+    cancelCountIn,
+    isPlaying,
+    prepareForPlaybackGesture,
+    primeForDelayedStart,
+    countInEnabled,
+    startCountIn,
+    beginPlayback,
+    togglePlay,
+  ])
 
   const handleSeek = useCallback((time: number) => {
     if (isLoadingStemAudio || isWaitingForSelectedStems) return
@@ -345,7 +402,7 @@ export function SongDetailPage() {
     // Depend on lyrics_source — switching between two non-community sheets
     // shouldn't clobber a manual highlight toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSheetSource, setLyricsMode])
+  }, [activeSheetSource, setLyricsMode]) // oxlint-disable-line react-doctor/exhaustive-deps
 
   const activeChords = useMemo(() => {
     if (!detail) return []
@@ -361,6 +418,9 @@ export function SongDetailPage() {
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
     let chords = activeChords
+    // Beginner/capo sheets re-spell chords, so any detected slash bass no longer
+    // applies — drop it there. Slash bass is only meaningful on the detected sheet.
+    const simplified = chordDisplayMode === 'beginner' || (chordDisplayMode === 'capo' && chordCapoFret > 0)
     if (chordDisplayMode === 'beginner') {
       chords = simplifyChords(chords)
     } else if (chordDisplayMode === 'capo' && chordCapoFret > 0) {
@@ -369,12 +429,17 @@ export function SongDetailPage() {
     return chords.map((c) => ({
       ...c,
       chord: transposeChordLabel(c.chord, transposeSemitones, { preferSharps: true }),
+      // Transpose the slash bass by the same amount so e.g. C/G -> D/A at +2.
+      bass:
+        simplified || !c.bass
+          ? null
+          : transposeChordLabel(c.bass, transposeSemitones, { preferSharps: true }),
     }))
   }, [activeChords, transposeSemitones, chordDisplayMode, chordCapoFret])
 
   const chordNamesForMap = useMemo(() => {
     const source = isEditMode ? editingChords : displayChords
-    return source.map((c) => c.chord).filter(Boolean)
+    return source.flatMap((c) => (c.chord ? [c.chord] : []))
   }, [isEditMode, editingChords, displayChords])
 
   const representativeStrumPattern = useMemo(() => {
@@ -523,6 +588,7 @@ export function SongDetailPage() {
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden pb-16 lg:pb-0" data-testid="song-detail-page">
+      <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div
@@ -533,7 +599,7 @@ export function SongDetailPage() {
       </div>
 
       {/* Fixed top section: song header + player controls */}
-      <div className="relative z-30 shrink-0 bg-black border-b border-charcoal-800/50">
+      <div className="relative z-30 shrink-0 bg-charcoal-950 border-b border-charcoal-800/50">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
             className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-2xl scale-125"

@@ -23,6 +23,7 @@ export function StringSelector({
       <div className="flex gap-1.5 justify-center">
         {/* Auto button */}
         <button
+          type="button"
           onClick={() => onSelect(null)}
           className={cn(
             'px-3 py-2 rounded-xl text-sm font-semibold border transition-colors',
@@ -44,6 +45,7 @@ export function StringSelector({
 
           return (
             <button
+              type="button"
               key={str.stringNumber}
               onClick={() => onSelect(str)}
               className={cn(
@@ -70,7 +72,7 @@ export function StringSelector({
       {/* Target indicator */}
       {highlightedString && (
         <p className="text-center text-xs text-smoke-600">
-          {highlightedString.name} — {highlightedString.frequency} Hz
+          {highlightedString.name}: {highlightedString.frequency} Hz
         </p>
       )}
     </div>

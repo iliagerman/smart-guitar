@@ -17,4 +17,14 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   }
+
+  runtime_observer_env = {
+    RUNTIME_OBSERVER_ENABLED      = "true"
+    RUNTIME_OBSERVER_ENDPOINT     = var.runtime_observer_endpoint
+    RUNTIME_OBSERVER_PROJECT_NAME = var.runtime_observer_project_name
+    RUNTIME_OBSERVER_API_KEY      = var.runtime_observer_api_key
+    RUNTIME_OBSERVER_CAPTURE_MODE = "prod"
+    RUNTIME_OBSERVER_ENVIRONMENT  = var.environment == "prod" ? "production" : "development"
+    RUNTIME_OBSERVER_LOG_LEVELS   = "WARNING,ERROR,CRITICAL"
+  }
 }

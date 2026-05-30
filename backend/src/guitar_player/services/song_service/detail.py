@@ -1,6 +1,5 @@
 """Song detail assembly -- builds the full SongDetailResponse."""
 
-import asyncio
 import logging
 import time
 import uuid
@@ -24,8 +23,6 @@ from guitar_player.schemas.song import (
     StrumEvent,
     TabNote,
 )
-from guitar_player.services.llm_service import LlmService
-from guitar_player.services.lyrics_correction import merge_lyrics_with_llm
 from guitar_player.storage import StorageBackend
 
 from .helpers import (
@@ -44,7 +41,6 @@ async def build_song_detail(
     song_dao: SongDAO,
     chord_vote_dao: ChordVoteDAO,
     storage: StorageBackend,
-    llm: LlmService,
 ) -> SongDetailResponse:
     """Build the full song detail response."""
     t0 = time.perf_counter()
@@ -68,7 +64,9 @@ async def build_song_detail(
     t3 = time.perf_counter()
 
     lyrics_data = await _load_all_lyrics(storage, song, song_dao)
-    await _generate_corrected_lyrics_if_needed(storage, song, song_dao, llm, lyrics_data)
+    # ver3 (corrected) lyrics are generated in background processing
+    # (ensure_corrected_lyrics), never synchronously here — a synchronous LLM
+    # merge in this request path caused intermittent 10s song-load timeouts.
     t4 = time.perf_counter()
 
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
@@ -306,53 +304,6 @@ async def _load_corrected_lyrics_key(
             )
         except Exception as e:
             logger.warning("Failed to read corrected lyrics for %s: %s", song.song_name, e)
-
-
-async def _generate_corrected_lyrics_if_needed(
-    storage: StorageBackend,
-    song: SongRecord,
-    song_dao: SongDAO,
-    llm: LlmService,
-    lyrics_data: dict[str, Any],
-) -> None:
-    """Generate ver3 corrected lyrics if both ver1 and ver2 exist but ver3 does not."""
-    corrected_key = lyrics_data["corrected_key"]
-    should_generate = (
-        song.song_name
-        and lyrics_data["lyrics_payload"] is not None
-        and lyrics_data["quick_lyrics_payload"] is not None
-        and not (corrected_key and storage.file_exists(corrected_key))
-    )
-    if not should_generate:
-        return
-
-    corrected_candidate = f"{song.song_name}/lyrics_corrected.json"
-    try:
-        corrected_payload, diagnostics = await asyncio.to_thread(
-            merge_lyrics_with_llm,
-            lyrics_data["quick_lyrics_payload"],
-            lyrics_data["lyrics_payload"],
-            llm,
-        )
-        storage.write_json(corrected_candidate, corrected_payload)
-        await song_dao.update_by_id(song.id, lyrics_corrected_key=corrected_candidate)
-
-        corrected_lyrics, corrected_source, _ = parse_lyrics_payload(corrected_payload)
-        lyrics_data["corrected_lyrics"] = corrected_lyrics
-        lyrics_data["corrected_lyrics_source"] = corrected_source
-        lyrics_data["corrected_key"] = corrected_candidate
-
-        logger.info(
-            "Generated lyrics ver3 for %s (%s/%s aligned words across %s groups)",
-            song.song_name,
-            diagnostics.aligned_words,
-            diagnostics.total_words,
-            diagnostics.mapping_groups,
-        )
-    except Exception:
-        logger.warning(
-            "Failed to generate lyrics ver3 for %s", song.song_name, exc_info=True,
-        )
 
 
 async def _load_tabs_and_strums(

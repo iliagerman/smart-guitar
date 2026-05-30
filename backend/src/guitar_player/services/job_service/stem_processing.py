@@ -454,7 +454,13 @@ async def _persist_results(
     storage,
 ) -> None:
     """Persist song stem keys + chords key and mark job completed."""
-    from .lyrics_chords import cleanup_lyrics_preamble
+    from .lyrics_chords import cleanup_lyrics_preamble, ensure_corrected_lyrics
+
+    # Generate ver3 (corrected) lyrics before marking the job complete, so it's
+    # present the moment the song's active job clears. Doing it here (orchestrator
+    # context) keeps the LLM merge off the API request path. Runs before the DB
+    # session opens so the merge doesn't hold a connection.
+    await ensure_corrected_lyrics(storage, song_name)
 
     async with safe_session() as session:
         job_dao = JobDAO(session)
@@ -497,6 +503,11 @@ async def _persist_results(
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         if storage.file_exists(lyrics_quick_key):
             song_changes["lyrics_quick_key"] = lyrics_quick_key
+
+        lyrics_corrected_key = f"{song_name}/lyrics_corrected.json"
+        if storage.file_exists(lyrics_corrected_key):
+            song_changes["lyrics_corrected_key"] = lyrics_corrected_key
+            song_changes["lyrics_corrected"] = True
 
         tabs_key = f"{song_name}/tabs.json"
         if storage.file_exists(tabs_key):
@@ -785,6 +796,23 @@ async def _run_separation_and_chords(
     except Exception as e:
         await fail_job(job_id, str(e))
         return None, None
+
+    # Annotate chords with slash bass notes from the separated bass stem (both
+    # are now available). Non-fatal: chords stay usable without bass annotations.
+    try:
+        bass_key = find_stem(storage, song_name, "bass")
+        chords_key = f"{song_name}/chords.json"
+        if bass_key and storage.file_exists(chords_key):
+            await processing.detect_bass(bass_key, chords_key)
+            logger.info(
+                "Slash bass annotation done",
+                extra={"job_id": str(job_id), "event_type": "detect_bass_done"},
+            )
+    except Exception as e:
+        logger.warning(
+            "Slash bass annotation failed (non-fatal): %s", e,
+            extra={"job_id": str(job_id), "event_type": "detect_bass_failed"},
+        )
 
     return separation_result, chords_result
 

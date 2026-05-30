@@ -18,8 +18,10 @@ function ToggleRow({ label, description, value, onChange, testId }: ToggleRowPro
         <p className="text-smoke-500 text-xs">{description}</p>
       </div>
       <button
+        type="button"
         role="switch"
         aria-checked={value}
+        aria-label={label}
         onClick={() => onChange(!value)}
         className={cn(
           'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
@@ -67,6 +69,7 @@ function GainSlider({ label, value, min, max, step, onChange, testId }: GainSlid
         min={min}
         max={max}
         step={step}
+        aria-label={label}
         value={value}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(Number(e.target.value))}
         className="w-full accent-flame-500"
@@ -120,6 +123,7 @@ export function RecordingSettingsSection() {
           </div>
           <div className="flex rounded-lg border border-charcoal-600 overflow-hidden">
             <button
+              type="button"
               onClick={() => setRecordVideo(false)}
               className={cn(
                 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',
@@ -134,6 +138,7 @@ export function RecordingSettingsSection() {
               Audio
             </button>
             <button
+              type="button"
               onClick={() => setRecordVideo(true)}
               className={cn(
                 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',

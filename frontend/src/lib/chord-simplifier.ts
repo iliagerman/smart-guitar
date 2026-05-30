@@ -19,7 +19,7 @@ const OPEN_MINOR_MAP: Record<string, string> = {
  * Strip chord extensions (7, 9, sus, etc.) to basic major or minor.
  * "Cmaj7" -> "C", "Dm7" -> "Dm", "Gsus4" -> "G", "Bdim" -> "Bm"
  */
-export function simplifyToTriad(chord: string): string {
+function simplifyToTriad(chord: string): string {
   const formatted = formatChordDisplayName(chord, { preferSharps: true })
   if (!formatted || formatted === 'N') return formatted
 
@@ -35,7 +35,7 @@ export function simplifyToTriad(chord: string): string {
 /**
  * Map any chord to the nearest beginner-friendly open chord.
  */
-export function toOpenChord(chord: string): string {
+function toOpenChord(chord: string): string {
   const triad = simplifyToTriad(chord)
   if (!triad || triad === 'N') return triad
 
@@ -51,7 +51,7 @@ export function toOpenChord(chord: string): string {
 /**
  * Count how many of the given chord names are in the open chord set.
  */
-export function scoreOpenChords(chords: string[]): number {
+function scoreOpenChords(chords: string[]): number {
   return chords.filter((c) => OPEN_CHORDS.has(simplifyToTriad(c))).length
 }
 

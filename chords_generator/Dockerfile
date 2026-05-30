@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vamp-plugin-sdk \
     libsndfile1 \
     ffmpeg \
+    git \
     libvamp-hostsdk3v5 \
     g++ \
     && rm -rf /var/lib/apt/lists/*

@@ -23,6 +23,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-8">
             <p className="text-smoke-300 text-lg">Something went wrong</p>
             <button
+              type="button"
               onClick={() => this.setState({ hasError: false })}
               className="px-4 py-2 bg-flame-400 text-charcoal-950 rounded-lg font-semibold hover:bg-flame-500 transition-colors"
               data-testid="error-boundary-retry-button"

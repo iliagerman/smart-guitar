@@ -302,6 +302,9 @@ interface WordsWithChordsProps {
   }) => React.ReactNode
 }
 
+// Leaf render component: the booleans are independent rendering states of a line
+// (active / highlight / edit-mode / rtl), not stackable variants.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 function WordsWithChords({
   line,
   lineIndex,
@@ -333,8 +336,10 @@ function WordsWithChords({
         const isLookAheadWord = lookAheadWord?.lineIndex === lineIndex && lookAheadWord?.wordIndex === wi
 
         return (
-          <WordColumn
-            key={wi}
+          // Words render in fixed positional order and never reorder; the index is also
+          // required as the wordIndex prop, so it is a stable key here.
+          // oxlint-disable-next-line react-doctor/no-array-index-key
+          <WordColumn key={wi}
             word={word}
             wordIndex={wi}
             wordChords={wordChords}
@@ -399,6 +404,9 @@ interface WordColumnProps {
   }) => React.ReactNode
 }
 
+// Leaf render component: the booleans are independent rendering states of a word column
+// (active-word / look-ahead / active-line / edit-mode / rtl / highlight), not variants.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 function WordColumn({
   word,
   wordIndex,
@@ -429,13 +437,29 @@ function WordColumn({
       className="inline-flex flex-col align-top gap-1 px-1 pb-1"
       style={{ minWidth: `${reservedWidthCh}ch` }}
     >
+      {/* Click-to-add-chord is an edit-mode-only affordance; role, tabIndex, keyboard and
+          click handlers are all gated together on isEditMode, so when this is interactive it
+          always carries role="button". The conditional role is intentional. */}
+      {/* oxlint-disable-next-line react-doctor/no-static-element-interactions */}
       <div
         className={cn(
           'min-h-7 flex flex-wrap gap-1',
           isRtl ? 'justify-end' : 'justify-start',
           isEditMode && wordChords.length === 0 && 'cursor-pointer hover:bg-flame-400/5 rounded',
         )}
+        role={isEditMode && wordChords.length === 0 ? 'button' : undefined}
+        tabIndex={isEditMode && wordChords.length === 0 ? 0 : undefined}
         onClick={isEditMode && wordChords.length === 0 ? () => onWordClick(word.start) : undefined}
+        onKeyDown={
+          isEditMode && wordChords.length === 0
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onWordClick(word.start)
+                }
+              }
+            : undefined
+        }
         onDragOver={isEditMode ? onWordDragOver : undefined}
         onDrop={isEditMode ? onWordDrop(word.start) : undefined}
         title={isEditMode && wordChords.length === 0 ? `Click to add chord at ${word.start.toFixed(2)}s` : undefined}
@@ -449,6 +473,10 @@ function WordColumn({
 
       {isEditMode && onWordRename && renderEditableWord ? (
         <span className="rounded px-0.5">
+          {/* renderEditableWord is a render prop injected by the parent, which owns the
+              concrete EditableWord component and its edit-handler closures; it is not an
+              inline component definition. */}
+          {/* oxlint-disable-next-line react-doctor/no-render-in-render */}
           {renderEditableWord({
             word: word.word,
             segmentIndex,
@@ -456,7 +484,11 @@ function WordColumn({
           })}
         </span>
       ) : (
-        <span
+        // Inline clickable lyric text; a <button>'s inline-block box model would disrupt
+        // text flow/wrapping in the sheet, so role="button" with keyboard handling is intentional.
+        // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+        <span role="button"
+          tabIndex={0}
           className={cn(
             'cursor-pointer rounded px-0.5',
             isActiveWord
@@ -466,6 +498,12 @@ function WordColumn({
                 : 'hover:text-smoke-300'
           )}
           onClick={() => onWordClick(word.start)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onWordClick(word.start)
+            }
+          }}
           title={`${word.start.toFixed(2)}s \u2013 ${word.end.toFixed(2)}s`}
         >
           {word.word}
@@ -493,6 +531,9 @@ interface ChordsOnlyLineProps {
   }) => React.ReactNode
 }
 
+// Leaf render component: the booleans are independent rendering states of a chords-only
+// line (active / highlight / edit-mode / rtl), not stackable variants.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 function ChordsOnlyLine({
   line,
   isActive,
@@ -513,12 +554,22 @@ function ChordsOnlyLine({
           return renderChordLabel({ chord, ci, gci, isChordActive, isRtl })
         })}
       </div>
-      <span
+      {/* Inline clickable line text; a <button>'s inline-block box model would disrupt
+          text flow/wrapping in the sheet, so role="button" with keyboard handling is intentional. */}
+      {/* oxlint-disable-next-line react-doctor/prefer-tag-over-role */}
+      <span role="button"
+        tabIndex={0}
         className={cn(
           'cursor-pointer',
           !isEditMode && isActive && showHighlight ? 'text-smoke-100' : ''
         )}
         onClick={() => onWordClick(line.startTime)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onWordClick(line.startTime)
+          }
+        }}
       >
         {line.text}
       </span>

@@ -65,6 +65,7 @@ export function ShareDialog({ blob, filename, open, onOpenChange }: ShareDialogP
 
           <div className="flex flex-col gap-2 p-4">
             <button
+              type="button"
               onClick={handleShare}
               className={cn(
                 'flex items-center gap-3 w-full rounded-lg px-4 py-3',
@@ -79,6 +80,7 @@ export function ShareDialog({ blob, filename, open, onOpenChange }: ShareDialogP
             </button>
 
             <button
+              type="button"
               onClick={handleDownload}
               className={cn(
                 'flex items-center gap-3 w-full rounded-lg px-4 py-3',

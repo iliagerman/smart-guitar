@@ -26,6 +26,7 @@ from lyrics_generator.onset_aligner import (
     load_audio,
     refine_segments_with_onsets,
 )
+from lyrics_generator.observability import instrument_runtime_observer
 from lyrics_generator.openai_transcriber import transcribe_openai, write_lyrics_json
 from lyrics_generator.schemas import (
     FetchAndAlignRequest,
@@ -34,7 +35,6 @@ from lyrics_generator.schemas import (
     SegmentInfo,
     TranscribeRequest,
     TranscribeResponse,
-    WordInfo,
     WordTimestamp,
 )
 from lyrics_generator.request_context import RequestContextFilter, RequestContextMiddleware
@@ -93,6 +93,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Lyrics Generator API", lifespan=lifespan)
+instrument_runtime_observer(app, service_name="lyrics-generator")
 app.add_middleware(RequestContextMiddleware)
 
 
@@ -303,7 +304,7 @@ async def _produce_fast_lyrics(
             del audio
             source = f"{src}_quick_synced"
         elif lyrics_result.plain_lyrics:
-            lines = [l.strip() for l in lyrics_result.plain_lyrics.splitlines() if l.strip()]
+            lines = [line.strip() for line in lyrics_result.plain_lyrics.splitlines() if line.strip()]
             if not lines:
                 del audio
                 logger.info("Fast lyrics: empty plain lyrics for job %s", job_id)

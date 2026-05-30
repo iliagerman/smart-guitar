@@ -17,13 +17,14 @@ export function UserFilterSelect({ emails }: UserFilterSelectProps) {
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
                     placeholder="All users"
+                    aria-label="User filter"
                     className="rounded-lg border border-charcoal-700 bg-charcoal-950 px-3 py-2 text-sm text-smoke-100 outline-none transition-colors focus:border-flame-400/40"
                     data-testid="user-filter-select-input"
                 />
             </label>
             <datalist id="analytics-user-emails">
                 {emails.map((email) => (
-                    <option key={email} value={email} />
+                    <option key={email} value={email}>{email}</option>
                 ))}
             </datalist>
         </div>

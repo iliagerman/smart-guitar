@@ -11,6 +11,7 @@ export function TunerControls({ isListening, permissionDenied, onToggle }: Tuner
   return (
     <div className="flex flex-col items-center gap-3">
       <button
+        type="button"
         onClick={onToggle}
         className={cn(
           'w-16 h-16 rounded-full flex items-center justify-center transition-all',

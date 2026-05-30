@@ -29,8 +29,9 @@ export function SidebarNav() {
                         loop
                         muted
                         playsInline
+                        tabIndex={-1}
                         aria-hidden="true"
-                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                            className="size-8 rounded-full object-cover shrink-0"
                     />
                     <span className="text-2xl font-display tracking-wide text-smoke-100 truncate">
                         SMART GUITAR

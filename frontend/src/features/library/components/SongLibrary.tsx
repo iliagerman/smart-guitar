@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSongs } from '../hooks/use-songs'
 import { SongCard } from './SongCard'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination } from '@/components/shared/Pagination'
+import { getScrollableParent } from '@/lib/scroll'
 import { Music, Search } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -18,7 +19,15 @@ export function SongLibrary({ query }: SongLibraryProps) {
 
 function SongLibraryInner({ query }: SongLibraryProps) {
   const [offset, setOffset] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
   const { data, isLoading } = useSongs(query, offset, PAGE_SIZE)
+
+  const handlePageChange = (newOffset: number) => {
+    setOffset(newOffset)
+    // Reset the scroll position so a new page starts from the top instead of
+    // wherever the previous page was scrolled to.
+    getScrollableParent(rootRef.current)?.scrollTo({ top: 0 })
+  }
 
   if (isLoading && !data) {
     return (
@@ -44,13 +53,13 @@ function SongLibraryInner({ query }: SongLibraryProps) {
   }
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="grid grid-cols-1 gap-3" data-testid="song-library">
         {songs.map((song) => (
           <SongCard key={song.id} song={song} />
         ))}
       </div>
-      <Pagination offset={offset} limit={PAGE_SIZE} total={total} onPageChange={setOffset} />
+      <Pagination offset={offset} limit={PAGE_SIZE} total={total} onPageChange={handlePageChange} />
     </div>
   )
 }

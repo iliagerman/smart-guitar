@@ -49,6 +49,9 @@ function layoutLineNotes(
 
   // Group notes into time buckets (e.g., within 50ms of each other)
   // First, sort all notes by start_time
+  // toSorted (ES2023) would crash on the app's browser baseline (Vite's default build
+  // target reaches Safari 14) with no polyfill, so a spread + sort is intentional.
+  // oxlint-disable-next-line react-doctor/js-tosorted-immutable
   const sortedNotes = [...notes].sort((a, b) => a.start_time - b.start_time)
 
   const timeBuckets: PositionedTabNote[][] = []
@@ -237,7 +240,7 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
 
         return (
           <div
-            key={li}
+            key={line.startTime}
             ref={isActive ? activeLineRef : undefined}
             className={cn(
               'px-3 py-2 rounded-sm',
@@ -277,7 +280,11 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
                       const offset = noteOffsets.get(note) ?? LABEL_PREFIX_WIDTH
 
                       return (
-                        <span
+                        // Absolutely-positioned fret overlay with full button semantics
+                        // already wired; a native <button>'s default box model would
+                        // break the ch-based absolute positioning.
+                        // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+                        <span role="button"
                           key={`${note.start_time}-${note.string}-${note.fret}-${ni}`}
                           className={cn(
                             'absolute top-0 cursor-pointer font-semibold',
@@ -286,7 +293,6 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
                             isNoteActive ? 'text-flame-400' : 'text-smoke-100'
                           )}
                           style={{ left: `calc(${offset}ch - 0.125rem)` }}
-                          role="button"
                           tabIndex={0}
                           aria-current={isNoteActive ? 'true' : undefined}
                           title={`String ${label}, fret ${note.fret} (${Math.round(note.confidence * 100)}%)`}
@@ -317,8 +323,13 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
                     line.words.map((word, wi) => {
                       const isActiveWord = isActive && showHighlight && wi === activeWordIndex
                       return (
-                        <span
-                          key={wi}
+                        // Inline clickable lyric word; a <button>'s inline-block box model
+                        // would disrupt text flow/wrapping, so role="button" with keyboard
+                        // handling is intentional.
+                        // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+                        <span role="button"
+                          key={`${word.start}-${word.word}`}
+                          tabIndex={0}
                           className={cn(
                             'cursor-pointer rounded px-0.5',
                             isActiveWord
@@ -328,15 +339,31 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
                                 : 'hover:text-smoke-300'
                           )}
                           onClick={() => handleSeek(word.start)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleSeek(word.start)
+                            }
+                          }}
                         >
                           {word.word}{' '}
                         </span>
                       )
                     })
                   ) : (
-                    <span
+                    // Inline clickable line text; a <button>'s inline-block box model would
+                    // disrupt text flow/wrapping, so role="button" with keyboard handling is intentional.
+                    // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+                    <span role="button"
+                      tabIndex={0}
                       className={cn('cursor-pointer', isActive && showHighlight ? 'text-smoke-100' : '')}
                       onClick={() => handleSeek(line.startTime)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleSeek(line.startTime)
+                        }
+                      }}
                     >
                       {line.text}
                     </span>

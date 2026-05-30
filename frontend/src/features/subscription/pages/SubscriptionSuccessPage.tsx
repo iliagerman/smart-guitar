@@ -15,30 +15,40 @@ export function SubscriptionSuccessPage() {
   useEffect(() => {
     let attempts = 0
     const maxAttempts = 10
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
 
     const poll = async () => {
+      if (cancelled) return
       try {
         const status = await subscriptionApi.getStatus()
+        if (cancelled) return
         if (status.has_access) {
           queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all })
           setChecking(false)
-          setTimeout(() => navigate(ROUTES.LIBRARY, { replace: true }), 2000)
+          timer = setTimeout(() => navigate(ROUTES.LIBRARY, { replace: true }), 2000)
           return
         }
       } catch {
         // ignore errors during polling
       }
 
+      if (cancelled) return
       attempts++
       if (attempts < maxAttempts) {
-        setTimeout(poll, 2000)
+        timer = setTimeout(poll, 2000)
       } else {
         setChecking(false)
-        setTimeout(() => navigate(ROUTES.LIBRARY, { replace: true }), 2000)
+        timer = setTimeout(() => navigate(ROUTES.LIBRARY, { replace: true }), 2000)
       }
     }
 
     poll()
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
   }, [navigate, queryClient])
 
   return (

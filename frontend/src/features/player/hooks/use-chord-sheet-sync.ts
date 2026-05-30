@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
-import type { ChordSheetLine } from '../lib/merge-chords-lyrics'
+import { findActiveChordIndex, type ChordSheetLine } from '../lib/merge-chords-lyrics'
 
 interface SyncState {
   activeLineIndex: number
@@ -60,12 +60,13 @@ function computeSync(
     }
   }
 
-  // Active chord
+  // Active chord: the latest chord started at or before the current time.
+  // This advances monotonically with playback (chords are laid out in
+  // start_time order) and keeps the highlight on the current chord during
+  // gaps instead of flickering off — matching the active-word behavior above.
   let activeChordIndex = -1
   if (activeLineIndex >= 0) {
-    activeChordIndex = lines[activeLineIndex].chords.findIndex(
-      (c) => rawTime >= c.start_time && rawTime < c.end_time
-    )
+    activeChordIndex = findActiveChordIndex(lines[activeLineIndex].chords, rawTime)
   }
 
   return { activeLineIndex, activeWordIndex, activeChordIndex }

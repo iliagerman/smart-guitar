@@ -20,10 +20,12 @@ from pythonjsonlogger.json import JsonFormatter
 from guitar_player.app_state import set_storage
 from guitar_player.config import get_settings
 from guitar_player.database import init_db
+from guitar_player.observability import bootstrap_runtime_observer
 from guitar_player.request_context import RequestContextFilter
 from guitar_player.storage import create_storage
 
 _initialized: bool = False
+_observer = None
 
 
 class _ServiceFilter(logging.Filter):
@@ -61,7 +63,7 @@ def setup_logging(*, level: str, service_name: str) -> None:
 
 
 def init_runtime(*, service_name: str) -> None:
-    global _initialized
+    global _initialized, _observer
     if _initialized:
         return
 
@@ -77,6 +79,10 @@ def init_runtime(*, service_name: str) -> None:
     storage.init()
     set_storage(storage)
 
+    # Runtime Observer — captures logs, exceptions, and outbound HTTP/DB calls
+    # for this worker. Returned instance is held for flush() during handler exit.
+    _observer = bootstrap_runtime_observer(service_name=service_name)
+
     _initialized = True
 
     logging.getLogger(__name__).info(
@@ -88,3 +94,13 @@ def init_runtime(*, service_name: str) -> None:
             "service": service_name,
         },
     )
+
+
+def flush_runtime_observer(timeout: float = 2.0) -> None:
+    """Flush queued Runtime Observer events before Lambda freezes the container."""
+    if _observer is None:
+        return
+    try:
+        _observer.flush(timeout=timeout)
+    except Exception:
+        logging.getLogger(__name__).exception("Runtime Observer flush failed")

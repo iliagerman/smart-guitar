@@ -16,7 +16,7 @@ import logging
 import uuid
 from typing import Any
 
-from guitar_player.lambdas.runtime import init_runtime
+from guitar_player.lambdas.runtime import flush_runtime_observer, init_runtime
 from guitar_player.request_context import request_id_var, user_id_var
 
 logger = logging.getLogger(__name__)
@@ -66,5 +66,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             extra={"event_type": "orchestrator_error", "job_id": str(job_id)},
         )
         return {"ok": False, "error": "orchestrator_failed", "job_id": str(job_id)}
+    finally:
+        flush_runtime_observer()
 
     return {"ok": True, "job_id": str(job_id)}

@@ -7,6 +7,9 @@ source "${script_dir}/_lib.sh"
 
 require_infra_outputs
 load_aws_env_from_secrets_if_missing
+# Image-only deploy — does NOT apply task-definition env var changes.
+# See assert_terraform_clean in _lib.sh for skip/strict knobs.
+assert_terraform_clean
 
 backend_dir="${project_dir}/backend"
 

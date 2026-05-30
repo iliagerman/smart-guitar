@@ -7,6 +7,7 @@ export interface PositionedChord {
   start_time: number
   end_time: number
   charOffset: number
+  bass?: string | null
 }
 
 export interface ChordSheetLine {
@@ -39,10 +40,12 @@ function isValidLyricsSegment(segment: LyricsSegment): boolean {
 }
 
 /**
- * Compute the character offset for a chord within a lyrics line.
- * Chords in inter-word gaps attach to the upcoming word instead of the
- * previous word, which keeps successive chord changes visually separated.
+ * Two chord changes closer than this (seconds) are treated as the same musical
+ * moment, so they're allowed to share a word column instead of being spread out.
  */
+const COINCIDENT_S = 0.15
+
+/** Character offset of the start of each word (one entry per word). */
 function getWordStartOffsets(words: LyricsWord[]): number[] {
   let offset = 0
   return words.map((word) => {
@@ -52,45 +55,80 @@ function getWordStartOffsets(words: LyricsWord[]): number[] {
   })
 }
 
-function computeCharOffset(chord: ChordEntry, words: LyricsWord[]): number {
-  if (words.length === 0) return 0
-
-  const offsets = getWordStartOffsets(words)
+/**
+ * The word column a chord naturally belongs to: the first word still playing or
+ * upcoming at the chord's start time. Chords in inter-word gaps attach to the
+ * upcoming word, keeping successive chord changes visually separated.
+ */
+function naturalColumn(chordStart: number, words: LyricsWord[]): number {
   for (let i = 0; i < words.length; i++) {
-    if (chord.start_time <= words[i].end) {
-      return offsets[i]
-    }
+    if (chordStart <= words[i].end) return i
   }
-
-  return offsets[offsets.length - 1]
+  return words.length - 1
 }
 
-function spreadCoincidentChords(chords: PositionedChord[], words: LyricsWord[]): PositionedChord[] {
-  if (chords.length < 2 || words.length < 2) return chords
+/**
+ * Assign each chord to a word column so the rendered chord row reads correctly:
+ *  - chords are laid out in start_time order (charOffset is non-decreasing), so
+ *    the active-chord highlight always advances left-to-right with playback;
+ *  - non-simultaneous chords that would land on the same word are spread onto
+ *    later free columns instead of stacking in one place (prevents clutter);
+ *  - when there are more chords than words, the surplus stack in the last
+ *    column but stay in time order.
+ *
+ * Mutates and returns `chords`, sorted by start_time.
+ */
+function assignChordColumns(chords: PositionedChord[], words: LyricsWord[]): PositionedChord[] {
+  chords.sort((a, b) => a.start_time - b.start_time)
+
+  if (words.length === 0) {
+    // Instrumental-style line: lay chords out sequentially by label width.
+    let offset = 0
+    for (const chord of chords) {
+      chord.charOffset = offset
+      offset += chord.chord.length + 2
+    }
+    return chords
+  }
 
   const offsets = getWordStartOffsets(words)
-  const occupied = new Set(chords.map((chord) => chord.charOffset))
-  const sorted = [...chords].sort((a, b) => a.start_time - b.start_time)
-  const previousByOffset = new Map<number, PositionedChord>()
+  const lastCol = offsets.length - 1
+  let prevCol = -1
+  let prevStart = -Infinity
 
-  for (const chord of sorted) {
-    const previous = previousByOffset.get(chord.charOffset)
-    previousByOffset.set(chord.charOffset, chord)
-    if (!previous || chord.start_time - previous.start_time < 0.25) continue
-
-    const currentOffsetIndex = offsets.indexOf(chord.charOffset)
-    if (currentOffsetIndex === -1) continue
-
-    const nextOffset = offsets
-      .slice(currentOffsetIndex + 1)
-      .find((offset) => !occupied.has(offset))
-    if (nextOffset === undefined) continue
-
-    chord.charOffset = nextOffset
-    occupied.add(nextOffset)
+  for (const chord of chords) {
+    let col = naturalColumn(chord.start_time, words)
+    if (col < prevCol) col = prevCol // never move backwards
+    if (col === prevCol && chord.start_time - prevStart >= COINCIDENT_S) {
+      // Distinct, non-simultaneous chord: push it to the next free column.
+      col = Math.min(prevCol + 1, lastCol)
+    }
+    chord.charOffset = offsets[col]
+    prevCol = col
+    prevStart = chord.start_time
   }
 
   return chords
+}
+
+/**
+ * Index of the chord that should be highlighted at `time`: the latest chord
+ * whose start time is at or before `time`. Returns -1 before the first chord.
+ *
+ * Selecting by "most recently started" (rather than strict interval
+ * containment) makes the highlight advance monotonically with playback,
+ * keeps it on the current chord during gaps between chords, and picks the
+ * latest-started chord when intervals overlap. Assumes `chords` is sorted by
+ * start_time (as produced by `assignChordColumns`).
+ */
+export function findActiveChordIndex(
+  chords: { start_time: number }[],
+  time: number,
+): number {
+  for (let i = chords.length - 1; i >= 0; i--) {
+    if (time >= chords[i].start_time) return i
+  }
+  return -1
 }
 
 function getLineDirection(segment: LyricsSegment, words: LyricsWord[]): TextDirection {
@@ -141,7 +179,8 @@ export function mergeChordLyrics(
           chord: chord.chord,
           start_time: chord.start_time,
           end_time: chord.end_time,
-          charOffset: computeCharOffset(chord, words),
+          bass: chord.bass,
+          charOffset: 0, // assigned by assignChordColumns below
         })
       }
     }
@@ -149,7 +188,7 @@ export function mergeChordLyrics(
     lines.push({
       text: segment.text,
       words,
-      chords: spreadCoincidentChords(segmentChords, words),
+      chords: assignChordColumns(segmentChords, words),
       startTime: segment.start,
       endTime: segment.end,
       segmentIndex: si,
@@ -194,34 +233,31 @@ export function mergeChordLyrics(
       chordsByGap.get(gap)!.push(chord)
     }
 
+    const lineBySegmentIndex = new Map<number, (typeof lines)[number]>()
+    for (const line of lines) {
+      if (!lineBySegmentIndex.has(line.segmentIndex)) {
+        lineBySegmentIndex.set(line.segmentIndex, line)
+      }
+    }
     for (const [gap, gapChords] of chordsByGap.entries()) {
       if (gapChords.length < 3 && validLyrics.length > 0) {
         // Attach to adjacent lyric line
         const targetSegmentIndex = gap < validLyrics.length ? gap : gap - 1
-        const targetLine = lines.find(l => l.segmentIndex === targetSegmentIndex)
+        const targetLine = lineBySegmentIndex.get(targetSegmentIndex)
 
         if (targetLine) {
           for (const chord of gapChords) {
-            let offset = 0
-            if (gap === targetSegmentIndex) {
-              // Prepending to the next segment (offset 0 puts it on the first word)
-              offset = 0
-            } else {
-              // Appending to the last segment (put it on the last word)
-              offset = targetLine.words.length > 0
-                ? targetLine.words.reduce((acc, w) => acc + w.word.length + 1, 0)
-                : targetLine.text.length
-            }
-
             targetLine.chords.push({
               chord: chord.chord,
               start_time: chord.start_time,
               end_time: chord.end_time,
-              charOffset: offset,
+              bass: chord.bass,
+              charOffset: 0, // reassigned by assignChordColumns below
             })
           }
-          targetLine.chords.sort((a, b) => a.start_time - b.start_time)
-          spreadCoincidentChords(targetLine.chords, targetLine.words)
+          // Re-lay out the whole line so the merged-in chords stay in time order
+          // and don't collide with the line's own chords.
+          assignChordColumns(targetLine.chords, targetLine.words)
           // IMPORTANT: do NOT expand lyric line time bounds based on chords.
           // Highlight sync should be driven strictly by lyrics.json timestamps.
         }
@@ -235,6 +271,7 @@ export function mergeChordLyrics(
             chord: chord.chord,
             start_time: chord.start_time,
             end_time: chord.end_time,
+            bass: chord.bass,
             charOffset: currentOffset,
           })
           currentOffset += chord.chord.length + 2

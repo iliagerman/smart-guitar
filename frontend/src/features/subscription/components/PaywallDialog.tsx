@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
+import { useMemo } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Heart, X } from 'lucide-react'
 import { queryKeys } from '@/api/query-keys'
@@ -13,13 +14,16 @@ interface PaywallDialogProps {
   trialEndsAt?: string | null
 }
 
-function formatAmount(amount: string, currency: string): string {
-  const num = parseFloat(amount)
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: num % 1 === 0 ? 0 : 2,
-  }).format(num)
+function useFormatAmount(amount: string | undefined, currency: string | undefined): string {
+  return useMemo(() => {
+    if (amount == null || currency == null) return '...'
+    const num = parseFloat(amount)
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: num % 1 === 0 ? 0 : 2,
+    }).format(num)
+  }, [amount, currency])
 }
 
 export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialogProps) {
@@ -29,6 +33,9 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
     enabled: open,
   })
 
+  // Checkout redirects the whole page to the payment provider on success, so the SPA
+  // (and its query cache) is torn down — there is nothing to invalidate.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const checkout = useMutation({
     mutationFn: (planType: 'monthly' | 'yearly') => subscriptionApi.checkout(planType),
     onSuccess: (data) => {
@@ -40,6 +47,9 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
   const monthly = prices?.monthly
   const yearly = prices?.yearly
   const hasYearly = yearly != null
+
+  const formattedMonthly = useFormatAmount(monthly?.amount, monthly?.currency)
+  const formattedYearly = useFormatAmount(yearly?.amount, yearly?.currency)
 
   let savingsPercent = 0
   if (monthly && yearly) {
@@ -62,7 +72,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
             <img
               src="/art/logo.png"
               alt="Smart Guitar"
-              className="w-16 h-16 rounded-full object-cover shadow-lg shadow-flame-400/20 mb-4"
+              className="size-16 rounded-full object-cover shadow-lg shadow-flame-400/20 mb-4"
             />
             <Dialog.Title className="text-xl font-bold text-smoke-100 text-center">
               {trialEndsAt ? 'Your free trial has ended' : 'Subscribe to Smart Guitar'}
@@ -90,6 +100,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
             ) : (
               <div className={cn('grid gap-3 mb-5', hasYearly ? 'grid-cols-2' : 'grid-cols-1')}>
                 <button
+                  type="button"
                   onClick={() => checkout.mutate('monthly')}
                   disabled={checkout.isPending || !monthly}
                   data-testid="paywall-monthly-button"
@@ -103,13 +114,14 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
                 >
                   <span className="text-xs text-smoke-400 font-medium">Monthly</span>
                   <span className="text-2xl font-bold text-smoke-100">
-                    {monthly ? formatAmount(monthly.amount, monthly.currency) : '...'}
+                    {formattedMonthly}
                   </span>
                   <span className="text-xs text-smoke-500">per month</span>
                 </button>
 
                 {hasYearly && (
                   <button
+                    type="button"
                     onClick={() => checkout.mutate('yearly')}
                     disabled={checkout.isPending}
                     data-testid="paywall-yearly-button"
@@ -126,7 +138,7 @@ export function PaywallDialog({ open, onOpenChange, trialEndsAt }: PaywallDialog
                     )}
                     <span className="text-xs text-smoke-400 font-medium">Yearly</span>
                     <span className="text-2xl font-bold text-smoke-100">
-                      {formatAmount(yearly.amount, yearly.currency)}
+                      {formattedYearly}
                     </span>
                     <span className="text-xs text-smoke-500">per year</span>
                   </button>

@@ -55,3 +55,18 @@ export function getChordColor(chord: string, variant: 'light' | 'dark' = 'light'
 export function formatChordName(chord: string): string {
   return formatChordDisplayName(chord, { preferSharps: true })
 }
+
+/**
+ * Format a chord for display, optionally appending its slash bass note.
+ * Returns the plain chord name when the bass toggle is off or no bass note
+ * was detected (root position). E.g. ("C:maj", "G", true) -> "C/G".
+ */
+export function formatChordWithBass(
+  chord: string,
+  bass: string | null | undefined,
+  showBass: boolean,
+): string {
+  const name = formatChordName(chord)
+  if (!showBass || !bass) return name
+  return `${name}/${bass}`
+}

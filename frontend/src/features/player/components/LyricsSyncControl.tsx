@@ -24,7 +24,7 @@ export function LyricsSyncControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setLyricsOffsetMs(lyricsOffsetMs - STEP_MS)}
+        onClick={() => setLyricsOffsetMs((prev) => prev - STEP_MS)}
         aria-label="Lyrics earlier"
         title="Lyrics earlier"
       >
@@ -51,7 +51,7 @@ export function LyricsSyncControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setLyricsOffsetMs(lyricsOffsetMs + STEP_MS)}
+        onClick={() => setLyricsOffsetMs((prev) => prev + STEP_MS)}
         aria-label="Lyrics later"
         title="Lyrics later"
       >

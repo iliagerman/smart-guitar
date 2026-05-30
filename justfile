@@ -132,6 +132,10 @@ deploy-lyrics whisper_model="medium":
 deploy-chords:
     bash "{{project_dir}}/scripts/deploy/chords.sh"
 
+# Build, push, and deploy the tabs_generator Lambda function
+deploy-tabs:
+    bash "{{project_dir}}/scripts/deploy/tabs.sh"
+
 # Build, push, and deploy the backend-api ECS service
 deploy-backend:
     bash "{{project_dir}}/scripts/deploy/backend.sh"
@@ -223,6 +227,10 @@ setup-chords:
 # Start the chords generator API server
 run-chords:
     cd {{project_dir}}/chords_generator && TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001
+
+# Run chords_generator unit tests (no audio/model/server). Optionally pass a file.
+test-chords-unit file='tests/test_simplifier.py tests/test_beat_align.py tests/test_bass_detect.py':
+    cd "{{project_dir}}/chords_generator" && uv run pytest {{file}} -v
 
 # Run all chords tests with cleanup (removes chord output after tests)
 test-chords audio_file=default_audio cleanup='true':
@@ -332,6 +340,13 @@ run-tabs:
 lock-backend:
     cd {{project_dir}}/backend && uv lock
 
+# Update worker/service uv.lock files (required for Docker builds using --frozen)
+lock-services:
+    cd {{project_dir}}/inference_demucs && uv lock
+    cd {{project_dir}}/chords_generator && uv lock
+    cd {{project_dir}}/lyrics_generator && uv lock
+    cd {{project_dir}}/tabs_generator && uv lock
+
 # Install backend dependencies
 setup-backend:
     cd {{project_dir}}/backend && uv sync --extra dev
@@ -369,6 +384,14 @@ test-backend cleanup='true':
     else
         APP_ENV=test uv run pytest tests/ -v -s -k "not with_cleanup"
     fi
+
+# Run a single backend test file, e.g. `just test-backend-file tests/test_lyrics_corrected.py`
+test-backend-file file:
+    cd "{{project_dir}}/backend" && APP_ENV=test uv run pytest "{{file}}" -v -s
+
+# Run backend tests matching a pattern, e.g. `just test-backend-grep corrected`
+test-backend-grep pattern:
+    cd "{{project_dir}}/backend" && APP_ENV=test uv run pytest tests/ -v -s -k "{{pattern}}"
 
 # Backfill legacy OGG media to MP3 CBR 192k (does not delete OGG).
 # Accepts key=value args *after* the recipe name, e.g.:
@@ -1087,6 +1110,10 @@ deploy-client:
 # Run client E2E tests (Playwright)
 test-client:
     cd {{project_dir}}/frontend && npx playwright test
+
+# Run frontend unit/integration tests (Vitest). Optionally pass a file or pattern.
+test-frontend *args:
+    cd {{project_dir}}/frontend && npm run test -- {{args}}
 
 # Lint frontend (eslint)
 lint-frontend:

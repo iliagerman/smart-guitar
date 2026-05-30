@@ -17,6 +17,7 @@ from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
 
 from inference_demucs.config import get_settings
+from inference_demucs.observability import instrument_runtime_observer
 from inference_demucs.request_context import RequestContextFilter, RequestContextMiddleware
 from inference_demucs.schemas import SeparateRequest, SeparateResponse, StemInfo
 from inference_demucs.separator import produce_test_outputs
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Inference Demucs API", lifespan=lifespan)
+instrument_runtime_observer(app, service_name="inference-demucs")
 app.add_middleware(RequestContextMiddleware)
 
 

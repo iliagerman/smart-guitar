@@ -25,6 +25,7 @@ export function LoadingSpinner({ className, label, size = 'md', fullScreen = fal
       loop
       muted
       playsInline
+      tabIndex={-1}
       aria-hidden="true"
       className={cn('h-105 w-105 object-cover', inline && className)}
       style={{
@@ -39,6 +40,7 @@ export function LoadingSpinner({ className, label, size = 'md', fullScreen = fal
       loop
       muted
       playsInline
+      tabIndex={-1}
       aria-hidden="true"
       className={cn('object-cover rounded-full', sizeClasses[size], inline && className)}
     />

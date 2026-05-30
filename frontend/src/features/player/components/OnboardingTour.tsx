@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useLayoutEffect, useEffectEvent } from 'react'
 import { Guitar, Heart, Music, Pencil, LayoutGrid, Circle, Captions, Music2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -88,7 +88,10 @@ export function OnboardingTour() {
   const [active, setActive] = useState(false)
   const [steps, setSteps] = useState<TourStep[]>([])
 
-  // Wait for subscription data to load and target elements to exist before starting
+  // Wait for subscription data to load and target elements to exist before starting.
+  // One-shot init: it resolves the visible steps and activates the tour together once,
+  // not as a cascading per-render update, so useReducer would add no clarity.
+  // oxlint-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (!isLoaded || hasSeenOnboarding) return
     const check = () => {
@@ -148,15 +151,17 @@ export function OnboardingTour() {
     setStepIndex((i) => Math.max(0, i - 1))
   }, [])
 
-  // Escape key dismisses
+  // Escape key dismisses. Wrapped in an Effect Event so the listener captures the latest
+  // dismiss without re-subscribing every time dismiss changes (it depends on stepIndex).
+  const onEscape = useEffectEvent(() => dismiss())
   useEffect(() => {
     if (!active) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') dismiss()
+      if (e.key === 'Escape') onEscape()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [active, dismiss])
+  }, [active])
 
   if (!active || !rect) return null
 
@@ -168,8 +173,14 @@ export function OnboardingTour() {
   const tooltipLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - 140, window.innerWidth - 296))
 
   return (
+    // Custom spotlight/coachmark overlay that positions a tooltip relative to a target
+    // element; a native <dialog> centers content + owns the backdrop and cannot reproduce
+    // the spotlight cutout, so role="dialog" on a positioned container is intentional.
+    // oxlint-disable-next-line react-doctor/prefer-html-dialog, react-doctor/prefer-tag-over-role
     <div className="fixed inset-0 z-60" aria-modal="true" role="dialog">
-      {/* Overlay backdrop — clicking it dismisses */}
+      {/* Backdrop dismiss is a pointer convenience; keyboard users dismiss via the Escape
+          key handler above, so a keyboard handler on the backdrop itself is unnecessary. */}
+      {/* oxlint-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
       <div className="absolute inset-0" onClick={dismiss} />
 
       {/* Spotlight cutout */}
@@ -198,7 +209,7 @@ export function OnboardingTour() {
       >
         {/* Arrow pointing up */}
         <div
-          className="absolute -top-2 w-4 h-4 rotate-45 bg-charcoal-800 border-l border-t border-charcoal-600"
+          className="absolute -top-2 size-4 rotate-45 bg-charcoal-800 border-l border-t border-charcoal-600"
           style={{ left: Math.max(20, rect.left + rect.width / 2 - tooltipLeft - 8) }}
         />
 

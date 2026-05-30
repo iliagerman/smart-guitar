@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI backend for Guitar Player"
 requires-python = ">=3.13"
 dependencies = [
+    "runtime-observer @ git+https://github.com/germanilia/runtime-observer.git#subdirectory=python-sdk",
     "fastapi==0.129.0",
     "mangum==0.21.0",
     "uvicorn[standard]==0.41.0",
@@ -39,6 +40,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/guitar_player"]

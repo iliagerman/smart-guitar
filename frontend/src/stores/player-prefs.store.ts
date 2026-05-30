@@ -40,6 +40,8 @@ export interface PlayerPrefsState {
   transposeSemitones: number
   /** Show/hide strumming arrows in the chord sheet. */
   showStrums: boolean
+  /** Show slash bass notes on chords (e.g. C/G) when detected. */
+  showBassNotes: boolean
   /** Lyrics sync offset in milliseconds. Positive = lyrics delayed (for when
    *  highlights appear too early). Negative = lyrics advanced. */
   lyricsOffsetMs: number
@@ -67,6 +69,9 @@ export interface PlayerPrefsState {
   recordingGuitarGain: number
   /** Gain applied to the backing track in the recording mix (0–1). */
   recordingBackingGain: number
+  /** Play a 3-2-1 count-in (with audible ticks) before playback starts, giving
+   *  the player time to get ready. */
+  countInEnabled: boolean
   /** Per-song setting overrides. Key is songId. */
   songOverrides: Record<string, SongOverrides>
   setSongOverride: <K extends keyof SongOverrides>(songId: string, key: K, value: SongOverrides[K]) => void
@@ -77,8 +82,10 @@ export interface PlayerPrefsState {
   resetTranspose: () => void
   setShowStrums: (show: boolean) => void
   toggleShowStrums: () => void
-  setLyricsOffsetMs: (ms: number) => void
-  setAutoScrollSpeed: (pxPerSec: number) => void
+  setShowBassNotes: (show: boolean) => void
+  toggleShowBassNotes: () => void
+  setLyricsOffsetMs: (ms: number | ((prev: number) => number)) => void
+  setAutoScrollSpeed: (pxPerSec: number | ((prev: number) => number)) => void
   setLyricsMode: (mode: LyricsHighlightMode) => void
   setStrumSource: (source: StrumSource) => void
   cycleStrumSource: () => void
@@ -90,6 +97,8 @@ export interface PlayerPrefsState {
   setHeadphonesMode: (enabled: boolean) => void
   setRecordingGuitarGain: (gain: number) => void
   setRecordingBackingGain: (gain: number) => void
+  setCountInEnabled: (enabled: boolean) => void
+  toggleCountInEnabled: () => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -97,6 +106,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
     (set, get) => ({
       transposeSemitones: 0,
       showStrums: true,
+      showBassNotes: false,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
       lyricsMode: 'highlight' as LyricsHighlightMode,
@@ -109,6 +119,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       headphonesMode: false,
       recordingGuitarGain: 3.0,
       recordingBackingGain: 0.5,
+      countInEnabled: true,
       songOverrides: {},
       setSongOverride: (songId, key, value) =>
         set((state) => ({
@@ -136,10 +147,24 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       resetTranspose: () => set({ transposeSemitones: 0 }),
       setShowStrums: (show) => set({ showStrums: !!show }),
       toggleShowStrums: () => set({ showStrums: !get().showStrums }),
+      setShowBassNotes: (show) => set({ showBassNotes: !!show }),
+      toggleShowBassNotes: () => set({ showBassNotes: !get().showBassNotes }),
       setLyricsOffsetMs: (ms) =>
-        set({ lyricsOffsetMs: clampInt(ms, -2000, 2000) }),
+        set((state) => ({
+          lyricsOffsetMs: clampInt(
+            typeof ms === 'function' ? ms(state.lyricsOffsetMs) : ms,
+            -2000,
+            2000,
+          ),
+        })),
       setAutoScrollSpeed: (pxPerSec) =>
-        set({ autoScrollSpeed: clampInt(pxPerSec, 10, 200) }),
+        set((state) => ({
+          autoScrollSpeed: clampInt(
+            typeof pxPerSec === 'function' ? pxPerSec(state.autoScrollSpeed) : pxPerSec,
+            10,
+            200,
+          ),
+        })),
       setLyricsMode: (mode) => set({ lyricsMode: mode }),
       setStrumSource: (source) => set({ strumSource: source }),
       cycleStrumSource: () =>
@@ -152,6 +177,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setHeadphonesMode: (enabled) => set({ headphonesMode: !!enabled }),
       setRecordingGuitarGain: (gain) => set({ recordingGuitarGain: Math.max(0, Math.min(5, gain)) }),
       setRecordingBackingGain: (gain) => set({ recordingBackingGain: Math.max(0, Math.min(1, gain)) }),
+      setCountInEnabled: (enabled) => set({ countInEnabled: !!enabled }),
+      toggleCountInEnabled: () => set({ countInEnabled: !get().countInEnabled }),
     }),
     {
       name: 'player-prefs',
@@ -252,9 +279,19 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           }
         }
 
+        // v14 → v15: slash bass notes toggle (default off).
+        if (state && state.showBassNotes === undefined) {
+          state.showBassNotes = false
+        }
+
+        // v15 → v16: 3-2-1 count-in before playback (default on).
+        if (state && state.countInEnabled === undefined) {
+          state.countInEnabled = true
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 14,
+      version: 16,
     }
   )
 )

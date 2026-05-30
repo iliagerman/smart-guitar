@@ -58,6 +58,65 @@ function contentFingerprint(d: SongDetail): string {
   ].join('|')
 }
 
+/**
+ * Decide how often to refetch a song's detail, based on what's still pending.
+ * Returns a poll interval in ms, or `false` to stop polling.
+ *
+ * Pure function so it can be tested directly. ver3 (corrected) lyrics are no
+ * longer generated lazily on GET — they're produced during background
+ * processing — so we must NOT poll for ver3 indefinitely. A song that has
+ * finished processing (no active job) but lacks ver3 will simply not get it,
+ * which is fine: ver3 is an enhancement over ver2.
+ */
+export function songDetailRefetchInterval(
+  detail: SongDetail | undefined,
+  pollForTabs: boolean,
+): number | false {
+  if (!detail) return 6000
+
+  // Audio is being downloaded — keep polling until it completes.
+  if (detail.download_pending) return 6000
+
+  // If there's an active job, keep polling until it finishes (ver3 lands here).
+  if (detail.active_job) return 6000
+
+  const missingAnyStem = detail.stem_types.some((s) => !detail.stems[s.name])
+  const ver1Lyrics = getVer1Lyrics(detail)
+  const ver2Lyrics = getVer2Lyrics(detail)
+  const missingVer1Lyrics = ver1Lyrics.length === 0
+  const missingVer2Lyrics = ver2Lyrics.length === 0
+  const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
+  // Songsterr data is fetched async — poll until backend reports a result
+  const songsterrPending = !detail.songsterr_status  // null = still fetching
+  // Community chord sheets are fetched async — poll until at least one appears
+  const hasCommunityChords = detail.chord_options?.some(
+    (o) => o.description?.startsWith('Community chord sheet'),
+  ) ?? false
+
+  // Keep polling while data is still missing (background retries may fill it in).
+  // But only poll up to a reasonable interval — lyrics/tabs may have failed.
+  if (missingAnyStem) return 6000
+
+  // Tabs are interactive UI in 'tabs' mode; keep this snappy.
+  if (missingTabs) return 5000
+
+  // Songsterr data (strumming patterns, tabs, sections) fetched async — poll until done.
+  if (songsterrPending) return 5000
+
+  // Community chord sheets still loading — keep polling until they arrive
+  if (!hasCommunityChords) return 6000
+
+  // Ver 1 lyrics are meant to appear ASAP.
+  if (missingVer1Lyrics) return 5000
+
+  // Ver 2 can take longer; poll less aggressively once ver1 exists.
+  if (missingVer2Lyrics) return 12000
+
+  // ver3 (merged) lyrics are persisted together with ver2 by background
+  // processing, so once ver2 is present there's nothing left to wait for.
+  return false
+}
+
 export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) {
   const pollForTabs = opts?.pollForTabs ?? false
 
@@ -65,56 +124,8 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
     queryKey: queryKeys.songs.detail(songId),
     queryFn: () => songsApi.detail(songId),
     enabled: !!songId,
-    refetchInterval: (query) => {
-      const detail = query.state.data as SongDetail | undefined
-      if (!detail) return 6000
-
-      // Audio is being downloaded — keep polling until it completes.
-      if (detail.download_pending) return 6000
-
-      // If there's an active job, keep polling until it finishes.
-      if (detail.active_job) return 6000
-
-      const missingAnyStem = detail.stem_types.some((s) => !detail.stems[s.name])
-      const ver1Lyrics = getVer1Lyrics(detail)
-      const ver2Lyrics = getVer2Lyrics(detail)
-      const ver3Lyrics = getVer3Lyrics(detail)
-      const missingVer1Lyrics = ver1Lyrics.length === 0
-      const missingVer2Lyrics = ver2Lyrics.length === 0
-      const missingVer3Lyrics =
-        ver1Lyrics.length > 0 && ver2Lyrics.length > 0 && ver3Lyrics.length === 0
-      const missingTabs = pollForTabs && (detail.tabs?.length ?? 0) === 0
-      // Songsterr data is fetched async — poll until backend reports a result
-      const songsterrPending = !detail.songsterr_status  // null = still fetching
-      // Community chord sheets are fetched async — poll until at least one appears
-      const hasCommunityChords = detail.chord_options?.some(
-        (o) => o.description?.startsWith('Community chord sheet'),
-      ) ?? false
-
-      // Keep polling while data is still missing (background retries may fill it in).
-      // But only poll up to a reasonable interval — lyrics/tabs may have failed.
-      if (missingAnyStem) return 6000
-
-      // Tabs are interactive UI in 'tabs' mode; keep this snappy.
-      if (missingTabs) return 5000
-
-      // Songsterr data (strumming patterns, tabs, sections) fetched async — poll until done.
-      if (songsterrPending) return 5000
-
-      // Community chord sheets still loading — keep polling until they arrive
-      if (!hasCommunityChords) return 6000
-
-      // Ver 1 lyrics are meant to appear ASAP.
-      if (missingVer1Lyrics) return 5000
-
-      // Ver 2 can take longer; poll less aggressively once ver1 exists.
-      if (missingVer2Lyrics) return 12000
-
-      // When ver1 + ver2 exist, keep polling for the auto-generated merged ver3.
-      if (missingVer3Lyrics) return 8000
-
-      return false
-    },
+    refetchInterval: (query) =>
+      songDetailRefetchInterval(query.state.data as SongDetail | undefined, pollForTabs),
     // Each poll returns new presigned S3 URLs even when content (chords, lyrics,
     // etc.) hasn't changed. Default structural sharing can't help because the URL
     // strings differ. Use a content fingerprint to return the old object reference

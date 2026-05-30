@@ -4,7 +4,7 @@ set -euo pipefail
 # Deploy ALL application components (excluding Terraform/infra).
 # Includes:
 #  - backend (ECS)
-#  - demucs/chords/lyrics (Lambda)
+#  - demucs/chords/lyrics/tabs (Lambda)
 #  - worker lambdas (job-orchestrator, vocals-guitar-stitch, stale-job-sweeper, unconfirmed-user-cleanup)
 #  - frontend (S3/CloudFront)
 
@@ -14,6 +14,7 @@ source "${script_dir}/_lib.sh"
 
 require_infra_outputs
 load_aws_env_from_secrets_if_missing
+assert_terraform_clean
 
 region="$(read_output aws_region)"
 
@@ -45,6 +46,7 @@ run_bg backend  "${project_dir}/scripts/deploy/backend.sh"
 run_bg demucs   "${project_dir}/scripts/deploy/demucs.sh"
 run_bg chords   "${project_dir}/scripts/deploy/chords.sh"
 run_bg lyrics   "${project_dir}/scripts/deploy/lyrics.sh"
+run_bg tabs     "${project_dir}/scripts/deploy/tabs.sh"
 
 run_bg job-orch "${project_dir}/scripts/deploy/job_orchestrator.sh"
 run_bg stitch   "${project_dir}/scripts/deploy/vocals_guitar_stitch.sh"

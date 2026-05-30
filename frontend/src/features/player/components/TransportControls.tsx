@@ -33,12 +33,14 @@ export function TransportControls({
 
   return (
     <div className="flex flex-col gap-2" data-testid="transport-controls">
-      <div
+      {/* Custom styled seek bar (gradient fill + hover thumb); a native <input type="range">
+          can't reproduce this, so role="slider" with keyboard handling is intentional. */}
+      {/* oxlint-disable-next-line react-doctor/prefer-tag-over-role */}
+      <div role="slider"
         className={cn(
           'relative h-1.5 rounded-full bg-charcoal-700 group',
           isPlaybackDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         )}
-        role="slider"
         aria-label="Playback progress"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -52,13 +54,29 @@ export function TransportControls({
           const ratio = (e.clientX - rect.left) / rect.width
           onSeek(ratio * duration)
         }}
+        onKeyDown={(e) => {
+          if (isPlaybackDisabled) return
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault()
+            onSeek(Math.max(0, currentTime - 5))
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault()
+            onSeek(Math.min(duration, currentTime + 5))
+          } else if (e.key === 'Home') {
+            e.preventDefault()
+            onSeek(0)
+          } else if (e.key === 'End') {
+            e.preventDefault()
+            onSeek(duration)
+          }
+        }}
       >
         <div
           className="absolute inset-y-0 left-0 bg-flame-400 rounded-full transition-all"
           style={{ width: `${progress}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-flame-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)] opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-1/2 -translate-y-1/2 size-3 bg-flame-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)] opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ left: `${progress}%`, marginLeft: '-6px' }}
         />
       </div>
@@ -84,6 +102,7 @@ export function TransportControls({
       {secondaryControls && (
         <>
           <button
+            type="button"
             className="sm:hidden flex items-center gap-1.5 text-smoke-400 hover:text-smoke-200 mx-auto py-1 transition-colors"
             onClick={() => setShowSecondary(!showSecondary)}
             aria-label="Toggle secondary controls"
@@ -107,6 +126,7 @@ export function TransportControls({
 
       <div className={showButtonsOnMobile ? 'flex items-center justify-center gap-6' : 'hidden sm:flex items-center justify-center gap-6'}>
         <button
+          type="button"
           onClick={() => onSeek(Math.max(0, currentTime - 10))}
           className={cn(
             'text-smoke-400 transition-colors',
@@ -119,6 +139,7 @@ export function TransportControls({
           <SkipBack size={24} />
         </button>
         <button
+          type="button"
           onClick={onTogglePlay}
           className={cn(
             'flex h-14 w-14 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 transition-colors',
@@ -132,6 +153,7 @@ export function TransportControls({
           {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
         </button>
         <button
+          type="button"
           onClick={() => onSeek(Math.min(duration, currentTime + 10))}
           className={cn(
             'text-smoke-400 transition-colors',

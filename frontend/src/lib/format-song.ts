@@ -37,7 +37,7 @@ export function slugToTitleCase(input: string | null | undefined): string {
     .join(' ')
 }
 
-export function splitSongName(songName: string | null | undefined): { artistSlug: string; songSlug: string } {
+function splitSongName(songName: string | null | undefined): { artistSlug: string; songSlug: string } {
   const raw = (songName ?? '').trim()
   if (!raw) return { artistSlug: '', songSlug: '' }
   const [artistSlug = '', songSlug = ''] = raw.split('/', 2)

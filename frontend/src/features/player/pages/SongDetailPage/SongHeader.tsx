@@ -55,6 +55,7 @@ export function SongHeader({
       {/* Mobile-only: transport buttons live in the header row to save vertical space */}
       <div className="sm:hidden shrink-0 flex items-center gap-2">
         <button
+          type="button"
           onClick={() => onSeek(Math.max(0, usePlaybackStore.getState().currentTime - 10))}
           className={cn(
             'text-smoke-400 transition-colors',
@@ -67,6 +68,7 @@ export function SongHeader({
           <SkipBack size={22} />
         </button>
         <button
+          type="button"
           onClick={onTogglePlay}
           className={cn(
             'flex h-12 w-12 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 transition-colors',
@@ -80,6 +82,7 @@ export function SongHeader({
           {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
         </button>
         <button
+          type="button"
           onClick={() => {
             const s = usePlaybackStore.getState()
             onSeek(Math.min(s.duration, s.currentTime + 10))

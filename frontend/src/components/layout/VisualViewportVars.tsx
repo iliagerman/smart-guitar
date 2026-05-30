@@ -31,7 +31,7 @@ export function VisualViewportVars() {
 
         const vv = window.visualViewport
         vv?.addEventListener('resize', update)
-        vv?.addEventListener('scroll', update)
+        vv?.addEventListener('scroll', update, { passive: true })
         window.addEventListener('resize', update)
         window.addEventListener('orientationchange', update)
 

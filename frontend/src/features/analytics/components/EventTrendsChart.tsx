@@ -1,11 +1,17 @@
+// recharts is heavy, but its only consumer (AnalyticsDashboardPage) is route-level
+// lazy-loaded in src/router/index.tsx, so recharts is already code-split out of the
+// main bundle and only fetched when the analytics route is visited.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { EventTrend } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
 
 const colors = ['#ff6a3d', '#f59e0b', '#fb7185', '#f8fafc', '#f97316']
 
+const bucketLabelFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+
 function formatBucketLabel(value: string) {
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
+    return bucketLabelFormat.format(new Date(value))
 }
 
 function buildTrendData(trends: EventTrend[]) {

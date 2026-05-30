@@ -47,6 +47,9 @@ function rechainEndTimes(chords: ChordEntry[]): ChordEntry[] {
 }
 
 function sortByStartTime(chords: ChordEntry[]): ChordEntry[] {
+  // toSorted (ES2023) would crash on the app's browser baseline (Vite's default build
+  // target reaches Safari 14) with no polyfill, so a spread + sort is intentional.
+  // oxlint-disable-next-line react-doctor/js-tosorted-immutable
   return [...chords].sort((a, b) => a.start_time - b.start_time)
 }
 

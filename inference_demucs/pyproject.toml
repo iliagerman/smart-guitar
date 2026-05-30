@@ -2,8 +2,9 @@
 name = "guitar-player-inference-demucs"
 version = "0.1.0"
 description = "Demucs-based audio source separation for local inference"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "runtime-observer @ git+https://github.com/germanilia/runtime-observer.git#subdirectory=python-sdk",
     "demucs==4.0.1",
     # torchaudio>=2.4 uses TorchCodec for decoding (demucs calls torchaudio.load).
     # Without this, separation fails at runtime with ImportError: TorchCodec is required.
@@ -30,6 +31,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/inference_demucs"]

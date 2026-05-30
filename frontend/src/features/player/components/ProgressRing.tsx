@@ -55,9 +55,8 @@ export function ProgressRing({ progress, isFailed, isCompleted, stage }: Progres
         />
       </svg>
 
-      <div
+      <output
         className="relative z-10 flex items-center justify-center rounded-full size-28 bg-charcoal-800 border-2 border-charcoal-600"
-        role="status"
         aria-label={
           isCompleted
             ? 'Processing complete'
@@ -80,7 +79,7 @@ export function ProgressRing({ progress, isFailed, isCompleted, stage }: Progres
             </span>
           </div>
         )}
-      </div>
+      </output>
     </div>
   )
 }
@@ -127,13 +126,12 @@ export function SpinnerRing({ label, sublabel }: SpinnerRingProps) {
             transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
           />
         </svg>
-        <div
+        <output
           className="relative z-10 flex items-center justify-center rounded-full size-28 bg-charcoal-800 border-2 border-charcoal-600"
-          role="status"
           aria-label={label}
         >
           <Loader2 size={24} className="animate-spin text-flame-400" />
-        </div>
+        </output>
       </div>
       <div className="text-center space-y-1">
         <p className="text-smoke-300 text-sm">{label}</p>

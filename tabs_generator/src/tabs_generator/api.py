@@ -22,6 +22,7 @@ from tabs_generator.audio_cleaner import clean_guitar_audio
 from tabs_generator.beat_detector import detect_beats
 from tabs_generator.config import get_settings
 from tabs_generator.note_processor import post_process_notes
+from tabs_generator.observability import instrument_runtime_observer
 from tabs_generator.schemas import (
     RhythmInfo,
     TabNote,
@@ -87,6 +88,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tabs Generator API", lifespan=lifespan)
+instrument_runtime_observer(app, service_name="tabs-generator")
 app.add_middleware(RequestContextMiddleware)
 
 

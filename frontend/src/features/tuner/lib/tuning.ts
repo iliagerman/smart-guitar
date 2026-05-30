@@ -15,7 +15,7 @@ export const STANDARD_TUNING: GuitarString[] = [
   { name: 'E4', note: 'E', octave: 4, frequency: 329.63, stringNumber: 1 },
 ]
 
-export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
 
 const A4_FREQ = 440
 

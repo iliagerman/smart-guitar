@@ -12,7 +12,7 @@ import { ChordEditToolbar } from '../../components/ChordEditToolbar'
 import { TabsSheet } from '../../components/TabsSheet'
 import { ChordMap } from '../../components/ChordMap'
 import { CurrentChordPanel } from './CurrentChordPanel'
-import type { SongDetail, LyricsSegment } from '@/types/song'
+import type { SongDetail, LyricsSegment, ChordEntry } from '@/types/song'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
 
 interface SongContentProps {
@@ -24,7 +24,7 @@ interface SongContentProps {
   hasChords: boolean
   hasAnyLyrics: boolean
   hasTabs: boolean
-  displayChords: { chord: string; start_time: number; end_time: number }[]
+  displayChords: ChordEntry[]
   activeLyrics: LyricsSegment[]
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
@@ -42,6 +42,9 @@ interface SongContentProps {
  * Main content area of the song detail page. Renders the chord sheet, tabs,
  * process button, background processing card, and chord map sidebar.
  */
+// Composition component aggregating distinct, independent content features; the boolean
+// flags are domain state, not stackable variants, so compound components add no clarity.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 export function SongContent({
   songId,
   detail,
@@ -143,8 +146,8 @@ export function SongContent({
                     {chordsLoading && !hasChords ? (
                       <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
                         <div className="flex flex-col items-center gap-3">
-                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
-                          <span className="text-sm">Detecting chords...</span>
+                          <div className="size-6 animate-spin rounded-full border-2 border-smoke-600 border-t-flame-400" />
+                          <span className="text-sm">Detecting chords…</span>
                         </div>
                       </div>
                     ) : sheetMode === 'tabs' && hasTabs ? (
@@ -212,7 +215,7 @@ interface FullscreenOverlayProps {
   hasTabs: boolean
   detail: SongDetail
   activeLyrics: LyricsSegment[]
-  displayChords: { chord: string; start_time: number; end_time: number }[]
+  displayChords: ChordEntry[]
   onSeek: (time: number) => void
   onTogglePlay: () => void
   onClose: () => void
@@ -251,7 +254,7 @@ function FullscreenOverlay({
           <div className="flex items-center gap-1 ml-auto mr-auto rounded-lg px-1.5 py-1 bg-charcoal-700 border border-charcoal-600">
             <button
               type="button"
-              onClick={() => setAutoScrollSpeed(autoScrollSpeed - SPEED_STEP)}
+              onClick={() => setAutoScrollSpeed((prev) => prev - SPEED_STEP)}
               className="p-1 rounded text-smoke-300 hover:text-smoke-100 transition-colors"
               aria-label="Slower scroll"
             >
@@ -263,7 +266,7 @@ function FullscreenOverlay({
             </span>
             <button
               type="button"
-              onClick={() => setAutoScrollSpeed(autoScrollSpeed + SPEED_STEP)}
+              onClick={() => setAutoScrollSpeed((prev) => prev + SPEED_STEP)}
               className="p-1 rounded text-smoke-300 hover:text-smoke-100 transition-colors"
               aria-label="Faster scroll"
             >

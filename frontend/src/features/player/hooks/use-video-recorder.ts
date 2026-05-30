@@ -44,8 +44,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
 }
 
 async function convertToMp4(webmBlob: Blob): Promise<Blob> {
-  const ffmpeg = await getFFmpeg()
-  const inputData = await fetchFile(webmBlob)
+  const [ffmpeg, inputData] = await Promise.all([getFFmpeg(), fetchFile(webmBlob)])
   await ffmpeg.writeFile('input.webm', inputData)
   await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4'])
   const outputData = await ffmpeg.readFile('output.mp4')

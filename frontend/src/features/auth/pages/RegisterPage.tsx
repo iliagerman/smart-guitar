@@ -13,6 +13,7 @@ export function RegisterPage() {
         loop
         muted
         playsInline
+        tabIndex={-1}
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover"
       />

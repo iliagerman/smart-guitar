@@ -44,3 +44,21 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t4g.micro"
 }
+
+variable "runtime_observer_endpoint" {
+  description = "Runtime Observer collector base URL"
+  type        = string
+  default     = "https://metrics.bobthebot.io"
+}
+
+variable "runtime_observer_project_name" {
+  description = "Runtime Observer project name (must match the project the API key belongs to)"
+  type        = string
+  default     = "Smart-guitar"
+}
+
+variable "runtime_observer_api_key" {
+  description = "Runtime Observer project API key (pass via TF_VAR_runtime_observer_api_key)"
+  type        = string
+  sensitive   = true
+}

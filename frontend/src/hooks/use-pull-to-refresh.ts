@@ -56,6 +56,10 @@ export function usePullToRefresh({
     }
   }, [onRefresh, snapBack])
 
+  // Touch-gesture state machine: the setState calls live in distinct touch handlers
+  // (start / move / end) driven by user events, not a cascading render-time chain, so a
+  // reducer would not simplify it.
+  // oxlint-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     const el = scrollRef.current
     if (!el || disabled) return
@@ -102,6 +106,9 @@ export function usePullToRefresh({
     }
 
     el.addEventListener('touchstart', onTouchStart, { passive: true })
+    // touchmove must stay non-passive: onTouchMove calls preventDefault() to suppress
+    // the browser's native pull-to-refresh and drive the custom gesture instead.
+    // oxlint-disable-next-line react-doctor/client-passive-event-listeners
     el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd, { passive: true })
 

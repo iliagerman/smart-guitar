@@ -572,7 +572,7 @@ async def regenerate_song_components(
     processing: ProcessingService = Depends(get_processing_service),
 ) -> RegenerateResponse:
     """Admin-only: force-regenerate selected song components."""
-    valid_targets = {"lyrics", "stems", "tabs", "strums", "full"}
+    valid_targets = {"lyrics", "stems", "tabs", "strums", "chords", "full"}
     targets = [t for t in body.targets if t in valid_targets]
     if not targets:
         raise HTTPException(
@@ -597,6 +597,7 @@ async def regenerate_song_components(
         "stems": _regenerate_stems,
         "tabs": _regenerate_tabs,
         "strums": _regenerate_strums,
+        "chords": _regenerate_chords,
     }
 
     for target in targets:
@@ -781,3 +782,35 @@ async def _regenerate_strums(
     except Exception as e:
         logger.warning("Admin regenerate strums failed for %s: %s", song_id, e)
         errors.append(f"strums: {e}")
+
+
+async def _regenerate_chords(
+    song_id: uuid.UUID, song: object,
+    admin: CurrentUser, song_service: SongService,
+    storage: StorageBackend, job_service: JobService,
+    processing: ProcessingService,
+    enqueued: list[str], skipped: list[str], errors: list[str],
+) -> None:
+    """Beat-align existing chords + add slash bass, without re-running autochord
+    or demucs. Needs an existing chords.json; slash bass also needs the bass stem."""
+    try:
+        song_name = song.song_name
+        audio_key = song.audio_key
+        if not audio_key or not storage.file_exists(audio_key):
+            skipped.append("chords")
+            return
+        chords_key = song.chords_key or (f"{song_name}/chords.json" if song_name else None)
+        if not chords_key or not storage.file_exists(chords_key):
+            skipped.append("chords")
+            return
+        bass_key = song.bass_key or (f"{song_name}/bass.mp3" if song_name else None)
+        bass_path = bass_key if (bass_key and storage.file_exists(bass_key)) else ""
+
+        result = await processing.enhance_chords(audio_key, chords_key, bass_path)
+        label = f"chords (beats={result.beats_detected}, slash-bass={result.bass_count})"
+        if not bass_path:
+            label += " [no bass stem — full reprocess needed for slash bass]"
+        enqueued.append(label)
+    except Exception as e:
+        logger.warning("Admin regenerate chords failed for %s: %s", song_id, e)
+        errors.append(f"chords: {e}")

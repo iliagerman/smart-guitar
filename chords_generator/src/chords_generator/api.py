@@ -4,6 +4,7 @@ Provides /health and /recognize endpoints. Storage backend (local or S3)
 is selected via config, initialized on startup.
 """
 
+import json
 import logging
 import os
 import shutil
@@ -15,10 +16,22 @@ from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
 
+from chords_generator.bass_detect import detect_bass_for_chords
+from chords_generator.beat_align import detect_beats, snap_chords_to_beats
 from chords_generator.config import get_settings
+from chords_generator.observability import instrument_runtime_observer
 from chords_generator.recognizer import recognize_chords
 from chords_generator.request_context import RequestContextFilter, RequestContextMiddleware
-from chords_generator.schemas import ChordInfo, RecognizeRequest, RecognizeResponse
+from chords_generator.schemas import (
+    ChordInfo,
+    ChordResult,
+    DetectBassRequest,
+    DetectBassResponse,
+    EnhanceRequest,
+    EnhanceResponse,
+    RecognizeRequest,
+    RecognizeResponse,
+)
 from chords_generator.storage import StorageBackend, create_storage
 
 logger = logging.getLogger(__name__)
@@ -61,6 +74,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Chords Generator API", lifespan=lifespan)
+instrument_runtime_observer(app, service_name="chords-generator")
 app.add_middleware(RequestContextMiddleware)
 
 
@@ -116,6 +130,148 @@ def recognize(request: RecognizeRequest):
         if settings.processing.cleanup_temp and os.path.exists(job_dir):
             shutil.rmtree(job_dir, ignore_errors=True)
             logger.info("Cleaned up temp dir: %s", job_dir)
+
+
+@app.post("/detect-bass", response_model=DetectBassResponse)
+def detect_bass(request: DetectBassRequest):
+    """Annotate an existing chords.json with slash bass notes from the bass stem.
+
+    Reads the chords file and bass stem, estimates the sounding bass note per
+    chord, writes the annotated chords.json back in place, and returns it.
+    """
+    settings = get_settings()
+    job_dir = os.path.join(settings.processing.temp_dir, str(uuid.uuid4()))
+    os.makedirs(job_dir, exist_ok=True)
+    try:
+        if not _storage.file_exists(request.bass_path):
+            raise HTTPException(status_code=404, detail=f"Bass stem not found: {request.bass_path}")
+        if not _storage.file_exists(request.chords_path):
+            raise HTTPException(status_code=404, detail=f"Chords not found: {request.chords_path}")
+
+        local_bass = _storage.resolve_input(request.bass_path)
+        local_chords = _storage.resolve_input(request.chords_path)
+        with open(local_chords) as f:
+            raw = json.load(f)
+
+        chord_results = [
+            ChordResult(
+                start_time=c["start_time"], end_time=c["end_time"],
+                chord=c["chord"], bass=c.get("bass"),
+            )
+            for c in raw
+        ]
+        annotated = detect_bass_for_chords(local_bass, chord_results)
+
+        out_path = os.path.join(job_dir, "chords.json")
+        with open(out_path, "w") as f:
+            json.dump(
+                [
+                    {
+                        "start_time": c.start_time, "end_time": c.end_time,
+                        "chord": c.chord, "bass": c.bass,
+                    }
+                    for c in annotated
+                ],
+                f, indent=2,
+            )
+        _storage.store_outputs(job_dir, request.chords_path)
+
+        chords = [
+            ChordInfo(start_time=c.start_time, end_time=c.end_time, chord=c.chord, bass=c.bass)
+            for c in annotated
+        ]
+        logger.info(
+            "Bass detection done: %d chords (%d with slash bass)",
+            len(chords), sum(1 for c in chords if c.bass),
+            extra={"event_type": "detect_bass_done", "chords_path": request.chords_path},
+        )
+        return DetectBassResponse(chords=chords, chords_path=request.chords_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Bass detection failed", extra={"event_type": "detect_bass_failed"})
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if settings.processing.cleanup_temp and os.path.exists(job_dir):
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+
+@app.post("/enhance", response_model=EnhanceResponse)
+def enhance(request: EnhanceRequest):
+    """Enhance an existing chords.json in place: snap chord changes to the
+    detected beat grid and (if a bass stem is given) add slash bass notes.
+
+    Operates on the already-recognized chords — it does NOT re-run autochord or
+    demucs — so it's a cheap way to back-fill beat alignment + slash bass.
+    """
+    settings = get_settings()
+    job_dir = os.path.join(settings.processing.temp_dir, str(uuid.uuid4()))
+    os.makedirs(job_dir, exist_ok=True)
+    try:
+        if not _storage.file_exists(request.chords_path):
+            raise HTTPException(status_code=404, detail=f"Chords not found: {request.chords_path}")
+        if not _storage.file_exists(request.audio_path):
+            raise HTTPException(status_code=404, detail=f"Audio not found: {request.audio_path}")
+
+        local_chords = _storage.resolve_input(request.chords_path)
+        with open(local_chords) as f:
+            raw = json.load(f)
+        chord_results = [
+            ChordResult(
+                start_time=c["start_time"], end_time=c["end_time"],
+                chord=c["chord"], bass=c.get("bass"),
+            )
+            for c in raw
+        ]
+
+        # Beat-align the existing chords.
+        local_audio = _storage.resolve_input(request.audio_path)
+        beats, bpm = detect_beats(local_audio)
+        if beats:
+            chord_results = snap_chords_to_beats(chord_results, beats)
+
+        # Slash bass (optional — needs the separated bass stem).
+        bass_count = 0
+        if request.bass_path and _storage.file_exists(request.bass_path):
+            local_bass = _storage.resolve_input(request.bass_path)
+            chord_results = detect_bass_for_chords(local_bass, chord_results)
+            bass_count = sum(1 for c in chord_results if c.bass)
+
+        out_path = os.path.join(job_dir, "chords.json")
+        with open(out_path, "w") as f:
+            json.dump(
+                [
+                    {
+                        "start_time": c.start_time, "end_time": c.end_time,
+                        "chord": c.chord, "bass": c.bass,
+                    }
+                    for c in chord_results
+                ],
+                f, indent=2,
+            )
+        _storage.store_outputs(job_dir, request.chords_path)
+
+        chords = [
+            ChordInfo(start_time=c.start_time, end_time=c.end_time, chord=c.chord, bass=c.bass)
+            for c in chord_results
+        ]
+        logger.info(
+            "Enhance done: %d chords, %d beats, %d slash-bass",
+            len(chords), len(beats), bass_count,
+            extra={"event_type": "enhance_done", "chords_path": request.chords_path},
+        )
+        return EnhanceResponse(
+            chords=chords, chords_path=request.chords_path,
+            beats_detected=len(beats), bass_count=bass_count,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Enhance failed", extra={"event_type": "enhance_failed"})
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if settings.processing.cleanup_temp and os.path.exists(job_dir):
+            shutil.rmtree(job_dir, ignore_errors=True)
 
 
 handler = Mangum(app)

@@ -27,9 +27,11 @@ export function useGoogleSignIn(): UseGoogleSignInResult {
       setGooglePending(true)
       // Clear stale Amplify auth keys from localStorage (don't call signOut()
       // because it redirects to Cognito logout endpoint with OAuth configured)
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-'))
-        .forEach(k => localStorage.removeItem(k))
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('CognitoIdentityServiceProvider') || k.startsWith('amplify-')) {
+          localStorage.removeItem(k)
+        }
+      }
       if (trackFn && eventName) {
         trackFn(eventName, { method: 'google' })
       }

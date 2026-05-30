@@ -4,7 +4,7 @@ function base64UrlToBase64(input: string): string {
     return padded.replace(/-/g, '+').replace(/_/g, '/')
 }
 
-export function decodeJwtPayload(token: string): Record<string, unknown> | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
     const parts = token.split('.')
     if (parts.length < 2) return null
 

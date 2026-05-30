@@ -13,6 +13,9 @@ function getErrorDetail(error: unknown): string | null {
   return typeof detail === 'string' ? detail : null
 }
 
+// Independent form-field state is clearer as separate useState hooks than a reducer;
+// these values do not update together or depend on one another.
+// oxlint-disable-next-line react-doctor/prefer-useReducer
 export function RegisterForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -52,6 +55,7 @@ export function RegisterForm() {
         name="email"
         type="email"
         placeholder="Email"
+        aria-label="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
@@ -64,6 +68,7 @@ export function RegisterForm() {
           name="password"
           type={showPassword ? 'text' : 'password'}
           placeholder="Password"
+          aria-label="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
@@ -90,6 +95,7 @@ export function RegisterForm() {
           name="confirmPassword"
           type={showConfirmPassword ? 'text' : 'password'}
           placeholder="Confirm password"
+          aria-label="Confirm password"
           value={confirmPassword}
           onChange={(e) => { setConfirmPassword(e.target.value); setMismatchError('') }}
           className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"

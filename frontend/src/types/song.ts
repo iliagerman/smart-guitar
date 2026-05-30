@@ -25,6 +25,8 @@ export interface ChordEntry {
   start_time: number
   end_time: number
   chord: string
+  /** Slash bass note (e.g. "G" for C/G) when it differs from the chord root. */
+  bass?: string | null
 }
 
 export interface LyricsWord {

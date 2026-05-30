@@ -89,7 +89,13 @@ module "ecs" {
   job_orchestrator_invoke_arn = aws_lambda_alias.job_orchestrator_live.arn
   youtube_download_queue_arn  = aws_sqs_queue.youtube_download.arn
   youtube_download_queue_url  = aws_sqs_queue.youtube_download.id
-  tags                        = local.common_tags
+
+  runtime_observer_endpoint     = var.runtime_observer_endpoint
+  runtime_observer_project_name = var.runtime_observer_project_name
+  runtime_observer_api_key      = var.runtime_observer_api_key
+  runtime_observer_environment  = var.environment == "prod" ? "production" : "development"
+
+  tags = local.common_tags
 }
 
 module "cdn" {
@@ -307,6 +313,12 @@ resource "aws_lambda_function" "lyrics_generator" {
     security_group_ids = [aws_security_group.lambda.id]
   }
 
+  environment {
+    variables = merge(local.runtime_observer_env, {
+      RUNTIME_OBSERVER_SERVICE_NAME = "lyrics-generator"
+    })
+  }
+
   # APP_ENV is set in the Dockerfile (ENV APP_ENV=prod)
 
   tags = local.common_tags
@@ -397,6 +409,12 @@ resource "aws_lambda_function" "chords_generator" {
   vpc_config {
     subnet_ids         = module.networking.private_app_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = merge(local.runtime_observer_env, {
+      RUNTIME_OBSERVER_SERVICE_NAME = "chords-generator"
+    })
   }
 
   # APP_ENV is set in the Dockerfile (ENV APP_ENV=prod)
@@ -491,6 +509,12 @@ resource "aws_lambda_function" "tabs_generator" {
     security_group_ids = [aws_security_group.lambda.id]
   }
 
+  environment {
+    variables = merge(local.runtime_observer_env, {
+      RUNTIME_OBSERVER_SERVICE_NAME = "tabs-generator"
+    })
+  }
+
   tags = local.common_tags
 
   lifecycle {
@@ -577,10 +601,11 @@ resource "aws_lambda_function" "demucs" {
   }
 
   environment {
-    variables = {
+    variables = merge(local.runtime_observer_env, {
       # Lambda Web Adapter: confirm FastAPI lifespan is complete before forwarding requests
-      READINESS_CHECK_PATH = "/health"
-    }
+      READINESS_CHECK_PATH          = "/health"
+      RUNTIME_OBSERVER_SERVICE_NAME = "inference-demucs"
+    })
   }
 
   vpc_config {
@@ -676,9 +701,10 @@ resource "aws_lambda_function" "job_orchestrator" {
   }
 
   environment {
-    variables = {
+    variables = merge(local.runtime_observer_env, {
       VOCALS_GUITAR_STITCH_FUNCTION_NAME = aws_lambda_alias.vocals_guitar_stitch_live.arn
-    }
+      RUNTIME_OBSERVER_SERVICE_NAME      = "job-orchestrator"
+    })
   }
 
   vpc_config {
@@ -737,6 +763,12 @@ resource "aws_lambda_function" "vocals_guitar_stitch" {
     security_group_ids = [aws_security_group.lambda.id]
   }
 
+  environment {
+    variables = merge(local.runtime_observer_env, {
+      RUNTIME_OBSERVER_SERVICE_NAME = "vocals-guitar-stitch"
+    })
+  }
+
   # APP_ENV is set in the Dockerfile (ENV APP_ENV=prod)
 
   tags = local.common_tags
@@ -786,9 +818,10 @@ resource "aws_lambda_function" "stale_job_sweeper" {
 
   # APP_ENV is set in the Dockerfile (ENV APP_ENV=prod)
   environment {
-    variables = {
-      YOUTUBE_DOWNLOAD_QUEUE_URL = aws_sqs_queue.youtube_download.id
-    }
+    variables = merge(local.runtime_observer_env, {
+      YOUTUBE_DOWNLOAD_QUEUE_URL    = aws_sqs_queue.youtube_download.id
+      RUNTIME_OBSERVER_SERVICE_NAME = "stale-job-sweeper"
+    })
   }
 
   tags = local.common_tags
@@ -855,6 +888,12 @@ resource "aws_lambda_function" "unconfirmed_user_cleanup" {
   vpc_config {
     subnet_ids         = module.networking.private_app_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = merge(local.runtime_observer_env, {
+      RUNTIME_OBSERVER_SERVICE_NAME = "unconfirmed-user-cleanup"
+    })
   }
 
   # APP_ENV is set in the Dockerfile (ENV APP_ENV=prod)

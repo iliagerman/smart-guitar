@@ -96,7 +96,12 @@ export function TutorialOverlay({ tutorialUrl, tutorialLinks, onClose }: Tutoria
           </button>
         </div>
       </div>
-      <iframe
+      {/* YouTube embeds require both allow-scripts and allow-same-origin to play, which
+          react-doctor flags as an escapable sandbox; the src is a curated, trusted tutorial
+          URL (not user input), so the residual risk is acceptable and the sandbox still
+          blocks forms, top-navigation, etc. */}
+      {/* oxlint-disable-next-line react-doctor/iframe-missing-sandbox */}
+      <iframe sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
         src={current.embedUrl}
         className="w-full aspect-video"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

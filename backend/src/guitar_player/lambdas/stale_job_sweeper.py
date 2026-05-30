@@ -24,7 +24,7 @@ from guitar_player.app_state import get_storage
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
-from guitar_player.lambdas.runtime import init_runtime
+from guitar_player.lambdas.runtime import flush_runtime_observer, init_runtime
 from guitar_player.request_context import request_id_var
 from guitar_player.schemas.records import SongRecord
 from guitar_player.storage import StorageBackend
@@ -234,3 +234,5 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             extra={"event_type": "sweeper_error"},
         )
         return {"ok": False, "error": "sweeper_exception"}
+    finally:
+        flush_runtime_observer()

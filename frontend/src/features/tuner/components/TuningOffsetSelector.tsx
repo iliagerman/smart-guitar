@@ -20,6 +20,7 @@ export function TuningOffsetSelector({ offset, onChange }: TuningOffsetSelectorP
     <div className="w-full max-w-xs mx-auto space-y-1">
       <div className="flex items-center justify-center gap-3">
         <button
+          type="button"
           onClick={() => onChange(Math.max(MIN_OFFSET, offset - 1))}
           disabled={offset <= MIN_OFFSET}
           className={cn(
@@ -39,6 +40,7 @@ export function TuningOffsetSelector({ offset, onChange }: TuningOffsetSelectorP
         </span>
 
         <button
+          type="button"
           onClick={() => onChange(Math.min(MAX_OFFSET, offset + 1))}
           disabled={offset >= MAX_OFFSET}
           className={cn(

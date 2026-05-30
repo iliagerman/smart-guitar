@@ -41,6 +41,12 @@ class ChordRecognitionResult:
 
 
 @dataclass
+class EnhanceResult:
+    beats_detected: int
+    bass_count: int
+
+
+@dataclass
 class WordTimestamp:
     word: str
     start: float
@@ -166,6 +172,31 @@ class ProcessingService:
         return ChordRecognitionResult(
             chords=chords,
             output_path=data.get("output_path", ""),
+        )
+
+    async def detect_bass(self, bass_path: str, chords_path: str) -> None:
+        """POST to chords /detect-bass to annotate chords.json with slash bass notes.
+
+        Updates the chords file in storage in place; the response is ignored.
+        """
+        url = f"{self._chords_host}/detect-bass"
+        await self._request(url, {"bass_path": bass_path, "chords_path": chords_path})
+
+    async def enhance_chords(
+        self, audio_path: str, chords_path: str, bass_path: str = "",
+    ) -> EnhanceResult:
+        """POST to chords /enhance: beat-align existing chords + add slash bass.
+
+        Updates chords.json in storage in place. ``bass_path`` empty -> skip bass.
+        """
+        url = f"{self._chords_host}/enhance"
+        data = await self._request(
+            url,
+            {"audio_path": audio_path, "chords_path": chords_path, "bass_path": bass_path},
+        )
+        return EnhanceResult(
+            beats_detected=int(data.get("beats_detected", 0)),
+            bass_count=int(data.get("bass_count", 0)),
         )
 
     async def transcribe_lyrics(

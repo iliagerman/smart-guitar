@@ -76,7 +76,7 @@ export function useEventTracker() {
             analyticsTracker.stop()
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- session_start should only fire on auth change, not on every navigation
-    }, [isAuthenticated])
+    }, [isAuthenticated]) // oxlint-disable-line react-doctor/exhaustive-deps
 
     useEffect(() => {
         if (!isAuthenticated) return

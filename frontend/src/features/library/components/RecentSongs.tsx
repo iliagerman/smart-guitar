@@ -20,11 +20,11 @@ function RecentSongCard({ song }: RecentSongCardProps) {
       className="shrink-0 w-28 group"
       data-testid={`recent-song-${song.id}`}
     >
-      <div className="relative w-28 h-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-colors">
+      <div className="relative size-28 rounded-xl bg-charcoal-700/60 overflow-hidden mb-1.5 ring-1 ring-charcoal-700/50 group-hover:ring-flame-400/20 transition-colors">
         {thumbnailUrl && !imgFailed ? (
           <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
         ) : (
-          <video src="/guitar.mp4" autoPlay loop muted playsInline aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
+          <video src="/guitar.mp4" autoPlay loop muted playsInline tabIndex={-1} aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
         )}
       </div>
       <p className="text-smoke-100 text-xs font-medium truncate">{displaySongTitle(song)}</p>

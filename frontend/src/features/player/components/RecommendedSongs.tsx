@@ -39,6 +39,7 @@ function RecommendedCard({ song }: RecommendedCardProps) {
             loop
             muted
             playsInline
+            tabIndex={-1}
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-cover"
           />

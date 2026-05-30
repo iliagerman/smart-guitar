@@ -67,6 +67,7 @@ export function SubscriptionSection() {
               </span>
             </p>
             <button
+              type="button"
               onClick={() => setShowPaywall(true)}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
               data-testid="subscription-subscribe-button"
@@ -104,6 +105,7 @@ export function SubscriptionSection() {
 
             {sub.status === 'active' && !showCancelConfirm && (
               <button
+                type="button"
                 onClick={() => setShowCancelConfirm(true)}
                 className="w-full py-2.5 bg-charcoal-700 border border-charcoal-600 text-smoke-300 rounded-lg text-sm hover:border-red-500 hover:text-red-500 transition-colors"
                 data-testid="subscription-cancel-button"
@@ -123,6 +125,7 @@ export function SubscriptionSection() {
                 </p>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={() => cancelMutation.mutate()}
                     disabled={cancelMutation.isPending}
                     className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50"
@@ -131,6 +134,7 @@ export function SubscriptionSection() {
                     {cancelMutation.isPending ? 'Canceling...' : 'Yes, Cancel'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowCancelConfirm(false)}
                     className="flex-1 py-2 bg-charcoal-700 text-smoke-300 rounded-lg text-sm hover:bg-charcoal-600 transition-colors"
                     data-testid="subscription-keep-button"
@@ -147,6 +151,7 @@ export function SubscriptionSection() {
           <div className="space-y-3">
             <p className="text-smoke-400 text-sm">You do not have an active subscription.</p>
             <button
+              type="button"
               onClick={() => setShowPaywall(true)}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
               data-testid="subscription-subscribe-no-trial-button"

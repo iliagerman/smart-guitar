@@ -29,6 +29,10 @@ function stepStatus(past: boolean, active: boolean): StepStatus {
   return 'pending'
 }
 
+// The boolean props are distinct, independent processing milestones for a song
+// (stems / chords / lyrics / tabs / download), not variant flags, so compound
+// components would not simplify this data-driven status panel.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 export function ProcessButton({
   songId,
   songTitle,
@@ -53,13 +57,18 @@ export function ProcessButton({
   const coreReady = hasStemsProcessed && hasChords
   const shouldDismiss = coreReady || jobDone
 
+  // jobId is local state seeded from the activeJobId prop but then driven independently
+  // by job creation and retry, so it cannot be computed during render. This effect
+  // intentionally syncs it and starts watching when a parent-provided job id appears.
   useEffect(() => {
+    // oxlint-disable-next-line react-doctor/no-event-handler
     if (activeJobId) {
+      // oxlint-disable-next-line react-doctor/no-derived-state
       setJobId(activeJobId)
       watchJob({ jobId: activeJobId, songId, songTitle, songArtist })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeJobId])
+  }, [activeJobId]) // oxlint-disable-line react-doctor/exhaustive-deps
 
   const handleRetry = useCallback(() => {
     setJobId(null)
@@ -89,8 +98,9 @@ export function ProcessButton({
         },
       },
     )
+    // Run once on mount to auto-start processing; intentionally has no reactive deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // oxlint-disable-line react-doctor/exhaustive-deps
 
   const [dismissed, setDismissed] = useState(false)
 
@@ -140,13 +150,12 @@ export function ProcessButton({
   const stage = manifest?.stage ?? job?.stage ?? null
 
   return (
-    <div
+    <output
       className={cn(
         'flex flex-1 flex-col items-center justify-center gap-6 py-8 transition-opacity duration-500',
         isCompleted && 'opacity-0',
       )}
       data-testid="process-button-container"
-      role="status"
       aria-label={isCompleted ? 'Processing complete' : isFailed ? 'Processing failed' : `Processing ${Math.round(displayProgress)}%`}
     >
       <ProgressRing
@@ -161,7 +170,7 @@ export function ProcessButton({
           Generation takes about 5 minutes
         </p>
         <p className="text-smoke-500 text-xs">
-          Feel free to browse — we'll notify you when it's ready
+          Feel free to browse; we'll notify you when it's ready
         </p>
       </div>
 
@@ -171,6 +180,7 @@ export function ProcessButton({
             {job.error_message || 'Processing failed'}
           </p>
           <button
+            type="button"
             onClick={handleRetry}
             disabled={createJob.isPending}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-flame-500/20 text-flame-400 hover:bg-flame-500/30 transition-colors disabled:opacity-50"
@@ -200,6 +210,6 @@ export function ProcessButton({
           </div>
         ))}
       </div>
-    </div>
+    </output>
   )
 }

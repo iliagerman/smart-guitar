@@ -5,9 +5,11 @@ import { App } from './App'
 import './index.css'
 import { initAmplifyAuth } from '@/lib/amplify'
 import { initMetaPixel } from '@/lib/meta-pixel'
+import { initRuntimeObserver } from '@/lib/runtime-observer'
 
 initAmplifyAuth()
 initMetaPixel()
+initRuntimeObserver()
 
 registerSW({
   immediate: true,

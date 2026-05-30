@@ -13,9 +13,11 @@ export function TunerGauge({ cents, active }: TunerGaugeProps) {
   const closeColor = Math.abs(cents) <= 15
 
   return (
-    <div
+    // Custom SVG tuning gauge; a native <meter> can't contain the SVG visualization,
+    // so role="meter" on a styled container is intentional.
+    // oxlint-disable-next-line react-doctor/prefer-tag-over-role
+    <div role="meter"
       className="w-full max-w-xs mx-auto"
-      role="meter"
       aria-label="Tuning accuracy"
       aria-valuenow={active ? Math.round(cents) : 0}
       aria-valuemin={-50}

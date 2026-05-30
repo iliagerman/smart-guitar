@@ -26,6 +26,9 @@ export function LoginForm() {
   const login = useLogin()
   const navigate = useNavigate()
   const { googleError, googlePending, handleGoogleSignIn } = useGoogleSignIn()
+  // Resends a confirmation code by email and navigates away; no client-side cached
+  // query reflects this action, so there is nothing to invalidate.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const resend = useMutation({
     mutationFn: () => authApi.resendCode(email.trim()),
     onSuccess: () => {
@@ -56,6 +59,7 @@ export function LoginForm() {
         name="email"
         type="email"
         placeholder="Email"
+        aria-label="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
@@ -68,6 +72,7 @@ export function LoginForm() {
           name="password"
           type={showPassword ? 'text' : 'password'}
           placeholder="Password"
+          aria-label="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full px-4 py-3 pr-12 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"

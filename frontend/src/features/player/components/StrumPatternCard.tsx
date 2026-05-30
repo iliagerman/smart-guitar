@@ -77,7 +77,7 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
         {loading && sectionPatterns.length === 0 ? (
           <div className="flex items-center gap-2 py-3 justify-center text-smoke-500 text-xs">
             <Loader2 size={14} className="animate-spin" />
-            Loading strumming patterns...
+            Loading strumming patterns…
           </div>
         ) : (
           sectionPatterns.map((sp) => (
@@ -104,9 +104,15 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
 }
 
 function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatternProps) {
+  // This child owns its own playback (useStrumPlayback) and notifies the parent of
+  // play/stop transitions via onPlayingChange so the parent can disable other sections'
+  // play buttons. Lifting playback into a shared provider would add indirection for a
+  // single, local coordination concern, so this pattern is intentional.
+  // oxlint-disable-next-line react-doctor/no-event-handler
   const rawPattern = section.pattern.map((s) => s.direction)
   // Filter out 'miss' entries for audio playback — only play actual strokes
   const playablePattern = rawPattern.filter((d): d is 'down' | 'up' => d !== 'miss')
+  // oxlint-disable-next-line react-doctor/no-event-handler
   const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(playablePattern, bpm)
   const labels = beatLabels(rawPattern.length)
 
@@ -115,6 +121,7 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
   useEffect(() => {
     if (prevPlaying.current !== isPlaying) {
       prevPlaying.current = isPlaying
+      // oxlint-disable-next-line react-doctor/no-pass-data-to-parent, react-doctor/no-prop-callback-in-effect
       onPlayingChange?.(isPlaying)
     }
   }, [isPlaying, onPlayingChange])
@@ -157,8 +164,10 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
           const isBeat = /^\d$/.test(label)
 
           return (
-            <div
-              key={index}
+            // Strum steps render in a fixed positional sequence that never reorders,
+            // so the positional index is a stable key here.
+            // oxlint-disable-next-line react-doctor/no-array-index-key, react-doctor/no-array-index-as-key
+            <div key={index}
               className={cn(
                 'flex flex-col items-center min-w-5 transition-all duration-100 rounded-md px-0.5 py-0.5',
                 isActive

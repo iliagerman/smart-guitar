@@ -56,9 +56,9 @@ export function CameraPreview({ stream }: CameraPreviewProps) {
       return clampPosition(savedPosition.x, savedPosition.y, w, h)
     }
     return defaultPosition(minimized)
-    // Only compute once on mount
+    // Only compute the initial position once on mount; later changes are driven by drag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // oxlint-disable-line react-doctor/exhaustive-deps
   const [pos, setPos] = useState(initialPos)
   const dragState = useRef<{ startX: number; startY: number; originX: number; originY: number; dragged: boolean } | null>(null)
 
@@ -136,8 +136,9 @@ export function CameraPreview({ stream }: CameraPreviewProps) {
         onPointerUp={handlePointerUp}
         data-testid="camera-preview-fab"
       >
-        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-400 animate-pulse" />
+        <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-red-400 animate-pulse" />
         <button
+          type="button"
           onClick={(e) => {
             if (dragState.current?.dragged) return
             e.stopPropagation()
@@ -168,10 +169,11 @@ export function CameraPreview({ stream }: CameraPreviewProps) {
       data-testid="camera-preview"
     >
       <div className="absolute top-1.5 left-2 flex items-center gap-1.5 z-10">
-        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+        <span className="size-2.5 rounded-full bg-red-500 animate-pulse" />
         <span className="text-[10px] font-mono text-white drop-shadow-md">REC</span>
       </div>
       <button
+        type="button"
         onClick={(e) => {
           if (dragState.current?.dragged) return
           e.stopPropagation()
@@ -191,6 +193,7 @@ export function CameraPreview({ stream }: CameraPreviewProps) {
         autoPlay
         muted
         playsInline
+        aria-label="Live camera preview"
         className="h-[90px] w-[120px] object-cover -scale-x-100"
       />
     </div>,

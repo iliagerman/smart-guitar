@@ -27,6 +27,16 @@ interface RegenerateResponse {
   errors: string[]
 }
 
+interface DeleteSongApiResponse {
+  songs_deleted: number
+  storage_errors: string[]
+}
+
+interface DeleteSongResponse {
+  songsDeleted: number
+  storageErrors: string[]
+}
+
 export const songsApi = {
   search: (query: string) =>
     api.post<{ results: SearchResult[] }>('/api/v1/songs/search', { query }).then((r) => r.data.results),
@@ -49,7 +59,12 @@ export const songsApi = {
       .then((r) => r.data.items),
 
   detail: (songId: string) =>
-    api.get<SongDetail>(`/api/v1/songs/${songId}`).then((r) => r.data),
+    // Song detail assembles many S3 reads; allow more than the 10s default so a
+    // cold-start / slow-S3 first load doesn't surface a timeout error. Combined
+    // with React Query's retry, a slow load stays seamless.
+    api
+      .get<SongDetail>(`/api/v1/songs/${songId}`, { timeout: 30000 })
+      .then((r) => r.data),
 
   recordPlay: (songId: string) =>
     api.post<MessageResponse>(`/api/v1/songs/${songId}/play`).then((r) => r.data),
@@ -65,6 +80,9 @@ export const songsApi = {
       .post<RegenerateResponse>(
         `/api/v1/songs/${songId}/regenerate`,
         { targets },
+        // The "chords" re-enhance runs beat detection synchronously on the
+        // server (~10-15s), so allow more than the 10s default.
+        { timeout: 120000 },
       )
       .then((r) => r.data),
 
@@ -89,6 +107,9 @@ export const songsApi = {
       })
       .then((r) => r.data.items),
 
-  deleteSong: (songId: string) =>
-    api.delete<{ songsDeleted: number; storageErrors: string[] }>(`/api/v1/songs/${songId}`).then((r) => r.data),
+  deleteSong: (songId: string): Promise<DeleteSongResponse> =>
+    api.delete<DeleteSongApiResponse>(`/api/v1/songs/${songId}`).then((r) => ({
+      songsDeleted: r.data.songs_deleted,
+      storageErrors: r.data.storage_errors,
+    })),
 }

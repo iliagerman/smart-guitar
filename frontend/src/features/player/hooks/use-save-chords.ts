@@ -45,8 +45,13 @@ export function useSaveChords() {
 
       // Auto-select the new user sheet source.
       const sheetVersions = buildSheetVersions(detail.chord_options ?? [])
+      // findLastIndex (ES2023) would crash on the app's browser baseline (Vite's default
+      // build target reaches Safari 14) with no polyfill, so use a manual reverse scan.
       let lastUserIdx = -1
       for (let i = sheetVersions.length - 1; i >= 0; i--) {
+        // includes() here is a substring check on a string, not an array membership test,
+        // so react-doctor's Set-lookup suggestion does not apply.
+        // oxlint-disable-next-line react-doctor/js-set-map-lookups
         if (sheetVersions[i].version_key?.includes('chords_user')) {
           lastUserIdx = i
           break

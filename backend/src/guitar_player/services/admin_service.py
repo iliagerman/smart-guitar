@@ -66,6 +66,18 @@ def _log_unrecoverable(*, song_name: str, artist: str, title: str, reason: str) 
         f.write(f"{ts}\t{song_name}\t{artist}\t{title}\t{reason}\n")
 
 
+def _collect_storage_keys(song: SongRecord) -> list[str]:
+    """Return unique storage keys explicitly referenced by a song record."""
+    keys: list[str] = []
+    for field_name in SongRecord.model_fields:
+        if not field_name.endswith("_key"):
+            continue
+        key = getattr(song, field_name, None)
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
 def _collect_storage_prefixes(song: SongRecord) -> list[str]:
     """Return unique storage prefixes (song_name dirs) for a song."""
     if song.song_name:
@@ -334,11 +346,27 @@ class AdminService:
         if skip_storage:
             return storage_errors
         for song in songs:
-            for prefix in _collect_storage_prefixes(song):
-                try:
-                    deleted = self._storage.delete_prefix(prefix)
-                    logger.info("Deleted %d storage files under %s", deleted, prefix)
-                except Exception as e:
-                    logger.warning("Storage cleanup failed for %s: %s", prefix, e)
-                    storage_errors.append(f"{prefix}: {e}")
+            self._delete_storage_keys(song, storage_errors)
+            self._delete_storage_prefixes(song, storage_errors)
         return storage_errors
+
+    def _delete_storage_keys(self, song: SongRecord, storage_errors: list[str]) -> None:
+        """Delete explicitly referenced storage objects for a song."""
+        for key in _collect_storage_keys(song):
+            try:
+                deleted = self._storage.delete_file(key)
+                if deleted:
+                    logger.info("Deleted storage file %s", key)
+            except Exception as e:
+                logger.warning("Storage file cleanup failed for %s: %s", key, e)
+                storage_errors.append(f"{key}: {e}")
+
+    def _delete_storage_prefixes(self, song: SongRecord, storage_errors: list[str]) -> None:
+        """Delete storage directories that may contain derived song artifacts."""
+        for prefix in _collect_storage_prefixes(song):
+            try:
+                deleted = self._storage.delete_prefix(prefix)
+                logger.info("Deleted %d storage files under %s", deleted, prefix)
+            except Exception as e:
+                logger.warning("Storage cleanup failed for %s: %s", prefix, e)
+                storage_errors.append(f"{prefix}: {e}")

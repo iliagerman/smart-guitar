@@ -367,6 +367,9 @@ export function useBufferedStemMixer({
   }, [getAudioContext])
 
   const loadStems = useCallback(async (stemUrls: Map<string, string>, options: StemLoadOptions) => {
+    // toSorted (ES2023) would crash on the app's browser baseline (Vite's default build
+    // target reaches Safari 14) with no polyfill; the spread already copies, so sort is safe.
+    // oxlint-disable-next-line react-doctor/js-tosorted-immutable
     const entries = [...stemUrls.entries()].sort(([left], [right]) => left.localeCompare(right))
     if (entries.length === 0) {
       clearActiveStems()
@@ -402,6 +405,9 @@ export function useBufferedStemMixer({
     setIsLoading(true)
 
     try {
+      // The await must precede the abort/revision guard below: the load can be
+      // superseded or aborted *during* this await, and that guard re-checks for it.
+      // oxlint-disable-next-line react-doctor/async-defer-await
       const loadedEntries = await Promise.all(
         entries.map(async ([name, url]) => {
           const loaded = await ensureStemBuffer(url, controller.signal)
@@ -522,6 +528,10 @@ export function useBufferedStemMixer({
     void startPlaybackFrom(time)
   }, [getCurrentPosition, playbackRate, startPlaybackFrom])
 
+  // The cleanup intentionally tears down the *current* refs at unmount (abort the
+  // in-flight load, stop the live sources/context). Capturing them at setup time
+  // would tear down stale values, so the ref-in-cleanup warning is intentional here.
+  // oxlint-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     const resumePlaybackIfNeeded = () => {
       const ctx = audioContextRef.current

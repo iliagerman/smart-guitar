@@ -17,7 +17,7 @@ from typing import Any
 from guitar_player.config import get_settings
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.database import safe_session
-from guitar_player.lambdas.runtime import init_runtime
+from guitar_player.lambdas.runtime import flush_runtime_observer, init_runtime
 from guitar_player.request_context import request_id_var
 from guitar_player.services.cognito_auth_service import CognitoAuthService
 from guitar_player.services.telegram_service import TelegramService
@@ -105,3 +105,5 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             extra={"event_type": "cleanup_error"},
         )
         return {"ok": False, "error": "cleanup_exception"}
+    finally:
+        flush_runtime_observer()

@@ -16,6 +16,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from guitar_player.config import get_settings
 from guitar_player.middleware import RequestContextMiddleware, SlowRequestMiddleware
+from guitar_player.observability import instrument_runtime_observer
 from guitar_player.request_context import RequestContextFilter
 from guitar_player.database import close_db, init_db
 from guitar_player.dao.job_dao import JobDAO
@@ -255,6 +256,7 @@ app = FastAPI(
     title="Guitar Player API",
     lifespan=lifespan,
 )
+instrument_runtime_observer(app, service_name="backend")
 
 # CORS
 _settings = get_settings()

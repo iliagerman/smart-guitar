@@ -4,7 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Music, Globe, X } from 'lucide-react'
 import { SongLibrary } from '@/features/library/components/SongLibrary'
 import { RecentSongs } from '@/features/library/components/RecentSongs'
-import { SearchResults } from '@/features/search/components/SearchResults'
+import { UnifiedSearchResults } from '@/features/songs/components/UnifiedSearchResults'
+import { SearchPreviewDialog } from '@/features/search/components/SearchPreviewDialog'
 import { useSearchSongs } from '@/features/search/hooks/use-search-songs'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
 import { SectionHeading } from '@/components/shared/SectionHeading'
@@ -28,6 +29,7 @@ export function SongsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [hasSearchedOnline, setHasSearchedOnline] = useState(false)
   const [selectingYoutubeId, setSelectingYoutubeId] = useState<string | null>(null)
+  const [previewResult, setPreviewResult] = useState<SearchResult | null>(null)
   const downloadLabel = useRotatingText(DOWNLOAD_PHRASES, !!selectingYoutubeId)
 
   useEffect(() => {
@@ -40,13 +42,24 @@ export function SongsPage() {
       songsApi.select(`${result.artist}/${result.song}`, result.youtube_id),
     onSuccess: (detail) => {
       setSelectingYoutubeId(null)
+      setPreviewResult(null)
       queryClient.setQueryData(queryKeys.songs.detail(detail.song.id), detail)
       navigate(songDetailPath(detail.song.id))
     },
     onError: () => {
       setSelectingYoutubeId(null)
+      setPreviewResult(null)
     },
   })
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value)
+    // Editing the query invalidates any previously fetched web results.
+    if (hasSearchedOnline) {
+      setHasSearchedOnline(false)
+      onlineSearch.reset()
+    }
+  }
 
   const handleSearchOnline = () => {
     if (!query.trim()) return
@@ -55,12 +68,19 @@ export function SongsPage() {
   }
 
   const handleSelect = (result: SearchResult) => {
+    // Already-processed songs go straight to their page; web results that still
+    // need downloading open a preview first so the user can confirm the match
+    // before triggering the heavy processing pipeline.
     if (result.exists_locally && result.song_id) {
       navigate(songDetailPath(result.song_id))
     } else {
-      setSelectingYoutubeId(result.youtube_id)
-      selectSong.mutate(result)
+      setPreviewResult(result)
     }
+  }
+
+  const handleConfirmDownload = (result: SearchResult) => {
+    setSelectingYoutubeId(result.youtube_id)
+    selectSong.mutate(result)
   }
 
   const handleClear = () => {
@@ -74,19 +94,21 @@ export function SongsPage() {
       <PageBackground />
       <div className="shrink-0">
         <PageHeader title="Songs" icon={<Music size={24} />} subtitle="Search and browse the collection">
-          <div className="flex gap-2">
+          <div className="flex items-stretch gap-2">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => handleQueryChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearchOnline()}
-                placeholder="Search songs..."
+                placeholder="Search by song or artist…"
+                aria-label="Search by song or artist"
                 className="w-full pl-4 pr-10 py-3 bg-charcoal-700 border border-charcoal-600 rounded-xl text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
                 data-testid="songs-search-input"
               />
               {query && (
                 <button
+                  type="button"
                   onClick={handleClear}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-smoke-500 hover:text-smoke-300 transition-colors"
                   aria-label="Clear search"
@@ -97,17 +119,19 @@ export function SongsPage() {
               )}
             </div>
             <button
+              type="button"
               onClick={handleSearchOnline}
               disabled={!query.trim() || onlineSearch.isPending}
-              className="flex items-center gap-2 px-4 py-3 bg-flame-400/20 border border-flame-400/40 hover:bg-flame-400/30 disabled:opacity-50 disabled:cursor-not-allowed text-flame-300 font-medium rounded-xl transition-colors whitespace-nowrap"
+              className="flex w-12 shrink-0 items-center justify-center bg-flame-400/20 border border-flame-400/40 hover:bg-flame-400/30 disabled:opacity-50 disabled:cursor-not-allowed text-flame-300 rounded-xl transition-colors"
+              aria-label="Search online"
+              title="Search online"
               data-testid="songs-search-online-button"
             >
               {onlineSearch.isPending ? (
                 <LoadingSpinner size="xs" inline />
               ) : (
-                <Globe size={16} />
+                <Globe size={18} />
               )}
-              <span>Search Online</span>
             </button>
           </div>
         </PageHeader>
@@ -126,35 +150,40 @@ export function SongsPage() {
             </div>
           )}
 
-          {!debouncedQuery && (
-            <section className="mb-8">
-              <SectionHeading title="Recently Added" />
-              <RecentSongs />
-            </section>
-          )}
-
-          <section className={hasSearchedOnline ? 'mb-8' : ''}>
-            <SectionHeading title={debouncedQuery ? 'Library Matches' : 'All Songs'} />
-            <SongLibrary query={debouncedQuery || undefined} />
-          </section>
-
-          {hasSearchedOnline && (
-            <section>
-              <SectionHeading title="Online Results" />
-              <SearchResults
-                results={onlineSearch.data || []}
-                onSelect={handleSelect}
-                isSelecting={selectSong.isPending}
-                selectingYoutubeId={selectingYoutubeId}
-                hasSearched={hasSearchedOnline}
-                query={query}
-                isLoading={onlineSearch.isPending}
-                downloadLabel={downloadLabel}
-              />
-            </section>
+          {debouncedQuery ? (
+            <UnifiedSearchResults
+              query={debouncedQuery}
+              onlineResults={onlineSearch.data || []}
+              hasSearchedOnline={hasSearchedOnline}
+              isOnlineLoading={onlineSearch.isPending}
+              onSearchOnline={handleSearchOnline}
+              onSelectOnline={handleSelect}
+              isSelecting={selectSong.isPending}
+              selectingYoutubeId={selectingYoutubeId}
+              downloadLabel={downloadLabel}
+            />
+          ) : (
+            <>
+              <section className="mb-8">
+                <SectionHeading title="Recently Added" />
+                <RecentSongs />
+              </section>
+              <section>
+                <SectionHeading title="All Songs" />
+                <SongLibrary />
+              </section>
+            </>
           )}
         </PageContainer>
       </PullToRefreshContainer>
+
+      <SearchPreviewDialog
+        result={previewResult}
+        onClose={() => setPreviewResult(null)}
+        onConfirm={handleConfirmDownload}
+        isDownloading={selectSong.isPending}
+        downloadLabel={downloadLabel}
+      />
     </div>
   )
 }

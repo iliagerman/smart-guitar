@@ -140,7 +140,9 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
     }
   }, [isPlaying, play, stop])
 
-  // Cleanup on unmount
+  // Cleanup on unmount: cancels the *current* rAF and closes the *current* context,
+  // so reading the live ref values in teardown is intentional.
+  // oxlint-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -149,9 +151,13 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
   }, [])
 
   // Stop playback when pattern or bpm changes so the user hears the updated values.
-  // Intentionally setting state in effect — this is a valid sync response to prop changes.
+  // stop() is a side-effectful teardown (cancels rAF, closes AudioContext) that reacts to
+  // prop changes and cannot run during render, so an effect is the right tool; isPlaying/stop
+  // are intentionally excluded from deps to avoid stopping on unrelated re-renders.
   useEffect(() => {
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change, react-doctor/no-event-handler
     if (isPlaying) stop() // eslint-disable-line react-hooks/set-state-in-effect
+    // oxlint-disable-next-line react-doctor/exhaustive-deps
   }, [pattern, bpm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { isPlaying, currentBeatIndex, toggle }

@@ -50,9 +50,9 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   email_configuration {
-    email_sending_account  = "DEVELOPER"
-    source_arn             = aws_ses_domain_identity.main.arn
-    from_email_address     = "Smart Guitar <noreply@${var.domain_name}>"
+    email_sending_account = "DEVELOPER"
+    source_arn            = aws_ses_domain_identity.main.arn
+    from_email_address    = "Smart Guitar <noreply@${var.domain_name}>"
   }
 
   tags = var.tags

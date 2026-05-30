@@ -8,6 +8,7 @@ import json
 import logging
 import os
 
+from chords_generator.beat_align import detect_beats, snap_chords_to_beats
 from chords_generator.schemas import ChordResult
 from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
 
@@ -49,6 +50,17 @@ def recognize_chords(audio_path: str, output_dir: str) -> list[ChordResult]:
                             chord=parts[2],
                         )
                     )
+
+    # Beat-align chord changes to the detected beat grid so changes land on the
+    # beat instead of autochord's ~190ms feature-frame grid. Non-fatal.
+    beats, bpm = detect_beats(audio_path)
+    if beats:
+        before = len(results)
+        results = snap_chords_to_beats(results, beats)
+        logger.info(
+            "Beat-aligned chords: %d -> %d segments (%.1f bpm, %d beats)",
+            before, len(results), bpm, len(beats),
+        )
 
     # Also save as JSON for easy consumption
     json_path = os.path.join(output_dir, "chords.json")

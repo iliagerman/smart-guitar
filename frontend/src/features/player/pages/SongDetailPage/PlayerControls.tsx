@@ -11,6 +11,7 @@ import { ChordMapDialog } from '../../components/ChordMapDialog'
 import { LyricsSourceSelector } from '../../components/LyricsSourceSelector'
 import { LyricsSyncControl } from '../../components/LyricsSyncControl'
 import { ChordDisplayControls } from '../../components/ChordDisplayControls'
+import { CountInToggle } from '../../components/CountInToggle'
 import { HighlightToggle } from '../../components/HighlightToggle'
 import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
 import { RecordButton } from '../../components/RecordButton'
@@ -82,6 +83,9 @@ function AudioStatusBanner({ message }: AudioStatusBannerProps) {
  * Renders the transport controls with primary action buttons and the simplified
  * sheet/lyrics controls used for source switching on mobile.
  */
+// Composition component that threads distinct, independent player features down to the
+// transport controls; the boolean flags are domain state, not stackable variants.
+// oxlint-disable-next-line react-doctor/no-many-boolean-props
 export function PlayerControls({
   songId,
   detail,
@@ -168,6 +172,7 @@ export function PlayerControls({
             <PlaybackSpeedSelector />
             <LyricsSyncControl />
             <ScrollModeControl />
+            <CountInToggle />
           </>
         }
       />
@@ -217,6 +222,7 @@ function PrimaryControls({
   return (
     <>
       <button
+        type="button"
         onClick={onToggleFavorite}
         className={cn(
           'inline-flex items-center justify-center rounded-lg w-16 h-16',

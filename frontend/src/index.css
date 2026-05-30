@@ -106,12 +106,33 @@ body {
   }
 }
 
+@keyframes count-in-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  35% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
 .animate-flame-pulse {
   animation: flame-pulse 2s ease-in-out infinite;
 }
 
 .animate-favorite-ignite {
   animation: favorite-ignite 0.3s ease-out;
+}
+
+.animate-count-in-pop {
+  animation: count-in-pop 0.4s ease-out;
 }
 
 .artwork-backdrop-feather {
@@ -133,7 +154,8 @@ body {
 
   .animate-flame-pulse,
   .animate-favorite-ignite,
-  .animate-slide-up {
+  .animate-slide-up,
+  .animate-count-in-pop {
     animation: none;
   }
 }

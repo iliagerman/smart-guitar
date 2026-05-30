@@ -10,6 +10,8 @@ import uuid
 from guitar_player.app_state import get_storage
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
+from guitar_player.services.llm_service import LlmService
+from guitar_player.services.lyrics_correction import merge_lyrics_with_llm
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.storage import StorageBackend
 
@@ -28,7 +30,6 @@ async def cleanup_lyrics_preamble(
     Non-fatal: logs a warning on failure.
     """
     from guitar_player.config import get_settings
-    from guitar_player.services.llm_service import LlmService
 
     try:
         raw = storage.read_json(lyrics_key)
@@ -83,12 +84,59 @@ async def cleanup_lyrics_preamble(
         )
 
 
+async def ensure_corrected_lyrics(storage: StorageBackend, song_name: str) -> bool:
+    """Generate ver3 corrected lyrics (``lyrics_corrected.json``) when missing.
+
+    ver3 aligns the quick-lyrics wording onto the regular-lyrics timing via an
+    LLM merge. This runs the LLM call in a worker thread and is meant to be
+    invoked from the processing/orchestrator context — NEVER the API request
+    path (a synchronous merge there caused the 10s song-load timeout).
+
+    Safe to call repeatedly: returns early if ver3 already exists or either
+    source file is missing. Returns True if ver3 exists after the call.
+    """
+    corrected_key = f"{song_name}/lyrics_corrected.json"
+    if storage.file_exists(corrected_key):
+        return True
+
+    quick_key = f"{song_name}/lyrics_quick.json"
+    regular_key = f"{song_name}/lyrics.json"
+    if not (storage.file_exists(quick_key) and storage.file_exists(regular_key)):
+        return False
+
+    from guitar_player.config import get_settings
+
+    try:
+        quick_data = storage.read_json(quick_key)
+        regular_data = storage.read_json(regular_key)
+        llm = LlmService(get_settings())
+        merged, diagnostics = await asyncio.to_thread(
+            merge_lyrics_with_llm, quick_data, regular_data, llm,
+        )
+        storage.write_json(corrected_key, merged)
+        logger.info(
+            "Generated lyrics ver3 for %s (%s/%s words aligned, %s groups)",
+            song_name, diagnostics.aligned_words, diagnostics.total_words,
+            diagnostics.mapping_groups,
+        )
+        return True
+    except Exception:
+        logger.warning(
+            "Failed to generate lyrics ver3 for %s (non-fatal)", song_name,
+            exc_info=True,
+        )
+        return False
+
+
 async def _persist_lyrics_results(
     storage: StorageBackend,
     song_id: uuid.UUID,
     song_name: str,
 ) -> None:
     """Persist lyrics_key and lyrics_quick_key if the files are now present."""
+    # Generate ver3 here (background/orchestrator context) so the GET request
+    # path never has to run the LLM merge synchronously.
+    await ensure_corrected_lyrics(storage, song_name)
     async with safe_session() as session:
         song_dao = SongDAO(session)
         song = await song_dao.get_by_id(song_id)

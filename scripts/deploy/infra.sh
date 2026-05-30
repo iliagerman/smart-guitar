@@ -21,6 +21,7 @@ infra_dir="${project_dir}/infra"
 
 load_aws_env_from_secrets_if_missing
 load_tf_google_vars_from_secrets
+load_tf_runtime_observer_vars_from_secrets
 
 case "${cmd}" in
   apply)

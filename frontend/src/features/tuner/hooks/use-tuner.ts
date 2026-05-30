@@ -28,6 +28,9 @@ function roundToTenth(value: number) {
 function median(values: number[]) {
   if (values.length === 0) return 0
 
+  // toSorted (ES2023) would crash on the app's browser baseline (Vite's default build
+  // target reaches Safari 14) with no polyfill, so a spread + sort is intentional.
+  // oxlint-disable-next-line react-doctor/js-tosorted-immutable
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
 
@@ -261,9 +264,14 @@ export function useTuner(): TunerState {
       const updated = activeTuning.find((s) => s.stringNumber === state.selectedString!.stringNumber)
       if (updated) actions.selectString(updated)
     }
+    // Intentionally re-syncs only when the tuning changes; selectedString/actions
+    // are deliberately omitted to avoid re-selecting on every selection change.
+    // oxlint-disable-next-line react-doctor/exhaustive-deps
   }, [activeTuning]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cleanup on unmount
+  // Cleanup on unmount. Only refs are read in the teardown (all stable), so the
+  // empty dependency array is intentional and correct.
+  // oxlint-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     return () => {
       isRunningRef.current = false

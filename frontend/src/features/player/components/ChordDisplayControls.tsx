@@ -8,6 +8,8 @@ export function ChordDisplayControls({ className }: { className?: string }) {
   const transposeUp = usePlayerPrefsStore((s) => s.transposeUp)
   const transposeDown = usePlayerPrefsStore((s) => s.transposeDown)
   const resetTranspose = usePlayerPrefsStore((s) => s.resetTranspose)
+  const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
+  const toggleShowBassNotes = usePlayerPrefsStore((s) => s.toggleShowBassNotes)
 
   return (
     <div
@@ -56,6 +58,25 @@ export function ChordDisplayControls({ className }: { className?: string }) {
         title="Transpose up"
       >
         <Plus size={16} />
+      </button>
+
+      <span className="mx-1 h-5 w-px bg-charcoal-600" aria-hidden="true" />
+
+      <button
+        type="button"
+        className={cn(
+          'inline-flex items-center justify-center rounded px-1.5 py-0.5 font-mono text-xs transition-colors',
+          showBassNotes
+            ? 'bg-flame-400/20 text-flame-300'
+            : 'text-smoke-300 hover:bg-charcoal-800/60',
+        )}
+        onClick={toggleShowBassNotes}
+        aria-label="Toggle slash bass notes"
+        aria-pressed={showBassNotes}
+        title={showBassNotes ? 'Hide slash bass notes (C/G)' : 'Show slash bass notes (C/G)'}
+        data-testid="chord-bass-toggle"
+      >
+        /bass
       </button>
     </div>
   )

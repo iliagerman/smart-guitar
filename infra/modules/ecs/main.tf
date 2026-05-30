@@ -464,7 +464,7 @@ resource "aws_iam_role_policy" "backend_task_permissions" {
           var.job_orchestrator_invoke_arn
         ]
       }
-    ] : [], var.youtube_download_queue_arn != "" ? [
+      ] : [], var.youtube_download_queue_arn != "" ? [
       {
         Sid    = "SQSSendYoutubeDownload"
         Effect = "Allow"
@@ -531,6 +531,14 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "COGNITO_CLIENT_ID", value = var.cognito_client_id },
         { name = "JOB_ORCHESTRATOR_FUNCTION_NAME", value = var.job_orchestrator_invoke_arn },
         { name = "YOUTUBE_DOWNLOAD_QUEUE_URL", value = var.youtube_download_queue_url },
+        { name = "RUNTIME_OBSERVER_ENABLED", value = "true" },
+        { name = "RUNTIME_OBSERVER_ENDPOINT", value = var.runtime_observer_endpoint },
+        { name = "RUNTIME_OBSERVER_PROJECT_NAME", value = var.runtime_observer_project_name },
+        { name = "RUNTIME_OBSERVER_API_KEY", value = var.runtime_observer_api_key },
+        { name = "RUNTIME_OBSERVER_SERVICE_NAME", value = "backend" },
+        { name = "RUNTIME_OBSERVER_CAPTURE_MODE", value = "prod" },
+        { name = "RUNTIME_OBSERVER_ENVIRONMENT", value = var.runtime_observer_environment },
+        { name = "RUNTIME_OBSERVER_LOG_LEVELS", value = "WARNING,ERROR,CRITICAL" },
       ]
 
       logConfiguration = {

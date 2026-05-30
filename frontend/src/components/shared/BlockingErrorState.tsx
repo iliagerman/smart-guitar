@@ -29,6 +29,7 @@ export function BlockingErrorState({ title, description, onRetry, retryTestId }:
         <p className="max-w-sm text-sm text-smoke-400">{description}</p>
       </div>
       <button
+        type="button"
         onClick={onRetry}
         className="rounded-lg bg-flame-500 px-4 py-2 font-medium text-white transition-colors hover:bg-flame-600"
         data-testid={retryTestId}

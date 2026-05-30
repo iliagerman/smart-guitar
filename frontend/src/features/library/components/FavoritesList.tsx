@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useFavorites } from '../hooks/use-favorites'
 import { SongCard } from './SongCard'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination } from '@/components/shared/Pagination'
+import { getScrollableParent } from '@/lib/scroll'
 import { Heart, Search } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -18,7 +19,15 @@ export function FavoritesList({ query }: FavoritesListProps) {
 
 function FavoritesListInner({ query }: FavoritesListProps) {
   const [offset, setOffset] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
   const { data: favorites, isLoading } = useFavorites()
+
+  const handlePageChange = (newOffset: number) => {
+    setOffset(newOffset)
+    // Reset the scroll position so a new page starts from the top instead of
+    // wherever the previous page was scrolled to.
+    getScrollableParent(rootRef.current)?.scrollTo({ top: 0 })
+  }
 
   const filtered = useMemo(() => {
     if (!favorites) return []
@@ -65,13 +74,13 @@ function FavoritesListInner({ query }: FavoritesListProps) {
   }
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="grid grid-cols-1 gap-3" data-testid="favorites-list">
         {page.map((fav) =>
           fav.song ? <SongCard key={fav.id} song={fav.song} /> : null,
         )}
       </div>
-      <Pagination offset={offset} limit={PAGE_SIZE} total={total} onPageChange={setOffset} />
+      <Pagination offset={offset} limit={PAGE_SIZE} total={total} onPageChange={handlePageChange} />
     </div>
   )
 }

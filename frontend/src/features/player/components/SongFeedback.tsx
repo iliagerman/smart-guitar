@@ -86,6 +86,7 @@ export function SongFeedback({ songId }: SongFeedbackProps) {
                   value={comment}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value)}
                   placeholder="Add a comment (optional)..."
+                  aria-label="Feedback comment"
                   rows={3}
                   maxLength={500}
                   data-testid="feedback-comment-input"

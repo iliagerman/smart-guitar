@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { songsApi } from '@/api/songs.api'
 import { subscriptionApi } from '@/api/subscription.api'
+import { queryKeys } from '@/api/query-keys'
+import { useSubscriptionStore } from '@/stores/subscription.store'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
 
@@ -20,6 +23,7 @@ interface RegenerateItem {
 const REGENERATE_ITEMS: RegenerateItem[] = [
   { label: 'Regenerate Lyrics', targets: ['lyrics'] },
   { label: 'Regenerate Stems & Chords', targets: ['stems'] },
+  { label: 'Re-enhance Chords (beat + slash bass)', targets: ['chords'] },
   { label: 'Regenerate Tabs', targets: ['tabs'] },
   { label: 'Regenerate Strum Patterns', targets: ['strums'] },
   { label: 'Regenerate All', targets: ['lyrics', 'stems', 'tabs', 'strums'] },
@@ -34,6 +38,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
   const [loading, setLoading] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (!open) return
@@ -68,7 +73,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
     if (!confirm('Are you sure you want to permanently delete this song? This will remove all S3 data and database records. This cannot be undone.')) {
       return
     }
-    setLoading('Delete Song')
+    setLoading('Permanently Delete Song')
     setOpen(false)
     try {
       const result = await songsApi.deleteSong(songId)
@@ -91,7 +96,16 @@ export function AdminMenu({ songId }: AdminMenuProps) {
     setOpen(false)
     try {
       await subscriptionApi.resetOnboarding()
-      toast.success('Onboarding reset — reload the page to see it')
+      // Reflect the reset in the frontend immediately: the OnboardingTour reads
+      // has_seen_onboarding from the subscription store, so flip it optimistically
+      // (the tour reappears right away on this page) and invalidate the cached
+      // /status query so the next refetch confirms the persisted value.
+      const store = useSubscriptionStore.getState()
+      if (store.status) {
+        store.setStatus({ ...store.status, has_seen_onboarding: false })
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.subscription.status() })
+      toast.success('Onboarding reset — the tour will play now')
     } catch {
       toast.error('Failed to reset onboarding')
     } finally {
@@ -102,6 +116,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
   return (
     <div ref={menuRef} className="relative">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
           'p-2 rounded-lg text-smoke-400 hover:text-flame-400 hover:bg-charcoal-700/50 transition-colors',
@@ -112,7 +127,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
         data-testid="admin-menu-toggle"
       >
         {loading ? (
-          <LoadingSpinner size="xs" inline className="h-5 w-5" />
+          <LoadingSpinner size="xs" inline className="size-5" />
         ) : (
           <Shield size={20} />
         )}
@@ -121,6 +136,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
         <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 w-56 rounded-lg bg-charcoal-800 border border-charcoal-600 shadow-xl z-50 py-1">
           {REGENERATE_ITEMS.map((item) => (
             <button
+              type="button"
               key={item.label}
               onClick={() => handleRegenerate(item.targets, item.label)}
               disabled={!!loading}
@@ -132,6 +148,7 @@ export function AdminMenu({ songId }: AdminMenuProps) {
           ))}
           <div className="border-t border-charcoal-600 my-1" />
           <button
+            type="button"
             onClick={handleResetOnboarding}
             disabled={!!loading}
             className="w-full text-left px-3 py-2 text-sm text-smoke-200 hover:bg-charcoal-700 hover:text-flame-400 transition-colors disabled:opacity-50"
@@ -141,12 +158,13 @@ export function AdminMenu({ songId }: AdminMenuProps) {
           </button>
           <div className="border-t border-charcoal-600 my-1" />
           <button
+            type="button"
             onClick={handleDeleteSong}
             disabled={!!loading}
             className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors disabled:opacity-50"
             data-testid="admin-menu-delete-song"
           >
-            Delete Song
+            Permanently Delete Song
           </button>
         </div>
       )}

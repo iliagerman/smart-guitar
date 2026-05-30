@@ -130,6 +130,72 @@ load_aws_env_from_secrets_if_missing() {
   export AWS_PAGER="${AWS_PAGER:-}"
 }
 
+yaml_get_nested_key() {
+  # Read a nested scalar from a YAML file using PyYAML.
+  # Args:
+  #   file       — path to the YAML file
+  #   dotted_path — e.g. "runtime_observer.api_key"
+  #   uv_dir     — (optional) directory whose .venv has PyYAML; defaults to backend/
+  local file="$1"
+  local dotted_path="$2"
+  local uv_dir="${3:-${project_dir}/backend}"
+
+  require_file "${file}"
+
+  uv run --directory "${uv_dir}" python3 -c "
+import sys, yaml
+data = yaml.safe_load(open(sys.argv[1])) or {}
+for key in sys.argv[2].split('.'):
+    if not isinstance(data, dict):
+        sys.exit(0)
+    data = data.get(key)
+    if data is None:
+        sys.exit(0)
+if isinstance(data, (str, int, float, bool)):
+    print(data)
+" "${file}" "${dotted_path}"
+}
+
+load_tf_runtime_observer_vars_from_secrets() {
+  # Populate TF_VAR_runtime_observer_* by reading the merged runtime_observer
+  # block from one of the secrets files. Preference: prod → secrets → local →
+  # test. The api_key is required; endpoint and project_name fall back to the
+  # Terraform variable defaults if not present.
+  local candidates=(
+    "${prod_secrets_file}"
+    "${default_secrets_file}"
+    "${local_secrets_file}"
+    "${test_secrets_file}"
+  )
+
+  local selected=""
+  local key=""
+  local f
+  for f in "${candidates[@]}"; do
+    [[ -z "${f}" || ! -f "${f}" ]] && continue
+    key="$(yaml_get_nested_key "${f}" "runtime_observer.api_key")"
+    if [[ -n "${key}" ]]; then
+      selected="${f}"
+      break
+    fi
+  done
+
+  if [[ -z "${selected}" ]]; then
+    echo "ERROR: No secrets file contains runtime_observer.api_key" >&2
+    echo "       Add a runtime_observer: block (api_key, endpoint, project_name) to one of:" >&2
+    echo "       ${prod_secrets_file}, ${default_secrets_file}, ${local_secrets_file}" >&2
+    return 1
+  fi
+
+  export TF_VAR_runtime_observer_api_key="${key}"
+
+  local endpoint project_name
+  endpoint="$(yaml_get_nested_key "${selected}" "runtime_observer.endpoint")"
+  project_name="$(yaml_get_nested_key "${selected}" "runtime_observer.project_name")"
+  [[ -n "${endpoint}" ]] && export TF_VAR_runtime_observer_endpoint="${endpoint}"
+  [[ -n "${project_name}" ]] && export TF_VAR_runtime_observer_project_name="${project_name}"
+}
+
 load_tf_google_vars_from_secrets() {
   local selected
   if ! selected="$(select_secrets_file_with_keys google_client_id google_client_secret)"; then
@@ -155,6 +221,14 @@ ecr_login() {
   local region="$1"
   local registry="$2"
 
+  # The macOS Docker credential helper (docker-credential-osxkeychain) can
+  # leave a stale entry after concurrent logins; subsequent `docker login`
+  # then fails with `-25299 (item already exists)`. Pre-emptively clear the
+  # entry so the login can always store fresh credentials.
+  if [[ "$(uname)" == "Darwin" ]] && command -v security >/dev/null 2>&1; then
+    security delete-internet-password -s "${registry}" >/dev/null 2>&1 || true
+  fi
+
   echo "==> ECR login (${registry}) ..."
   aws ecr get-login-password --region "${region}" \
     | docker login --username AWS --password-stdin "${registry}"
@@ -170,6 +244,10 @@ deploy_lambda_container_image() {
   local repo_url="$3"
   local function_name="$4"
   local region="$5"
+
+  # Image-only deploys can't apply Lambda function-configuration changes
+  # (env vars, memory, timeout, etc.). Warn early if Terraform has drift.
+  assert_terraform_clean
 
   local image_uri="${repo_url}:latest"
 
@@ -327,6 +405,63 @@ prepare_secrets() {
 
   _merged_secrets_to_clean+=("${output}")
   trap '_cleanup_merged_secrets' EXIT
+}
+
+assert_terraform_clean() {
+  # Warn (or fail) if there's pending Terraform drift before redeploying images.
+  # The image-deploy scripts don't apply Terraform — they only swap the image — so
+  # un-applied changes to task definitions or Lambda env vars stay invisible until
+  # something explicit catches them. This helper does that.
+  #
+  # Default: warn and continue.
+  # Set REQUIRE_TERRAFORM_CLEAN=1 to make pending drift a hard failure.
+  # Set SKIP_TF_DRIFT_CHECK=1 to skip entirely (useful if Terraform/creds aren't
+  # available in the deploy context).
+  [[ "${SKIP_TF_DRIFT_CHECK:-0}" == "1" ]] && return 0
+
+  local infra_dir="${project_dir}/infra"
+  if [[ ! -d "${infra_dir}" ]]; then
+    return 0
+  fi
+  if ! command -v terraform >/dev/null 2>&1; then
+    echo "==> Skipping terraform drift check (terraform CLI not on PATH)" >&2
+    return 0
+  fi
+
+  # Required sensitive vars come from secrets.yml — fail loudly if missing.
+  load_tf_google_vars_from_secrets || return 0
+  load_tf_runtime_observer_vars_from_secrets || return 0
+
+  local tfvars="${infra_dir}/environments/prod.tfvars"
+  local args=("-detailed-exitcode" "-input=false" "-lock=false" "-no-color")
+  [[ -f "${tfvars}" ]] && args+=("-var-file=${tfvars}")
+
+  echo "==> Checking for pending Terraform changes ..."
+  set +e
+  (cd "${infra_dir}" && terraform plan "${args[@]}" >/dev/null 2>&1)
+  local code=$?
+  set -e
+
+  case "${code}" in
+    0)
+      echo "==> Terraform is clean."
+      ;;
+    2)
+      echo "" >&2
+      echo "⚠️  Terraform has pending changes that this image-deploy will NOT apply." >&2
+      echo "   Image-only deploys can't update task definition env vars or Lambda configuration." >&2
+      echo "   Run \`cd infra && terraform apply -var-file=environments/prod.tfvars\` first," >&2
+      echo "   or set SKIP_TF_DRIFT_CHECK=1 to bypass this check." >&2
+      echo "" >&2
+      if [[ "${REQUIRE_TERRAFORM_CLEAN:-0}" == "1" ]]; then
+        echo "REQUIRE_TERRAFORM_CLEAN=1 — refusing to deploy with pending Terraform drift." >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "==> terraform plan exited ${code} — skipping drift check." >&2
+      ;;
+  esac
 }
 
 refresh_worker_lambdas() {

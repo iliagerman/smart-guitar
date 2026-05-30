@@ -45,8 +45,10 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
   // Stabilize the tap reference so useRecorder's callbacks don't churn on every render.
   const backingTrackTap = useMemo(
     () => rawTap,
+    // Keyed on the stable context/node identity (not rawTap itself, which is a fresh
+    // wrapper each render) so useRecorder's callbacks don't churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rawTap?.context, rawTap?.node],
+    [rawTap?.context, rawTap?.node], // oxlint-disable-line react-doctor/exhaustive-deps
   )
 
   const audioRecorder = useRecorder(
@@ -168,6 +170,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
       <Popover.Root open={showModeSelector && !isRecording} onOpenChange={setShowModeSelector}>
         <Popover.Trigger asChild>
           <button
+            type="button"
             onClick={handleRecordButtonClick}
             className={cn(
               'inline-flex items-center justify-center rounded-lg w-16 h-16',
@@ -206,6 +209,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
             data-testid="recording-mode-selector"
           >
             <button
+              type="button"
               onClick={() => handleModeSelect('audio')}
               className={cn(
                 'inline-flex items-center gap-2 px-4 py-3',
@@ -220,6 +224,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
             </button>
             <div className="border-t border-charcoal-700" />
             <button
+              type="button"
               onClick={() => handleModeSelect('video')}
               className={cn(
                 'inline-flex items-center gap-2 px-4 py-3',

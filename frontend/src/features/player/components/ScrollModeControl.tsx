@@ -27,7 +27,7 @@ export function ScrollModeControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setAutoScrollSpeed(autoScrollSpeed - SPEED_STEP)}
+        onClick={() => setAutoScrollSpeed((prev) => prev - SPEED_STEP)}
         aria-label="Slower scroll"
         title="Slower scroll"
       >
@@ -42,7 +42,7 @@ export function ScrollModeControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setAutoScrollSpeed(autoScrollSpeed + SPEED_STEP)}
+        onClick={() => setAutoScrollSpeed((prev) => prev + SPEED_STEP)}
         aria-label="Faster scroll"
         title="Faster scroll"
       >

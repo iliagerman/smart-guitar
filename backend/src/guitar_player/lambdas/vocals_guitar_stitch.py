@@ -19,7 +19,7 @@ import uuid
 from typing import Any
 
 from guitar_player.app_state import get_storage
-from guitar_player.lambdas.runtime import init_runtime
+from guitar_player.lambdas.runtime import flush_runtime_observer, init_runtime
 from guitar_player.request_context import request_id_var, user_id_var
 
 logger = logging.getLogger(__name__)
@@ -79,3 +79,5 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             extra={"event_type": "stitch_error", "song_name": song_name},
         )
         return {"ok": False, "status": "FAILED", "error": "stitch_exception"}
+    finally:
+        flush_runtime_observer()

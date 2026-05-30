@@ -1,13 +1,15 @@
 import type { UserActivity } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
 
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+})
+
 function formatDateTime(value: string) {
-    return new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    }).format(new Date(value))
+    return dateTimeFormatter.format(new Date(value))
 }
 
 interface UserActivityTableProps {
@@ -36,9 +38,9 @@ export function UserActivityTable({ users }: UserActivityTableProps) {
                         <tbody>
                             {users.map((user) => (
                                 <tr key={user.user_email} className="border-b border-charcoal-900/80">
-                                    <td className="px-3 py-3 text-smoke-200">{user.user_email}</td>
-                                    <td className="px-3 py-3 text-smoke-300">{user.event_count.toLocaleString()}</td>
-                                    <td className="px-3 py-3 text-smoke-300">{formatDateTime(user.last_seen_at)}</td>
+                                    <td className="p-3 text-smoke-200">{user.user_email}</td>
+                                    <td className="p-3 text-smoke-300">{user.event_count.toLocaleString()}</td>
+                                    <td className="p-3 text-smoke-300">{formatDateTime(user.last_seen_at)}</td>
                                 </tr>
                             ))}
                         </tbody>

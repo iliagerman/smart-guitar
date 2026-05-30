@@ -53,7 +53,7 @@ function isDirectionalStrum(strum: StrumEvent): strum is DirectionalStrum {
   return strum.direction !== 'ambiguous'
 }
 
-export function getRenderableStrums(strums: StrumEvent[]) {
+function getRenderableStrums(strums: StrumEvent[]) {
   return strums.filter(isDirectionalStrum)
 }
 
@@ -94,7 +94,7 @@ export function getStrumGridDisplay(
   return { slots: [] as GridSlot[], quantized: new Map<number, QuantizedStrum>(), isSuggested: false as const }
 }
 
-export function getStrumGridPattern(
+function getStrumGridPattern(
   start: number,
   end: number,
   strums: StrumEvent[],
@@ -201,10 +201,16 @@ export function getRepresentativeSongStrumPattern(
     }
   }
 
-  const best = [...buckets.values()].sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count
-    return b.pattern.length - a.pattern.length
-  })[0]
+  let best: { pattern: StrumSymbol[]; count: number } | undefined
+  for (const cur of buckets.values()) {
+    if (
+      !best ||
+      cur.count > best.count ||
+      (cur.count === best.count && cur.pattern.length > best.pattern.length)
+    ) {
+      best = cur
+    }
+  }
   if (best) {
     return best.pattern.slice(0, maxSymbols)
   }
@@ -280,7 +286,10 @@ export function getSectionStrumPatterns(
 
   for (const [name, bucket] of groups) {
     // Pick most common pattern for this section type
-    const best = [...bucket.values()].sort((a, b) => b.count - a.count)[0]
+    let best: { pattern: ('down' | 'up' | 'miss')[]; count: number } | undefined
+    for (const cur of bucket.values()) {
+      if (!best || cur.count > best.count) best = cur
+    }
     if (!best) continue
 
     const patternKey = best.pattern.join('')

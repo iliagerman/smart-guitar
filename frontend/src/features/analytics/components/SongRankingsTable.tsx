@@ -27,9 +27,9 @@ export function SongRankingsTable({ songs }: SongRankingsTableProps) {
                         <tbody>
                             {songs.map((song) => (
                                 <tr key={song.song_id ?? song.song_title ?? 'unknown'} className="border-b border-charcoal-900/80">
-                                    <td className="px-3 py-3 text-smoke-200">{song.song_title ?? 'Unknown song'}</td>
-                                    <td className="px-3 py-3 text-smoke-300">{song.play_count.toLocaleString()}</td>
-                                    <td className="px-3 py-3 text-smoke-300">{song.unique_users.toLocaleString()}</td>
+                                    <td className="p-3 text-smoke-200">{song.song_title ?? 'Unknown song'}</td>
+                                    <td className="p-3 text-smoke-300">{song.play_count.toLocaleString()}</td>
+                                    <td className="p-3 text-smoke-300">{song.unique_users.toLocaleString()}</td>
                                 </tr>
                             ))}
                         </tbody>

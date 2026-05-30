@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Download, Share } from 'lucide-react'
 
 import { isAppleMobileSafariLike } from '@/lib/device'
@@ -33,7 +33,9 @@ function isInStandaloneMode(): boolean {
 }
 
 export function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  // Held in a ref, not state: it is only read inside the install handler and never in
+  // render, so updating it must not trigger a re-render (visibility is its own state).
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const [showIosInstructions, setShowIosInstructions] = useState(false)
   const showIosBanner = useMemo(() => {
     if (isInStandaloneMode() || wasDismissedRecently()) return false
@@ -52,7 +54,7 @@ export function InstallPrompt() {
     // Android / Chrome: capture the beforeinstallprompt event
     const handler = (e: Event) => {
       e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
+      deferredPromptRef.current = e as BeforeInstallPromptEvent
       setVisible(true)
     }
     window.addEventListener('beforeinstallprompt', handler)
@@ -67,13 +69,14 @@ export function InstallPrompt() {
   }
 
   const install = async () => {
-    if (!deferredPrompt) return
-    await deferredPrompt.prompt()
-    const { outcome } = await deferredPrompt.userChoice
+    const prompt = deferredPromptRef.current
+    if (!prompt) return
+    await prompt.prompt()
+    const { outcome } = await prompt.userChoice
     if (outcome === 'accepted') {
       setVisible(false)
     }
-    setDeferredPrompt(null)
+    deferredPromptRef.current = null
   }
 
   if (!visible) return null
@@ -84,7 +87,7 @@ export function InstallPrompt() {
         <img
           src="/icons/icon-192x192.png"
           alt="Smart Guitar"
-          className="h-12 w-12 shrink-0 rounded-xl"
+          className="size-12 shrink-0 rounded-xl"
         />
 
         <div className="min-w-0 flex-1">
@@ -103,7 +106,7 @@ export function InstallPrompt() {
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-fire-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fire-500 active:bg-fire-700"
                     data-testid="install-prompt-ios-instructions-button"
                   >
-                    <Share className="h-3.5 w-3.5" />
+                    <Share className="size-3.5" />
                     {showIosInstructions ? 'Hide steps' : 'How to install'}
                   </button>
                   {showIosInstructions && (
@@ -112,7 +115,7 @@ export function InstallPrompt() {
                       data-testid="install-prompt-ios-instructions"
                     >
                       <ol className="list-decimal space-y-1 pl-4">
-                        <li>Tap <Share className="inline h-3.5 w-3.5 align-text-bottom text-fire-400" /> in Safari.</li>
+                        <li>Tap <Share className="inline size-3.5 align-text-bottom text-fire-400" /> in Safari.</li>
                         <li>Choose <span className="font-medium text-smoke-100">Add to Home Screen</span>.</li>
                         <li>Tap <span className="font-medium text-smoke-100">Add</span> to finish.</li>
                       </ol>
@@ -136,7 +139,7 @@ export function InstallPrompt() {
                 className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-fire-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fire-500 active:bg-fire-700"
                 data-testid="install-prompt-install-button"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download className="size-3.5" />
                 Install
               </button>
             </>
@@ -150,7 +153,7 @@ export function InstallPrompt() {
           aria-label="Dismiss install prompt"
           data-testid="install-prompt-dismiss-button"
         >
-          <X className="h-4 w-4" />
+          <X className="size-4" />
         </button>
       </div>
     </div>

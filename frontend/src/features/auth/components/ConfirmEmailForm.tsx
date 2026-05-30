@@ -41,6 +41,9 @@ export function ConfirmEmailForm() {
     sessionStorage.removeItem(CONFIRM_EMAIL_STORAGE_KEY)
   }, [normalizedEmail])
 
+  // Resends a confirmation code and shows a local status message; no cached query
+  // reflects this action, so there is nothing to invalidate.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const resend = useMutation({
     mutationFn: () => authApi.resendCode(normalizedEmail),
     onSuccess: () => setResendMsg('Code resent! Check your email.'),
@@ -78,6 +81,7 @@ export function ConfirmEmailForm() {
         name="email"
         type="email"
         placeholder="Email"
+        aria-label="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-shadow"
@@ -90,6 +94,7 @@ export function ConfirmEmailForm() {
         name="code"
         type="text"
         placeholder="Verification code"
+        aria-label="Verification code"
         value={code}
         onChange={(e) => setCode(e.target.value)}
         className="w-full px-4 py-3 bg-charcoal-700 border border-charcoal-600 rounded-lg text-smoke-100 placeholder:text-smoke-600 focus:outline-none focus:ring-2 focus:ring-flame-400 transition-all text-center tracking-widest"

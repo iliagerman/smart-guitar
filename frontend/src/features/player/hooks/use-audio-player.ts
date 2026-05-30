@@ -102,6 +102,10 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
   const intervalRef = useRef<number | null>(null)
   const animFrameRef = useRef<number>(0)
   const lastReportedTimeRef = useRef(0)
+  // True while we briefly play+pause muted to unlock the element for a delayed
+  // start (count-in). The play/pause event handlers no-op during this window so
+  // store state (isPlaying / currentTime) is not disturbed.
+  const primingRef = useRef(false)
 
   const isPlaying = usePlaybackStore((state) => state.isPlaying)
   const playbackRate = usePlaybackStore((state) => state.playbackRate)
@@ -195,12 +199,14 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
     audio.preload = 'auto'
 
     audio.onplay = () => {
+      if (primingRef.current) return
       setPlaying(true)
       lastReportedTimeRef.current = audio.currentTime
       setCurrentTime(audio.currentTime)
       startSingleTimeLoop()
     }
     audio.onpause = () => {
+      if (primingRef.current) return
       setPlaying(false)
       stopSingleTimeLoop()
       setCurrentTime(audio.currentTime)
@@ -330,6 +336,33 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
     })
   }, [onPlaybackError, primeAudioContext])
 
+  /**
+   * Unlock the single-track element inside the user gesture so a delayed start
+   * (after a count-in) is allowed on mobile browsers, which only permit playback
+   * that originates from a gesture. We briefly play+pause muted; the multi-stem
+   * mixer is already unlocked by prepareForPlaybackGesture's silent buffer.
+   */
+  const primeForDelayedStart = useCallback(() => {
+    if (modeRef.current !== 'single') return
+    const audio = singleTrackRef.current?.audio
+    if (!audio || !audio.paused) return
+    primingRef.current = true
+    const wasMuted = audio.muted
+    // eslint-disable-next-line react-hooks/immutability
+    audio.muted = true
+    void audio
+      .play()
+      .then(() => audio.pause())
+      .catch(() => {
+        // Best effort: if the unlock play is rejected, the real post-count-in
+        // play() will surface the error through its own handler.
+      })
+      .finally(() => {
+        audio.muted = wasMuted
+        primingRef.current = false
+      })
+  }, [])
+
   return {
     clear,
     getRecordingTap,
@@ -343,5 +376,6 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
     isPlaying,
     isLoading,
     prepareForPlaybackGesture,
+    primeForDelayedStart,
   }
 }

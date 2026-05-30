@@ -70,6 +70,28 @@ variable "youtube_download_queue_url" {
   description = "URL of the SQS queue for YouTube download requests (passed as env var to backend)"
 }
 
+variable "runtime_observer_endpoint" {
+  type        = string
+  description = "Runtime Observer collector base URL"
+}
+
+variable "runtime_observer_project_name" {
+  type        = string
+  description = "Runtime Observer project name"
+}
+
+variable "runtime_observer_api_key" {
+  type        = string
+  sensitive   = true
+  description = "Runtime Observer project API key"
+}
+
+variable "runtime_observer_environment" {
+  type        = string
+  default     = "production"
+  description = "Runtime Observer environment label (development/staging/production)"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

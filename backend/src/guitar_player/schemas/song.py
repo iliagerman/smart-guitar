@@ -72,6 +72,9 @@ class ChordEntry(BaseModel):
     start_time: float
     end_time: float
     chord: str
+    # Slash bass note (e.g. "G" for C/G) when the sounding bass differs from the
+    # chord root; None for root-position chords. Shown when the user toggles it.
+    bass: str | None = None
 
 
 class ChordOption(BaseModel):

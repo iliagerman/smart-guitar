@@ -424,8 +424,7 @@ class SongService:
     async def get_song_detail(self, song_id: uuid.UUID) -> SongDetailResponse:
         """Full song detail: audio URL, stems, chords."""
         return await build_song_detail(
-            song_id, self._song_dao, self._chord_vote_dao,
-            self._storage, self._llm,
+            song_id, self._song_dao, self._chord_vote_dao, self._storage,
         )
 
     def _enrich_song_response(self, song: Any) -> SongResponse:

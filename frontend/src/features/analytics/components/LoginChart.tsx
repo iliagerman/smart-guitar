@@ -1,10 +1,16 @@
 import { useMemo } from 'react'
+// recharts is heavy, but its only consumer (AnalyticsDashboardPage) is route-level
+// lazy-loaded in src/router/index.tsx, so recharts is already code-split out of the
+// main bundle and only fetched when the analytics route is visited.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { EventTrend } from '@/types/analytics'
 import { EmptyState } from '@/components/shared/EmptyState'
 
+const bucketLabelFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+
 function formatBucketLabel(value: string) {
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value))
+    return bucketLabelFormat.format(new Date(value))
 }
 
 interface LoginChartProps {
