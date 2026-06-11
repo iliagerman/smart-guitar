@@ -119,6 +119,9 @@ export interface SongDetail {
   chord_options: ChordOption[]
   tabs: TabNote[]
   tabs_source?: string | null
+  /** Beat-detected tempo and bar (measure) start times for the bars view. */
+  detected_bpm?: number | null
+  bar_starts?: number[]
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
   sections: SongSection[]

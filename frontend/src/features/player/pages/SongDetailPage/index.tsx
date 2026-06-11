@@ -521,6 +521,7 @@ export function SongDetailPage() {
     (option) => option.key !== 'off' && option.segments.length > 0,
   )
   const hasTabs = (detail?.tabs?.length ?? 0) > 0 || (detail?.strums?.length ?? 0) > 0 || !!detail?.rhythm
+  const hasBars = (detail?.bar_starts?.length ?? 0) > 0
 
   const handleEnterEditMode = useCallback(() => {
     if (!activeChords.length) return
@@ -628,6 +629,7 @@ export function SongDetailPage() {
             headerArtist={headerArtist}
             hasChords={hasChords}
             hasTabs={hasTabs}
+            hasBars={hasBars}
             isFavorited={isFavorited}
             showAudioStatus={showAudioStatus}
             audioStatusMessage={audioStatusMessage}

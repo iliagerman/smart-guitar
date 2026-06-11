@@ -114,6 +114,41 @@ async def test_enhance_regenerates_simplified_variants(client, monkeypatch, tmp_
 
 
 @pytest.mark.asyncio
+async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
+    """Enhance must persist bpm + bar starts to chord_meta.json (merging any
+    existing meta fields like capo/key) so the player can render bars."""
+    song_dir = tmp_path / "song4"
+    song_dir.mkdir()
+    chords_path = str(song_dir / "chords.json")
+    audio_path = str(song_dir / "audio.mp3")
+    _write_chords(chords_path, [
+        {"start_time": 1.0, "end_time": 3.0, "chord": "C:maj"},
+        {"start_time": 3.0, "end_time": 5.0, "chord": "G:maj"},
+    ])
+    open(audio_path, "wb").write(b"x")
+    with open(song_dir / "chord_meta.json", "w") as f:
+        json.dump({"capo": 2, "key": "G"}, f)
+
+    beats = [i * 0.5 for i in range(20)]
+    monkeypatch.setattr(api_mod, "detect_beats", lambda p: (beats, 120.0))
+
+    resp = await client.post("/enhance", json={
+        "audio_path": audio_path, "chords_path": chords_path, "bass_path": "",
+    })
+    assert resp.status_code == 200
+
+    with open(song_dir / "chord_meta.json") as f:
+        meta = json.load(f)
+    # Existing fields preserved, bar grid added.
+    assert meta["capo"] == 2
+    assert meta["key"] == "G"
+    assert meta["bpm"] == 120.0
+    assert len(meta["bar_starts"]) >= 4
+    # Chords change at 1.0/3.0 → bar phase anchors there.
+    assert meta["bar_starts"][0] == 1.0
+
+
+@pytest.mark.asyncio
 async def test_enhance_404_when_chords_missing(client, tmp_path):
     audio_path = str(tmp_path / "audio.mp3")
     open(audio_path, "wb").write(b"x")

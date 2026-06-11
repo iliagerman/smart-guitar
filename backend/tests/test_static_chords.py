@@ -412,6 +412,48 @@ async def test_community_sheet_synced_to_whisper_lyrics(settings, storage):
         await close_db()
 
 
+@pytest.mark.asyncio
+async def test_song_detail_serves_bar_grid_from_chord_meta(settings, storage):
+    """bpm + bar_starts from chord_meta.json must reach the detail response
+    so the player can render the measures (bars) view."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_bars_{uuid.uuid4().hex[:8]}/test_song"
+    created_dirs: list[Path] = []
+    try:
+        meta_path = _write_static_chords_to_storage(
+            settings, f"{song_name}/chord_meta.json",
+            {"bpm": 120.5, "bar_starts": [0.5, 2.5, 4.5, 6.5], "capo": 0},
+        )
+        created_dirs.append(meta_path.parent.parent)
+
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.create(
+                title="Bars Test", artist="Test Artist",
+                song_name=song_name, audio_key=f"{song_name}/audio.mp3",
+            )
+            await song_dao.commit()
+            song_id = song.id
+
+        async with factory() as session:
+            service = _make_song_service(session, storage)
+            detail = await service.get_song_detail(song_id)
+
+        assert detail.detected_bpm == 120.5
+        assert detail.bar_starts == [0.5, 2.5, 4.5, 6.5]
+    finally:
+        async with factory() as session:
+            song = await SongDAO(session).get_by_song_name(song_name)
+            if song:
+                await SongDAO(session).delete_by_id(song.id)
+                await session.commit()
+        for d in created_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+        await close_db()
+
+
 class TestUGContentParser:
     """Tests for parse_ug_content — the Ultimate Guitar chord sheet parser."""
 

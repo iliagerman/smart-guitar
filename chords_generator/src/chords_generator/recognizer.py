@@ -8,6 +8,7 @@ import json
 import logging
 import os
 
+from chords_generator.bars import compute_bar_starts
 from chords_generator.beat_align import detect_beats, snap_chords_to_beats
 from chords_generator.schemas import ChordResult
 from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
@@ -74,6 +75,16 @@ def recognize_chords(audio_path: str, output_dir: str) -> list[ChordResult]:
     # Generate simplified chord options (difficulty levels + capo variations)
     options = generate_simplified_options(results)
     write_simplified_outputs(options, output_dir)
+
+    # Bar grid for the player's measures view (4/4, phase-aligned to chord
+    # changes). Fresh recognition has no prior chord_meta to merge.
+    if beats:
+        with open(os.path.join(output_dir, "chord_meta.json"), "w") as f:
+            json.dump(
+                {"bpm": round(bpm, 2), "bar_starts": compute_bar_starts(beats, results)},
+                f,
+                indent=2,
+            )
 
     logger.info("Recognized %d chords, output in: %s", len(results), output_dir)
     return results

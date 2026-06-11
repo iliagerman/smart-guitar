@@ -7,6 +7,7 @@ import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 import { ProcessButton } from '../../components/ProcessButton'
 import { BackgroundProcessingCard } from '../../components/BackgroundProcessingCard'
+import { BarsSheet } from '../../components/BarsSheet'
 import { ChordSheet } from '../../components/ChordSheet'
 import { ChordEditToolbar } from '../../components/ChordEditToolbar'
 import { TabsSheet } from '../../components/TabsSheet'
@@ -158,6 +159,14 @@ export function SongContent({
                         rhythm={detail.rhythm}
                         onSeek={onSeek}
                       />
+                    ) : sheetMode === 'bars' && (detail.bar_starts?.length ?? 0) > 0 ? (
+                      <BarsSheet
+                        chords={displayChords}
+                        barStarts={detail.bar_starts ?? []}
+                        duration={detail.song.duration_seconds ?? 0}
+                        bpm={detail.detected_bpm}
+                        onSeek={onSeek}
+                      />
                     ) : (
                       <>
                         {isEditMode && (
@@ -294,6 +303,14 @@ function FullscreenOverlay({
             lyrics={activeLyrics}
             strums={detail.strums}
             rhythm={detail.rhythm}
+            onSeek={onSeek}
+          />
+        ) : sheetMode === 'bars' && (detail.bar_starts?.length ?? 0) > 0 ? (
+          <BarsSheet
+            chords={displayChords}
+            barStarts={detail.bar_starts ?? []}
+            duration={detail.song.duration_seconds ?? 0}
+            bpm={detail.detected_bpm}
             onSeek={onSeek}
           />
         ) : (

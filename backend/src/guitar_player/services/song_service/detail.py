@@ -145,6 +145,8 @@ async def build_song_detail(
         chord_source=primary_source,
         recommended_capo=recommended_capo,
         song_key=song_key,
+        detected_bpm=chord_data.get("detected_bpm"),
+        bar_starts=chord_data.get("bar_starts", []),
         web_chords_failed=False,
         web_chords_pending=False,
         download_pending=song.download_requested_at is not None,
@@ -187,6 +189,8 @@ def _load_chords(
 
     recommended_capo: int | None = None
     song_key: str | None = None
+    detected_bpm: float | None = None
+    bar_starts: list[float] = []
     if song.song_name:
         meta_key = f"{song.song_name}/chord_meta.json"
         if storage.file_exists(meta_key):
@@ -195,6 +199,10 @@ def _load_chords(
                 if isinstance(meta, dict):
                     recommended_capo = meta.get("capo") or None
                     song_key = meta.get("key") or None
+                    detected_bpm = meta.get("bpm") or None
+                    raw_bars = meta.get("bar_starts")
+                    if isinstance(raw_bars, list):
+                        bar_starts = [float(b) for b in raw_bars]
             except Exception as e:
                 logger.warning("Failed to read chord_meta for %s: %s", song.song_name, e)
 
@@ -202,6 +210,8 @@ def _load_chords(
         "autochord": autochord,
         "recommended_capo": recommended_capo,
         "song_key": song_key,
+        "detected_bpm": detected_bpm,
+        "bar_starts": bar_starts,
     }
 
 

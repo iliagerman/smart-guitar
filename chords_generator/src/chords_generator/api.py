@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
 
+from chords_generator.bars import compute_bar_starts
 from chords_generator.bass_detect import detect_bass_for_chords
 from chords_generator.beat_align import detect_beats, snap_chords_to_beats
 from chords_generator.config import get_settings
@@ -255,6 +256,25 @@ def enhance(request: EnhanceRequest):
         # chords, so beginner/capo sheets carry the same beat-aligned timing.
         options = generate_simplified_options(chord_results)
         write_simplified_outputs(options, job_dir)
+
+        # Persist the bar grid (bpm + phase-aligned bar starts) so the player
+        # can render measures. Merge into any existing chord_meta.json so
+        # capo/key from other sources are preserved.
+        meta_neighbor = os.path.join(os.path.dirname(request.chords_path), "chord_meta.json")
+        meta: dict = {}
+        if _storage.file_exists(meta_neighbor):
+            try:
+                with open(_storage.resolve_input(meta_neighbor)) as f:
+                    existing = json.load(f)
+                if isinstance(existing, dict):
+                    meta = existing
+            except Exception:
+                logger.warning("Unreadable chord_meta.json at %s — rewriting", meta_neighbor)
+        if beats:
+            meta["bpm"] = round(bpm, 2)
+            meta["bar_starts"] = compute_bar_starts(beats, chord_results)
+        with open(os.path.join(job_dir, "chord_meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
 
         _storage.store_outputs(job_dir, request.chords_path)
 
