@@ -199,7 +199,7 @@ def test_even_distribution_proportional_to_length():
     assert dur_california > dur_i * 5, (
         f"'California' ({dur_california:.3f}s) should be >5x 'I' ({dur_i:.3f}s)"
     )
-    assert dur_am > dur_i, f"'am' should be longer than 'I'"
+    assert dur_am > dur_i, "'am' should be longer than 'I'"
     # Total should cover full range
     assert result[0].start == 0.0
     assert result[-1].end == 3.0

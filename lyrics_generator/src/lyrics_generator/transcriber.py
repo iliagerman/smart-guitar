@@ -15,8 +15,8 @@ from pathlib import Path
 # (ABI mismatch with torch 2.8) and pyannote falls back to torchaudio fine.
 warnings.filterwarnings("ignore", message="torchcodec is not installed correctly")
 
-from .config import WhisperConfig
-from .schemas import SegmentInfo, WordInfo
+from .config import WhisperConfig  # noqa: E402
+from .schemas import SegmentInfo, WordInfo  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 
+from .sanitizer import sanitize_segments
 from .schemas import SegmentInfo, WordInfo
 
 logger = logging.getLogger(__name__)
@@ -145,6 +145,9 @@ def write_lyrics_json(
             (e.g. "whisper", "openai_whisper", "lrclib_synced").
             Persisted in the JSON so the frontend can display it.
     """
+    # Single output choke point: every lyrics file ships structurally valid
+    # (sorted, non-overlapping) segments so playback sync can't jump backward.
+    segments = sanitize_segments(segments)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     data: dict = {
         "segments": [

@@ -1,7 +1,6 @@
 """Tests for the LRC parser."""
 
 from lyrics_generator.lrc_parser import parse_lrc
-from lyrics_generator.schemas import SegmentInfo
 
 
 LRC_SAMPLE = """\

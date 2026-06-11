@@ -1,6 +1,5 @@
 """Tests for Unicode script-based language detection."""
 
-import pytest
 
 from lyrics_generator.detect_language import detect_language_from_text
 

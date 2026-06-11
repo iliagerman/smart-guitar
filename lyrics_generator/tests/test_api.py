@@ -84,7 +84,10 @@ async def test_transcribe_empty_path(client):
 
 @pytest.mark.asyncio
 async def test_transcribe_whisperx_primary_even_with_openai_key(client, test_vocals_key):
-    """Local WhisperX is always primary, even when openai_api_key is provided."""
+    """Providing an openai_api_key alone must not flip transcription priority:
+    for Latin-script songs local WhisperX stays primary. (Languages listed in
+    whisper.openai_prefer_languages, e.g. Hebrew, legitimately prefer OpenAI —
+    that path is covered separately.)"""
     output_lyrics = str(
         (Path(TEST_BUCKET_DIR) / Path(test_vocals_key).parent / "lyrics.json").resolve()
     )
@@ -109,8 +112,8 @@ async def test_transcribe_whisperx_primary_even_with_openai_key(client, test_voc
                     "input_path": test_vocals_key,
                     "openai_api_key": "test-key-123",
                     "openai_model": "whisper-1",
-                    "title": "שיר בדיקה",
-                    "artist": "אמן בדיקה",
+                    "title": "Knocking on Heaven's Door",
+                    "artist": "Bob Dylan",
                 },
             )
             assert resp.status_code == 200

@@ -299,7 +299,7 @@ class TestTranscribeOpenAI:
         mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_response)
 
         with patch("openai.AsyncOpenAI", return_value=mock_client):
-            segments = await transcribe_openai(
+            await transcribe_openai(
                 str(audio_file),
                 api_key="test-key",
                 language=None,
