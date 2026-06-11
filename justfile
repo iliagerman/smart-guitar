@@ -552,6 +552,55 @@ bulk-regenerate *args="":
 validate-artifacts dir="local_bucket" *args="":
     cd {{project_dir}} && python3 scripts/validate_artifacts.py {{dir}} {{args}}
 
+# Upload regenerated lyrics/chords JSON artifacts from local_bucket to the prod
+# bucket, delete legacy lyrics_corrected.json objects, and invalidate the media
+# CDN. Runs validate-artifacts first as a gate. Audio/stems are never touched.
+# Deliberately avoids --size-only: same-size JSONs must still be replaced.
+#
+#   just sync-artifacts-to-prod              # dry run (prints what would change)
+#   just sync-artifacts-to-prod apply=true   # actually upload + delete + invalidate
+sync-artifacts-to-prod apply="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_dir}}"
+    export AWS_PROFILE="${AWS_PROFILE:-smart-guitar}"
+    BUCKET="smart-guitar-audio-prod"
+    MEDIA_CF_DISTRIBUTION="E3QJ1X7T9TEYE0"   # media.smart-guitar.com
+
+    just validate-artifacts local_bucket
+
+    DRYRUN="--dryrun"
+    if [[ "{{apply}}" == "true" ]]; then DRYRUN=""; fi
+
+    echo "── Syncing JSON artifacts to s3://${BUCKET} ${DRYRUN:+(DRY RUN)}"
+    aws s3 sync local_bucket "s3://${BUCKET}" ${DRYRUN} \
+        --exclude "*" \
+        --include "*/lyrics.json" \
+        --include "*/lyrics_quick.json" \
+        --include "*/chords.json" \
+        --include "*/chords_beginner*.json" \
+        --include "*/chords_intermediate.json" \
+        --include "*/chords_capo_*.json"
+
+    echo "── Deleting legacy lyrics_corrected.json objects from prod"
+    aws s3api list-objects-v2 --bucket "${BUCKET}" --query "Contents[?ends_with(Key, 'lyrics_corrected.json')].Key" --output text \
+        | tr '\t' '\n' | grep -v '^None$' | while read -r key; do
+        [[ -z "$key" ]] && continue
+        if [[ "{{apply}}" == "true" ]]; then
+            aws s3 rm "s3://${BUCKET}/${key}"
+        else
+            echo "(dryrun) delete: s3://${BUCKET}/${key}"
+        fi
+    done
+
+    if [[ "{{apply}}" == "true" ]]; then
+        echo "── Invalidating media CDN cache"
+        aws cloudfront create-invalidation --distribution-id "${MEDIA_CF_DISTRIBUTION}" --paths "/*" \
+            --query 'Invalidation.{id:Id,status:Status}' --output table
+    else
+        echo "(dryrun) would invalidate CloudFront ${MEDIA_CF_DISTRIBUTION} paths /*"
+    fi
+
 # Cleanup local_bucket/ by removing original-audio files whose filenames suggest
 # live concert/show recordings.
 #
