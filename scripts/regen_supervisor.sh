@@ -10,7 +10,7 @@ STATE_FILE="${PROJECT_DIR}/regen_state.jsonl"
 TOTAL_SONGS=1099
 INTERVAL=120
 # Don't (re)start heavy work while 1-minute load is above this.
-MAX_LOAD_TO_START=60
+MAX_LOAD_TO_START=100
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
@@ -21,14 +21,14 @@ current_load() { sysctl -n vm.loadavg | awk '{print int($2)}'; }
 restart_chords() {
     log "RESTART chords service (8001, background QoS)"
     cd "${PROJECT_DIR}/chords_generator"
-    TF_USE_LEGACY_KERAS=1 APP_ENV=local OMP_NUM_THREADS=2 nohup taskpolicy -b uv run uvicorn chords_generator.api:app \
+    TF_USE_LEGACY_KERAS=1 APP_ENV=local OMP_NUM_THREADS=2 nohup taskpolicy -c utility uv run uvicorn chords_generator.api:app \
         --host 0.0.0.0 --port 8001 >> /tmp/chords_service.log 2>&1 &
 }
 
 restart_lyrics() {
     log "RESTART lyrics service (8003, background QoS)"
     cd "${PROJECT_DIR}/lyrics_generator"
-    APP_ENV=local OMP_NUM_THREADS=4 nohup taskpolicy -b uv run uvicorn lyrics_generator.api:app \
+    APP_ENV=local OMP_NUM_THREADS=4 nohup taskpolicy -c utility uv run uvicorn lyrics_generator.api:app \
         --host 0.0.0.0 --port 8003 >> /tmp/lyrics_service.log 2>&1 &
 }
 
@@ -61,7 +61,7 @@ ensure_service() {
     eval "count=\${${counter_name}}"
     count=$((count + 1))
     eval "${counter_name}=${count}"
-    if [ "${count}" -ge 5 ]; then
+    if [ "${count}" -ge 8 ]; then
         log "service on ${port} stuck (alive but unhealthy ${count} cycles) — force restart"
         pkill -f "${pattern}"
         sleep 5
