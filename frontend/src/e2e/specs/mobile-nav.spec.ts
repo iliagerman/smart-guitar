@@ -4,11 +4,8 @@ test.describe('Mobile Navigation', () => {
   test.use({ viewport: { width: 390, height: 844 } }) // iPhone 14
 
   test('bottom nav navigates between pages', async ({ authenticatedPage: page }) => {
-    await page.goto('/search')
-    await expect(page.getByTestId('search-page')).toBeVisible()
-
-    await page.getByTestId('nav-library').click()
-    await expect(page.getByTestId('library-page')).toBeVisible()
+    await page.goto('/songs')
+    await expect(page.getByTestId('songs-page')).toBeVisible()
 
     await page.getByTestId('nav-favorites').click()
     await expect(page.getByTestId('favorites-page')).toBeVisible()
@@ -16,8 +13,8 @@ test.describe('Mobile Navigation', () => {
     await page.getByTestId('nav-settings').click()
     await expect(page.getByTestId('profile-page')).toBeVisible()
 
-    await page.getByTestId('nav-search').click()
-    await expect(page.getByTestId('search-page')).toBeVisible()
+    await page.getByTestId('nav-songs').click()
+    await expect(page.getByTestId('songs-page')).toBeVisible()
   })
 
   test('favorites page renders with API data', async ({ authenticatedPage: page }) => {
