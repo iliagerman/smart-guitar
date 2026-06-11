@@ -182,8 +182,14 @@ async def _do_lyrics(
     job_id: uuid.UUID,
     settings,
     fallback_input_key: str | None = None,
+    fast_only: bool = False,
 ) -> None:
-    """Transcribe lyrics from the vocals stem, or the full audio as fallback (non-fatal)."""
+    """Transcribe lyrics from the vocals stem, or the full audio as fallback (non-fatal).
+
+    With *fast_only* only the quick (LRCLIB/onset-aligned) lyrics are produced —
+    used early in the job, before stems exist, for fast UX feedback. The full
+    Whisper pass must run on the isolated vocals stem for accuracy.
+    """
     vocals_stem_key = find_stem(storage, song_name, "vocals")
     input_key = vocals_stem_key or fallback_input_key
     t0 = time.monotonic()
@@ -207,6 +213,7 @@ async def _do_lyrics(
                 "job_id": str(job_id),
                 "subtask": "lyrics",
                 "input_key": input_key,
+                "fast_only": fast_only,
                 "using_fallback": vocals_stem_key is None,
             },
         )
@@ -218,6 +225,7 @@ async def _do_lyrics(
             language=settings.openai.transcription_language,
             openai_api_key=settings.openai.api_key,
             openai_model=settings.openai.transcription_model,
+            fast_only=fast_only,
         )
         elapsed_s = time.monotonic() - t0
         logger.info(
@@ -587,13 +595,15 @@ async def process_job(job_id: uuid.UUID) -> None:
     # Idempotency: skip expensive work if core artifacts already exist.
     await set_progress(job_id, 10, "separating")
 
-    # Start lyrics immediately in parallel with stem separation.
-    # Uses vocals stem when available (better Whisper accuracy), falls back to
-    # the original audio so transcription overlaps with the ~2-minute demucs run.
-    early_lyrics_task = asyncio.create_task(
+    # Start QUICK lyrics immediately in parallel with stem separation: the
+    # LRCLIB/onset fast track is bleed-tolerant, so the full mix is fine and
+    # the player gets lyrics within seconds. The full Whisper pass is NOT
+    # started here — on a fresh song no vocals stem exists yet and whisper on
+    # the full mix transcribes drums/guitar bleed.
+    early_quick_lyrics_task = asyncio.create_task(
         _do_lyrics(
             processing, storage, song_name, song_title, song_artist,
-            job_id, settings, fallback_input_key=audio_key,
+            job_id, settings, fallback_input_key=audio_key, fast_only=True,
         )
     )
 
@@ -602,13 +612,14 @@ async def process_job(job_id: uuid.UUID) -> None:
         demucs_requested_outputs, job_start_time,
     )
     if sep_result is None:
-        early_lyrics_task.cancel()
-        await asyncio.gather(early_lyrics_task, return_exceptions=True)
+        early_quick_lyrics_task.cancel()
+        await asyncio.gather(early_quick_lyrics_task, return_exceptions=True)
         return  # Job was failed inside the helper.
 
-    # Lyrics is already running; join it with merge/tabs/quick-lyrics.
+    # Stems exist now — run the full Whisper transcription on the isolated
+    # vocals stem (find_stem picks it up), joined with merge/tabs.
     logger.info(
-        "Stems+chords done, joining lyrics/merge in parallel",
+        "Stems+chords done, transcribing vocals stem + merge in parallel",
         extra={
             "job_id": str(job_id),
             "stage": "transcribing",
@@ -621,7 +632,11 @@ async def process_job(job_id: uuid.UUID) -> None:
 
     async def _remaining_subtasks() -> None:
         await asyncio.gather(
-            early_lyrics_task,
+            early_quick_lyrics_task,
+            _do_lyrics(
+                processing, storage, song_name, song_title, song_artist,
+                job_id, settings, fallback_input_key=audio_key,
+            ),
             _do_merge(storage, song_name, job_id, settings),
             _do_tabs(processing, storage, song_name, job_id),
             _check_quick_lyrics(storage, song_name, song_id, job_id),
