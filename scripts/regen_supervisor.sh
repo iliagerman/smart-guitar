@@ -41,6 +41,38 @@ resume_driver() {
         >> /tmp/bulk_regen_0.log 2>&1 &
 }
 
+# ensure_service <port> <pgrep-pattern> <restart-fn> <stuck-counter-name>
+# Restart only when NO process exists — services boot slowly under background
+# QoS and firing twice races two listeners for the port. If a process exists
+# but stays unhealthy for 5 cycles, force-kill and restart it.
+ensure_service() {
+    local port="$1" pattern="$2" restart_fn="$3" counter_name="$4"
+    if [ "$(health "${port}")" = "200" ]; then
+        eval "${counter_name}=0"
+        return
+    fi
+    if ! pgrep -f "${pattern}" > /dev/null 2>&1; then
+        "${restart_fn}"
+        eval "${counter_name}=0"
+        sleep 10
+        return
+    fi
+    local count
+    eval "count=\${${counter_name}}"
+    count=$((count + 1))
+    eval "${counter_name}=${count}"
+    if [ "${count}" -ge 5 ]; then
+        log "service on ${port} stuck (alive but unhealthy ${count} cycles) — force restart"
+        pkill -f "${pattern}"
+        sleep 5
+        "${restart_fn}"
+        eval "${counter_name}=0"
+    fi
+}
+
+stuck_chords=0
+stuck_lyrics=0
+
 log "supervisor started (interval ${INTERVAL}s, LOW-IMPACT single instance)"
 while true; do
     done_count=$(grep -c '"status": "done"' "${STATE_FILE}" 2>/dev/null || true)
@@ -59,8 +91,8 @@ while true; do
         continue
     fi
 
-    if [ "$(health 8001)" != "200" ]; then restart_chords; sleep 20; fi
-    if [ "$(health 8003)" != "200" ]; then restart_lyrics; sleep 30; fi
+    ensure_service 8001 "uvicorn chords_generator" restart_chords stuck_chords
+    ensure_service 8003 "uvicorn lyrics_generator" restart_lyrics stuck_lyrics
 
     if ! pgrep -f "bulk_regenerate.py" > /dev/null 2>&1; then
         sleep 5
