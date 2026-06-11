@@ -119,6 +119,52 @@ def test_repeated_chorus_lines_stay_monotonic():
     assert timings[2] == (18.0, 21.0)
 
 
+def test_aligns_lines_within_long_merged_segments():
+    """Old whisper data often has few long segments covering several sheet
+    lines each (e.g. 5 segments for a whole song). Lines must still get
+    their own time window from the word timestamps inside the segment."""
+    segments = [
+        # One 30-second segment containing two sheet lines worth of words.
+        seg(11.0, 40.0, "Mama take this badge off of me I can't use it anymore"),
+        seg(43.0, 68.0, "It's getting dark too dark to see"),
+    ]
+    lines = [
+        lyric("Mama, take this badge off of me"),
+        lyric("I can't use it anymore"),
+        lyric("It's getting dark, too dark to see"),
+    ]
+    timings = align_sheet_lines_to_segments(lines, segments, duration=180.0)
+    assert timings is not None
+    first, second, third = timings
+    assert first is not None and second is not None and third is not None
+    # Both lines live inside the first segment but get DISTINCT windows,
+    # in order, splitting roughly at the word boundary.
+    assert 11.0 <= first[0] < first[1] <= second[0] < second[1] <= 40.0 + 0.1
+    # Third line maps to the second segment.
+    assert 43.0 <= third[0] < third[1] <= 68.0 + 0.1
+
+
+def test_tab_noise_lines_do_not_block_the_match_gate():
+    """UG sheets often carry tuning/tab/url text mislabeled as lyric lines.
+    Those must not count against the match ratio — the sheet should still
+    sync when its real lyric lines match."""
+    lines = [
+        lyric("Knockin' On Heaven's Door - Bob Dylan"),
+        lyric("G     3-x-0-0-0-3"),
+        lyric("D     x-x-0-2-3-2"),
+        lyric("Am7   x-0-2-2-1-3"),
+        lyric("https://en.wikipedia.org/wiki/Knockin"),
+        lyric("When I find myself in times of trouble"),
+        lyric("Mother Mary comes to me"),
+        lyric("Speaking words of wisdom let it be"),
+    ]
+    timings = align_sheet_lines_to_segments(lines, SEGMENTS, duration=240.0)
+    assert timings is not None
+    assert timings[5] == (10.0, 14.0)
+    assert timings[6] == (15.0, 19.0)
+    assert timings[7] == (20.0, 24.0)
+
+
 def test_returns_none_when_sheet_does_not_match_lyrics():
     lines = [
         lyric("totally unrelated line one"),

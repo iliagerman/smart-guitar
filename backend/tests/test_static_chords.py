@@ -331,21 +331,26 @@ async def test_community_sheet_synced_to_whisper_lyrics(settings, storage):
     lyrics_key = f"{song_name}/lyrics.json"
     created_dirs: list[Path] = []
 
+    def _words(start: float, end: float, text: str) -> list[dict]:
+        tokens = text.split()
+        dur = (end - start) / len(tokens)
+        return [
+            {"word": t, "start": round(start + i * dur, 3), "end": round(start + (i + 1) * dur, 3)}
+            for i, t in enumerate(tokens)
+        ]
+
     whisper = {
         "source": "whisper",
         "segments": [
             {
                 "start": 42.0, "end": 46.5,
                 "text": "When I find myself in times of trouble",
-                "words": [
-                    {"word": "When", "start": 42.0, "end": 42.5},
-                    {"word": "trouble", "start": 45.8, "end": 46.5},
-                ],
+                "words": _words(42.0, 46.5, "When I find myself in times of trouble"),
             },
             {
                 "start": 47.0, "end": 50.0,
                 "text": "Mother Mary comes to me",
-                "words": [{"word": "Mother", "start": 47.0, "end": 47.6}],
+                "words": _words(47.0, 50.0, "Mother Mary comes to me"),
             },
         ],
     }

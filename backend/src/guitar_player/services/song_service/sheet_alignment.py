@@ -1,29 +1,37 @@
 """Align fetched chord-sheet lines to whisper lyrics timing.
 
 Community chord sheets (Ultimate Guitar) carry lyric lines + chord positions
-but no timestamps. This module fuzzy-matches each sheet lyric line to the
-whisper-transcribed segments — deterministically, with a monotonic dynamic
-program (no LLM) — so the sheet can auto-scroll in real time.
+but no timestamps. This module matches each sheet lyric line to a contiguous
+window of whisper-transcribed WORDS — deterministically, in order, no LLM —
+so the sheet can auto-scroll in real time.
 
-Lines that don't match (ad-libs, transcription gaps, instrumentals) get a
-window interpolated between their matched neighbors. If too few lines match
-overall, alignment returns None and the caller falls back to even
-distribution across the song duration.
+Matching at the word level (rather than segment level) is essential: whisper
+segmentation varies wildly, and older transcripts often pack several sheet
+lines into one long segment. Word timestamps let every line get its own
+window regardless of how whisper chose to segment.
+
+Lines that don't match (ad-libs, section noise, tab/tuning text the sheet
+parser mislabeled as lyrics) get a window interpolated between their matched
+neighbors. If too few lines match overall, alignment returns None and the
+caller falls back to even distribution across the song duration.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from guitar_player.schemas.song import LyricsSegment
 
-# A pair must be at least this similar to count as a match.
-_MATCH_THRESHOLD = 0.55
-# Cheap token-overlap prefilter before running SequenceMatcher.
-_PREFILTER_JACCARD = 0.15
+# A line->window match must reach this token-sequence similarity.
+_MATCH_THRESHOLD = 0.6
 # If fewer than this fraction of lyric lines matched, give up (wrong sheet).
 _MIN_MATCH_RATIO = 0.35
+# Window width slack around the line's token count.
+_WIDTH_SLACK = 2
+# At most this many candidate anchor positions are scored per line.
+_MAX_CANDIDATES = 60
 
 _NON_WORD_RE = re.compile(r"[^\w\s]", re.UNICODE)
 
@@ -31,62 +39,78 @@ _NON_WORD_RE = re.compile(r"[^\w\s]", re.UNICODE)
 TIMED_LINE_TYPES = ("lyric", "instrumental")
 
 
-def _normalize(text: str) -> str:
-    return " ".join(_NON_WORD_RE.sub(" ", text.lower()).split())
+@dataclass
+class _TimedWord:
+    token: str
+    start: float
+    end: float
 
 
-def _similarity(a: str, b: str, tokens_a: set[str], tokens_b: set[str]) -> float:
-    if not a or not b:
-        return 0.0
-    union = tokens_a | tokens_b
-    if union:
-        jaccard = len(tokens_a & tokens_b) / len(union)
-        if jaccard < _PREFILTER_JACCARD:
-            return 0.0
-    return SequenceMatcher(None, a, b).ratio()
+def _tokenize(text: str) -> list[str]:
+    return _NON_WORD_RE.sub(" ", text.lower()).split()
 
 
-def _best_monotonic_matches(
-    line_texts: list[str], segment_texts: list[str],
-) -> dict[int, int]:
-    """Monotonic line->segment assignment maximizing total similarity.
+def _is_noise_line(text: str) -> bool:
+    """Tab/tuning/url text the sheet parser mislabeled as lyrics.
 
-    Standard alignment DP: at each (i, j) either match line i to segment j,
-    skip the line, or skip the segment. Matches below the threshold score 0
-    and are discarded during backtracking.
+    Such lines never match the transcript; excluding them from the match
+    gate keeps one noisy header from blocking an otherwise good sheet.
     """
-    n, m = len(line_texts), len(segment_texts)
-    line_tokens = [set(t.split()) for t in line_texts]
-    seg_tokens = [set(t.split()) for t in segment_texts]
+    lowered = text.lower()
+    if "http://" in lowered or "https://" in lowered or "www." in lowered:
+        return True
+    tokens = _tokenize(text)
+    if not tokens:
+        return True
+    noisy = sum(1 for t in tokens if any(ch.isdigit() for ch in t) or len(t) == 1)
+    return noisy / len(tokens) > 0.5
 
-    sim = [
-        [
-            _similarity(line_texts[i], segment_texts[j], line_tokens[i], seg_tokens[j])
-            for j in range(m)
-        ]
-        for i in range(n)
-    ]
 
-    # dp[i][j] = best score aligning lines[i:] with segments[j:]
-    dp = [[0.0] * (m + 1) for _ in range(n + 1)]
-    for i in range(n - 1, -1, -1):
-        for j in range(m - 1, -1, -1):
-            match_score = (sim[i][j] if sim[i][j] >= _MATCH_THRESHOLD else 0.0) + dp[i + 1][j + 1]
-            dp[i][j] = max(match_score, dp[i + 1][j], dp[i][j + 1])
+def _flatten_words(segments: list[LyricsSegment]) -> list[_TimedWord]:
+    words: list[_TimedWord] = []
+    for seg in segments:
+        for w in seg.words:
+            tokens = _tokenize(w.word)
+            if not tokens:
+                continue
+            # A whisper "word" is occasionally multiple tokens; share its window.
+            for t in tokens:
+                words.append(_TimedWord(token=t, start=float(w.start), end=float(w.end)))
+    return words
 
-    matches: dict[int, int] = {}
-    i = j = 0
-    while i < n and j < m:
-        match_score = (sim[i][j] if sim[i][j] >= _MATCH_THRESHOLD else 0.0) + dp[i + 1][j + 1]
-        if dp[i][j] == match_score and sim[i][j] >= _MATCH_THRESHOLD:
-            matches[i] = j
-            i += 1
-            j += 1
-        elif dp[i][j] == dp[i + 1][j]:
-            i += 1
-        else:
-            j += 1
-    return matches
+
+def _match_line(
+    tokens: list[str],
+    words: list[_TimedWord],
+    min_start: int,
+) -> tuple[int, int, float] | None:
+    """Best (start_idx, end_idx_exclusive, score) word window for a line."""
+    n = len(tokens)
+    if n == 0:
+        return None
+    anchors = {tokens[0]}
+    if n > 1:
+        anchors.add(tokens[1])
+
+    best: tuple[int, int, float] | None = None
+    candidates = 0
+    for s in range(min_start, len(words)):
+        if words[s].token not in anchors:
+            continue
+        candidates += 1
+        if candidates > _MAX_CANDIDATES:
+            break
+        for width in range(max(1, n - _WIDTH_SLACK), n + _WIDTH_SLACK + 1):
+            e = s + width
+            if e > len(words):
+                break
+            window = [w.token for w in words[s:e]]
+            score = SequenceMatcher(None, tokens, window).ratio()
+            if score >= _MATCH_THRESHOLD and (best is None or score > best[2]):
+                best = (s, e, score)
+        if best is not None and best[2] > 0.95:
+            break  # essentially exact; no point scanning further
+    return best
 
 
 def align_sheet_lines_to_segments(
@@ -104,6 +128,9 @@ def align_sheet_lines_to_segments(
     """
     if not segments:
         return None
+    words = _flatten_words(segments)
+    if not words:
+        return None
 
     timed_indices = [
         idx for idx, line in enumerate(raw_lines)
@@ -113,30 +140,36 @@ def align_sheet_lines_to_segments(
         pos for pos, idx in enumerate(timed_indices)
         if raw_lines[idx].get("type") == "lyric" and (raw_lines[idx].get("text") or "").strip()
     ]
-    if not lyric_positions:
+    gated_positions = [
+        pos for pos in lyric_positions
+        if not _is_noise_line(raw_lines[timed_indices[pos]].get("text", ""))
+    ]
+    if not gated_positions:
         return None
 
-    line_texts = [_normalize(raw_lines[timed_indices[pos]].get("text", "")) for pos in lyric_positions]
-    segment_texts = [_normalize(s.text) for s in segments]
-
-    matches = _best_monotonic_matches(line_texts, segment_texts)
-    if len(matches) / len(lyric_positions) < _MIN_MATCH_RATIO:
-        return None
-
-    # Anchor windows for matched timed positions.
-    total_timed = len(timed_indices)
+    # Match each lyric line to a word window, advancing monotonically.
     anchors: dict[int, tuple[float, float]] = {}
-    for lyric_pos_idx, seg_idx in matches.items():
-        timed_pos = lyric_positions[lyric_pos_idx]
-        s = segments[seg_idx]
-        anchors[timed_pos] = (float(s.start), float(s.end))
+    cursor = 0
+    matched = 0
+    for pos in lyric_positions:
+        tokens = _tokenize(raw_lines[timed_indices[pos]].get("text", ""))
+        found = _match_line(tokens, words, cursor)
+        if found is None:
+            continue
+        s, e, _score = found
+        anchors[pos] = (round(words[s].start, 3), round(words[e - 1].end, 3))
+        cursor = e
+        matched += 1
+
+    if matched / len(gated_positions) < _MIN_MATCH_RATIO:
+        return None
 
     # Interpolate the unmatched timed positions between anchored neighbors.
+    total_timed = len(timed_indices)
     windows: list[tuple[float, float]] = [(0.0, 0.0)] * total_timed
     anchor_positions = sorted(anchors)
-    for pos in range(total_timed):
-        if pos in anchors:
-            windows[pos] = anchors[pos]
+    for pos in anchor_positions:
+        windows[pos] = anchors[pos]
 
     def _fill_gap(start_pos: int, end_pos: int, t0: float, t1: float) -> None:
         """Evenly distribute positions in (start_pos, end_pos) over [t0, t1]."""
