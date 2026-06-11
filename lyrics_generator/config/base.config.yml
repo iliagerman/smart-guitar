@@ -15,12 +15,16 @@ whisper:
   beam_size: 5
   patience: 2.0
 
-  # Keep decoding deterministic by default.
-  temperature: 0.0
+  # Temperature fallback schedule: when a window fails the quality gates
+  # (compression ratio / logprob), retry at higher temperatures instead of
+  # keeping the degenerate beam output. A single 0.0 leaves repetition
+  # loops ("oh oh oh..." x100) no escape path.
+  temperature: [0.0, 0.2, 0.4]
 
-  # Use previous segment text as context for the next segment, improving
-  # coherence across repeated verses/choruses in songs.
-  condition_on_previous_text: true
+  # Conditioning each window on the previous text feeds repetition loops on
+  # music (measured: 39% of regenerated songs had phrase loops with this
+  # on). The LRCLIB initial prompt still provides vocabulary guidance.
+  condition_on_previous_text: false
 
   # Prompting: keep it short and focused on proper nouns.
   # Template supports {title} and {artist}. Backend can pass these per-request.
