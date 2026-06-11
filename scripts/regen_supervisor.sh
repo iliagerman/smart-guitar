@@ -10,7 +10,7 @@ STATE_FILE="${PROJECT_DIR}/regen_state.jsonl"
 TOTAL_SONGS=1099
 INTERVAL=120
 # Don't (re)start heavy work while 1-minute load is above this.
-MAX_LOAD_TO_START=20
+MAX_LOAD_TO_START=60
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
