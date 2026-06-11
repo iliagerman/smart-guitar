@@ -195,7 +195,12 @@ async def main() -> None:
 
     settings = load_settings()
     if args.lyrics_host:
-        settings.services.lyrics_generator = args.lyrics_host
+        # Mirror the config loader's normalization — post-load mutation
+        # bypasses validators, and ProcessingService needs a full URL.
+        host = args.lyrics_host
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
+        settings.services.lyrics_generator = host
     init_db(settings)
     storage = create_storage(settings)
     storage.init()
