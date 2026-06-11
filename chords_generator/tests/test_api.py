@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import TEST_BUCKET_DIR
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from chords_generator.config import get_settings
 from chords_generator.observability import instrument_runtime_observer
 from chords_generator.recognizer import recognize_chords
 from chords_generator.request_context import RequestContextFilter, RequestContextMiddleware
+from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
 from chords_generator.schemas import (
     ChordInfo,
     ChordResult,
@@ -249,6 +250,12 @@ def enhance(request: EnhanceRequest):
                 ],
                 f, indent=2,
             )
+
+        # Regenerate the simplified difficulty variants from the enhanced
+        # chords, so beginner/capo sheets carry the same beat-aligned timing.
+        options = generate_simplified_options(chord_results)
+        write_simplified_outputs(options, job_dir)
+
         _storage.store_outputs(job_dir, request.chords_path)
 
         chords = [
@@ -256,8 +263,8 @@ def enhance(request: EnhanceRequest):
             for c in chord_results
         ]
         logger.info(
-            "Enhance done: %d chords, %d beats, %d slash-bass",
-            len(chords), len(beats), bass_count,
+            "Enhance done: %d chords, %d beats, %d slash-bass, %d variants",
+            len(chords), len(beats), bass_count, len(options["options"]),
             extra={"event_type": "enhance_done", "chords_path": request.chords_path},
         )
         return EnhanceResponse(

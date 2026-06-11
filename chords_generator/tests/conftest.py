@@ -14,6 +14,9 @@ from httpx import ASGITransport, AsyncClient
 
 # Set test environment before any app imports
 os.environ["APP_ENV"] = "test"
+# autochord's bundled model is a legacy SavedModel; Keras 3 can't load it.
+# Mirror the run-chords recipe so /recognize works under plain pytest too.
+os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
 
 from chords_generator.api import app  # noqa: E402
 

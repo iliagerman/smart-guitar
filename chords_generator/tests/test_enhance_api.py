@@ -84,6 +84,36 @@ async def test_enhance_beat_aligns_without_bass_when_no_bass_path(client, monkey
 
 
 @pytest.mark.asyncio
+async def test_enhance_regenerates_simplified_variants(client, monkeypatch, tmp_path):
+    """Enhance must rewrite the simplified difficulty variants too, so
+    beginner/capo sheets carry the same beat-aligned timing as chords.json."""
+    song_dir = tmp_path / "song3"
+    song_dir.mkdir()
+    chords_path = str(song_dir / "chords.json")
+    audio_path = str(song_dir / "audio.mp3")
+    _write_chords(chords_path, [
+        {"start_time": 0.07, "end_time": 1.9, "chord": "C:maj"},
+        {"start_time": 1.9, "end_time": 3.8, "chord": "G:maj"},
+    ])
+    open(audio_path, "wb").write(b"x")
+
+    monkeypatch.setattr(api_mod, "detect_beats", lambda p: ([0.0, 1.0, 2.0, 3.0, 4.0], 120.0))
+
+    resp = await client.post("/enhance", json={
+        "audio_path": audio_path, "chords_path": chords_path, "bass_path": "",
+    })
+    assert resp.status_code == 200
+
+    for variant in ("chords_intermediate.json", "chords_beginner.json"):
+        variant_path = song_dir / variant
+        assert variant_path.exists(), f"{variant} not regenerated"
+        with open(variant_path) as f:
+            data = json.load(f)
+        # Variant timing must match the beat-aligned main chords.
+        assert data["chords"][0]["start_time"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_enhance_404_when_chords_missing(client, tmp_path):
     audio_path = str(tmp_path / "audio.mp3")
     open(audio_path, "wb").write(b"x")
