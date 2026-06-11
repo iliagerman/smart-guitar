@@ -23,6 +23,13 @@ from .schemas import SegmentInfo, WordInfo
 # segments to be considered one audio region transcribed twice.
 _DUPLICATE_OVERLAP_RATIO = 0.5
 
+# Identical-token runs faster than this are decoder degeneration ("you" x221
+# in 15s ≈ 14/sec) — no human sings discrete words that fast. Real chants
+# ("la la la" at ~3/sec) stay untouched.
+_MAX_TOKEN_RATE_HZ = 5.0
+_THINNED_TOKEN_DURATION_S = 0.3
+_MIN_RUN_TO_THIN = 10
+
 
 def _normalize_text(text: str) -> str:
     return " ".join(text.lower().split())
@@ -60,6 +67,43 @@ def _sanitize_words(words: list[WordInfo], seg_start: float, seg_end: float) -> 
     return result
 
 
+def _thin_degenerate_runs(words: list[WordInfo]) -> tuple[list[WordInfo], bool]:
+    """Thin impossibly fast runs of one repeated token to a singable pace.
+
+    Returns (words, modified). The run keeps its time window; only the
+    token count inside it is reduced and re-timed evenly.
+    """
+    if len(words) < _MIN_RUN_TO_THIN:
+        return words, False
+    out: list[WordInfo] = []
+    modified = False
+    i = 0
+    while i < len(words):
+        j = i
+        token = _normalize_text(words[i].word)
+        while j < len(words) and _normalize_text(words[j].word) == token:
+            j += 1
+        run = words[i:j]
+        if len(run) >= _MIN_RUN_TO_THIN:
+            window = max(run[-1].end - run[0].start, 1e-6)
+            if len(run) / window > _MAX_TOKEN_RATE_HZ:
+                target = max(4, min(len(run), round(window / _THINNED_TOKEN_DURATION_S)))
+                step = window / target
+                start = run[0].start
+                run = [
+                    WordInfo(
+                        word=run[0].word,
+                        start=round(start + k * step, 3),
+                        end=round(start + (k + 1) * step, 3),
+                    )
+                    for k in range(target)
+                ]
+                modified = True
+        out.extend(run)
+        i = j
+    return out, modified
+
+
 def sanitize_segments(segments: list[SegmentInfo]) -> list[SegmentInfo]:
     """Return a structurally valid copy of *segments* (text untouched)."""
     valid = [
@@ -92,8 +136,12 @@ def sanitize_segments(segments: list[SegmentInfo]) -> list[SegmentInfo]:
         start = max(s.start, prev_end) if result else max(s.start, 0.0)
         end = max(s.end, start)
         words = _sanitize_words(s.words, start, end)
+        words, thinned = _thin_degenerate_runs(words)
+        # Only rebuild text when thinning changed the words — otherwise the
+        # original text (punctuation, casing) is preserved verbatim.
+        text = " ".join(w.word for w in words) if thinned else s.text
         result.append(
-            SegmentInfo(start=round(start, 3), end=round(end, 3), text=s.text, words=words)
+            SegmentInfo(start=round(start, 3), end=round(end, 3), text=text, words=words)
         )
         prev_end = end
     return result

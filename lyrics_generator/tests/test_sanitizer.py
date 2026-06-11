@@ -115,6 +115,39 @@ def test_overlapping_words_made_monotonic():
     assert w[1].start >= w[0].end
 
 
+def test_degenerate_token_runs_are_thinned_to_singable_rate():
+    """221 'you's in 15s (~14 words/sec) is decoder degeneration, not singing.
+    The run must be thinned to a plausible rate across the same time window."""
+    n = 221
+    start, end = 11.8, 27.3
+    dur = (end - start) / n
+    words = [WordInfo("you", start + i * dur, start + (i + 1) * dur) for i in range(n)]
+    segments = [seg(start, end, " ".join(["you"] * n), words)]
+
+    out = sanitize_segments(segments)
+    assert len(out) == 1
+    thinned = out[0].words
+    # Capped to a sane rate (<= ~4 tokens/sec over 15.5s ≈ 62) but not erased.
+    assert 4 <= len(thinned) <= 65
+    # Window preserved.
+    assert thinned[0].start == start
+    assert abs(thinned[-1].end - end) < 0.5
+    # Text rebuilt to match the thinned words.
+    assert out[0].text == " ".join(w.word for w in thinned)
+
+
+def test_real_chant_runs_are_preserved():
+    """'La la la' sung at ~300ms per word is real content — never thinned."""
+    n = 20
+    start = 10.0
+    words = [WordInfo("la", start + i * 0.3, start + (i + 1) * 0.3) for i in range(n)]
+    segments = [seg(start, start + n * 0.3, " ".join(["la"] * n), words)]
+
+    out = sanitize_segments(segments)
+    assert len(out[0].words) == n
+    assert out[0].text == " ".join(["la"] * n)
+
+
 def test_sanitize_is_idempotent():
     segments = [
         seg(10.0, 12.0, "later"),
