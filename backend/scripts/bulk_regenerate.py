@@ -84,7 +84,13 @@ async def regenerate_chords(
     bass_key = song.bass_key or f"{song_name}/bass.mp3"
     bass_path = bass_key if storage.file_exists(bass_key) else ""
 
-    result = await processing.enhance_chords(audio_key, chords_key, bass_path)
+    # The chords service resolves inputs in its own storage; pass service
+    # paths (absolute locally, raw keys on S3) like the orchestrator does.
+    result = await processing.enhance_chords(
+        storage.resolve_service_path(audio_key),
+        storage.resolve_service_path(chords_key),
+        storage.resolve_service_path(bass_path) if bass_path else "",
+    )
     return f"chords: beats={result.beats_detected} slash-bass={result.bass_count}"
 
 

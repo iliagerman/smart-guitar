@@ -43,8 +43,10 @@ def check_lyrics(path: Path) -> dict[str, int]:
             issues["segment_overlap"] += 1
         if end < start:
             issues["segment_inverted"] += 1
-        if text and text == prev_text:
-            issues["adjacent_duplicate"] += 1
+        # A repeated line is an artifact only when it covers the SAME audio
+        # region (overlapping windows). Chorus repeats at later times are fine.
+        if text and text == prev_text and start < prev_end - 0.001:
+            issues["overlapping_duplicate"] += 1
         prev_word_start = -1.0
         for word in seg.get("words", []):
             ws, we = float(word.get("start", 0)), float(word.get("end", 0))

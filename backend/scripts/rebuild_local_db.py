@@ -51,9 +51,15 @@ def wipe_and_migrate(db_url: str) -> None:
     sync_url = db_url.replace("+aiosqlite", "").replace("+asyncpg", "")
     engine = create_engine(sync_url)
     logger.info("Dropping all tables on %s", sync_url.split("@")[-1])
-    Base.metadata.drop_all(engine)
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
+    if sync_url.startswith("postgresql"):
+        # drop_all can't order the jobs<->songs FK cycle; nuke the schema.
+        with engine.begin() as conn:
+            conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+            conn.exec_driver_sql("CREATE SCHEMA public")
+    else:
+        Base.metadata.drop_all(engine)
+        with engine.begin() as conn:
+            conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
     engine.dispose()
 
     logger.info("Running alembic upgrade head")
