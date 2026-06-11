@@ -90,12 +90,12 @@ class TabsResult:
 
 
 class ProcessingService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, timeout: float = PROCESSING_TIMEOUT) -> None:
         self._demucs_host = settings.services.inference_demucs
         self._chords_host = settings.services.chords_generator
         self._lyrics_host = settings.services.lyrics_generator
         self._tabs_host = settings.services.tabs_generator
-
+        self._timeout = timeout
 
     async def _request(self, url: str, payload: dict) -> dict:
         """POST to a downstream service with timing, status, and error logging."""
@@ -114,7 +114,7 @@ class ProcessingService:
         if uid:
             headers["X-User-ID"] = uid
         try:
-            async with httpx.AsyncClient(timeout=PROCESSING_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, json=payload, headers=headers)
                 elapsed_ms = (time.monotonic() - t0) * 1000
                 logger.info(

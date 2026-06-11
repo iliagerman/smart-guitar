@@ -6,16 +6,20 @@ For each song:
     simplified difficulty variants. Cheap (no autochord / demucs re-run).
   * lyrics: deletes lyrics.json / lyrics_quick.json / lyrics_corrected.json
     and re-runs the current transcription pipeline (LRCLIB + WhisperX +
-    deterministic sanitizer) via the same `transcribe_lyrics_only` task the
-    orchestrator uses. The legacy LLM-merged lyrics_corrected.json is always
-    deleted and never regenerated.
+    deterministic sanitizer). The legacy LLM-merged lyrics_corrected.json
+    is always deleted and never regenerated.
 
-Requires the chords (8001) and lyrics (8003) services to be running.
-Progress is appended to a JSONL state file; rerunning skips completed songs.
+Requires the chords (8001) and lyrics services to be running. Multiple
+driver instances can run in parallel against separate lyrics service
+instances: use --shard k/N with --lyrics-host per instance. Progress is
+appended to a shared JSONL state file; rerunning skips completed songs.
 
-Usage:
-    cd backend && APP_ENV=local uv run python scripts/bulk_regenerate.py \
-        --concurrency 2 --state-file ../regen_state.jsonl
+Usage (two-way parallel):
+    cd backend
+    APP_ENV=local uv run python scripts/bulk_regenerate.py \
+        --shard 0/2 --lyrics-host localhost:8003 --state-file ../regen_state.jsonl &
+    APP_ENV=local uv run python scripts/bulk_regenerate.py \
+        --shard 1/2 --lyrics-host localhost:8013 --state-file ../regen_state.jsonl &
 """
 
 from __future__ import annotations
@@ -32,7 +36,6 @@ from guitar_player.config import load_settings
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import close_db, init_db, safe_session
 from guitar_player.schemas.records import SongRecord
-from guitar_player.services.job_service.lyrics_chords import transcribe_lyrics_only
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.storage import StorageBackend, create_storage
 
@@ -94,7 +97,12 @@ async def regenerate_chords(
     return f"chords: beats={result.beats_detected} slash-bass={result.bass_count}"
 
 
-async def regenerate_lyrics(storage: StorageBackend, song: SongRecord) -> str:
+async def regenerate_lyrics(
+    processing: ProcessingService,
+    storage: StorageBackend,
+    song: SongRecord,
+    settings,
+) -> str:
     """Delete existing lyrics artifacts and re-transcribe with the current pipeline."""
     song_name = song.song_name
     vocals_key = song.vocals_key or f"{song_name}/vocals.mp3"
@@ -114,7 +122,14 @@ async def regenerate_lyrics(storage: StorageBackend, song: SongRecord) -> str:
         )
         await dao.commit()
 
-    await transcribe_lyrics_only(song.id)
+    await processing.transcribe_lyrics(
+        storage.resolve_service_path(vocals_key),
+        title=song.title,
+        artist=song.artist,
+        language=settings.openai.transcription_language,
+        openai_api_key=settings.openai.api_key,
+        openai_model=settings.openai.transcription_model,
+    )
 
     produced = [
         fname for fname in ("lyrics.json", "lyrics_quick.json")
@@ -122,6 +137,14 @@ async def regenerate_lyrics(storage: StorageBackend, song: SongRecord) -> str:
     ]
     if "lyrics.json" not in produced:
         raise RuntimeError(f"lyrics.json not produced (got: {produced})")
+
+    changes: dict = {"lyrics_key": f"{song_name}/lyrics.json"}
+    if "lyrics_quick.json" in produced:
+        changes["lyrics_quick_key"] = f"{song_name}/lyrics_quick.json"
+    async with safe_session() as session:
+        dao = SongDAO(session)
+        await dao.update_by_id(song.id, **changes)
+        await dao.commit()
     return f"lyrics: produced {'+'.join(produced)}"
 
 
@@ -131,6 +154,7 @@ async def process_song(
     song: SongRecord,
     targets: set[str],
     state_file: Path,
+    settings,
 ) -> bool:
     parts: list[str] = []
     try:
@@ -139,7 +163,7 @@ async def process_song(
         if "chords" in targets:
             parts.append(await regenerate_chords(processing, storage, song))
         if "lyrics" in targets:
-            parts.append(await regenerate_lyrics(storage, song))
+            parts.append(await regenerate_lyrics(processing, storage, song, settings))
         append_state(state_file, str(song.id), song.song_name, "done", "; ".join(parts))
         return True
     except Exception as e:
@@ -150,24 +174,33 @@ async def process_song(
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--concurrency", type=int, default=2)
+    parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--limit", type=int, default=0, help="0 = all songs")
     parser.add_argument("--targets", default="lyrics,chords")
     parser.add_argument("--state-file", default="../regen_state.jsonl")
     parser.add_argument("--retry-failed", action="store_true",
                         help="Re-attempt songs previously marked failed")
     parser.add_argument("--filter", default="", help="Only songs whose song_name contains this substring")
+    parser.add_argument("--shard", default="0/1",
+                        help="k/N: process songs where index %% N == k (for parallel drivers)")
+    parser.add_argument("--lyrics-host", default="",
+                        help="Override the lyrics service host (e.g. localhost:8013)")
+    parser.add_argument("--timeout", type=float, default=1800.0,
+                        help="Per-request timeout in seconds for service calls")
     args = parser.parse_args()
 
     targets = {t.strip() for t in args.targets.split(",") if t.strip()}
     state_file = Path(args.state_file).resolve()
+    shard_k, shard_n = (int(x) for x in args.shard.split("/"))
 
     settings = load_settings()
+    if args.lyrics_host:
+        settings.services.lyrics_generator = args.lyrics_host
     init_db(settings)
     storage = create_storage(settings)
     storage.init()
     set_storage(storage)
-    processing = ProcessingService(settings)
+    processing = ProcessingService(settings, timeout=args.timeout)
 
     state = load_state(state_file)
     skip_statuses = {"done"} if args.retry_failed else {"done", "failed"}
@@ -182,13 +215,16 @@ async def main() -> None:
         and (args.filter in s.song_name)
     ]
     queue.sort(key=lambda s: s.song_name or "")
+    queue = [s for i, s in enumerate(queue) if i % shard_n == shard_k]
     if args.limit:
         queue = queue[: args.limit]
 
     total = len(queue)
     logger.info(
-        "Bulk regenerate: %d songs to process (%d already in state file), targets=%s, concurrency=%d",
+        "Bulk regenerate: %d songs to process (%d already in state file), targets=%s, "
+        "concurrency=%d, shard=%s, lyrics_host=%s",
         total, len(state), sorted(targets), args.concurrency,
+        args.shard, settings.services.lyrics_generator,
     )
     if not total:
         await close_db()
@@ -202,7 +238,7 @@ async def main() -> None:
     async def worker(song: SongRecord, idx: int) -> None:
         nonlocal done_count, fail_count
         async with sem:
-            ok = await process_song(processing, storage, song, targets, state_file)
+            ok = await process_song(processing, storage, song, targets, state_file, settings)
             if ok:
                 done_count += 1
             else:
