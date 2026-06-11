@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { findActiveTimedIndex } from '../lib/active-timed-index'
 import { findActiveChordIndex, type ChordSheetLine } from '../lib/merge-chords-lyrics'
 
 interface SyncState {
@@ -14,26 +15,18 @@ function computeSync(
   params: { rawTime: number; adjustedLyricsTime: number }
 ): SyncState {
   const { rawTime, adjustedLyricsTime } = params
-  // Active line is driven strictly by line time bounds (lyrics timestamps).
-  // If currentTime falls into a true gap between two lyric lines, keep the
-  // previous line active until the next one starts (no arbitrary linger).
+  // Most recently started line — monotonic in time, so the highlight can
+  // never jump backward even if stored timestamps overlap. Gaps keep the
+  // previous line active until the next one starts.
   // IMPORTANT: line selection is based on the *audio timebase* (rawTime) so
   // chord highlighting/scrolling stays aligned even when the user tweaks the
   // lyrics offset.
-  let activeLineIndex = lines.findIndex(
-    (line) => rawTime >= line.startTime && rawTime < line.endTime
+  const activeLineIndex = findActiveTimedIndex(
+    lines.length,
+    rawTime,
+    (i) => lines[i].startTime,
+    (i) => lines[i].endTime,
   )
-
-  if (activeLineIndex < 0 && lines.length > 1) {
-    for (let i = 0; i < lines.length - 1; i++) {
-      const a = lines[i]
-      const b = lines[i + 1]
-      if (rawTime >= a.endTime && rawTime < b.startTime) {
-        activeLineIndex = i
-        break
-      }
-    }
-  }
 
   // Active word
   let activeWordIndex = -1

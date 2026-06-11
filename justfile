@@ -288,6 +288,10 @@ setup-lyrics:
 run-lyrics:
     cd {{project_dir}}/lyrics_generator && APP_ENV=local uv run uvicorn lyrics_generator.api:app --reload --host 0.0.0.0 --port 8003
 
+# Run lyrics_generator pytest suite (no audio/model/server). Optionally pass a file.
+test-lyrics-pytest file='tests':
+    cd "{{project_dir}}/lyrics_generator" && uv run pytest {{file}} -v
+
 # Run lyrics transcription test with cleanup (removes lyrics.json after test)
 test-lyrics vocals_file=default_vocals vocals_key=default_vocals_key cleanup='true':
     #!/usr/bin/env bash
@@ -524,26 +528,29 @@ test-auth:
 backfill-genres:
     cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/backfill_genres.py
 
-# Create lyrics_corrected.json by combining quick wording with regular timing via LLM.
-merge-lyrics quick regular output="" backup='true':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "{{project_dir}}/backend"
+# Wipe the local DB and rebuild the song catalog from local_bucket
+# (discovers both storage layouts, resolves metadata, fills artifact keys
+# and durations). Pass "--yes" to skip the confirmation prompt.
+rebuild-local-db *args="":
+    cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/rebuild_local_db.py {{args}}
 
-    args=(
-        --quick "{{quick}}"
-        --regular "{{regular}}"
-    )
+# Bulk-regenerate lyrics (fresh WhisperX + sanitizer) and chords (beat-align +
+# slash bass + variants) for every song in local_bucket. Requires run-chords and
+# run-lyrics services. Resumable via the state file.
+#
+# Examples:
+#   just bulk-regenerate                          # all songs, 2 at a time
+#   just bulk-regenerate "--limit 5"              # smoke test on 5 songs
+#   just bulk-regenerate "--targets chords"       # chords only
+#   just bulk-regenerate "--retry-failed"         # re-attempt failures
+bulk-regenerate *args="":
+    cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/bulk_regenerate.py {{args}}
 
-    if [[ -n "{{output}}" ]]; then
-        args+=(--output "{{output}}")
-    fi
-
-    if [[ "{{backup}}" == "true" ]]; then
-        args+=(--backup)
-    fi
-
-    APP_ENV=local uv run python scripts/merge_lyrics_with_llm.py "${args[@]}"
+# Validate all lyrics/chords JSON artifacts in a bucket dir (default local_bucket).
+# Non-zero exit when ordering/overlap/duplicate issues or leftover
+# lyrics_corrected.json files are found — use as the gate before prod upload.
+validate-artifacts dir="local_bucket" *args="":
+    cd {{project_dir}} && python3 scripts/validate_artifacts.py {{dir}} {{args}}
 
 # Cleanup local_bucket/ by removing original-audio files whose filenames suggest
 # live concert/show recordings.

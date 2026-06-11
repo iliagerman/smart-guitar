@@ -17,20 +17,12 @@ function getVer2Lyrics(detail: SongDetail): LyricsSegment[] {
   return detail.ver2_lyrics ?? detail.lyrics ?? []
 }
 
-function getVer3Lyrics(detail: SongDetail): LyricsSegment[] {
-  return detail.ver3_lyrics ?? detail.corrected_lyrics ?? []
-}
-
 function getVer1Source(detail: SongDetail): string | null {
   return detail.ver1_lyrics_source ?? detail.quick_lyrics_source ?? null
 }
 
 function getVer2Source(detail: SongDetail): string | null {
   return detail.ver2_lyrics_source ?? detail.lyrics_source ?? null
-}
-
-function getVer3Source(detail: SongDetail): string | null {
-  return detail.ver3_lyrics_source ?? detail.corrected_lyrics_source ?? null
 }
 
 function usesCustomLyrics(activeVersion: ChordOption | undefined): boolean {
@@ -44,7 +36,6 @@ function usesCustomLyrics(activeVersion: ChordOption | undefined): boolean {
 
 function isLikelyNonLatin(detail: SongDetail): boolean {
   const sample = [
-    ...getVer3Lyrics(detail),
     ...getVer1Lyrics(detail),
     ...getVer2Lyrics(detail),
   ]
@@ -69,17 +60,6 @@ function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefine
       description: isCommunity ? 'Lyrics from chord sheet' : 'Following your custom lyrics',
       segments: activeVersion?.lyrics ?? [],
       source: activeVersion?.lyrics_source ?? null,
-    }
-  }
-
-  const mergedLyrics = getVer3Lyrics(detail)
-  if (mergedLyrics.length > 0) {
-    return {
-      key: 'auto',
-      label: 'Auto',
-      description: 'Recommended: merged text + timing',
-      segments: mergedLyrics,
-      source: getVer3Source(detail),
     }
   }
 
@@ -155,15 +135,6 @@ export function getAvailableLyricsSources(
       description: 'Generated from audio with word timing',
       segments: getVer2Lyrics(detail),
       source: getVer2Source(detail),
-    })
-  }
-  if (getVer3Lyrics(detail).length > 0) {
-    options.push({
-      key: 'ver3',
-      label: 'Merged',
-      description: 'Online text merged with AI timing',
-      segments: getVer3Lyrics(detail),
-      source: getVer3Source(detail),
     })
   }
   if ((detail.ver4_lyrics ?? []).length > 0) {

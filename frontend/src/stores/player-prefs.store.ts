@@ -9,7 +9,7 @@ function clampInt(n: number, min: number, max: number): number {
 
 /** Whether lyrics highlighting is active or disabled (auto-scroll). */
 export type LyricsHighlightMode = 'highlight' | 'none'
-export type LyricsSourceMode = 'auto' | 'ver1' | 'ver2' | 'ver3' | 'ver4' | 'off'
+export type LyricsSourceMode = 'auto' | 'ver1' | 'ver2' | 'ver4' | 'off'
 export type StrumSource = 'songsterr' | 'ai'
 
 export interface SongOverrides {

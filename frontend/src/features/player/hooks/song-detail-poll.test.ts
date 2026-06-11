@@ -13,7 +13,6 @@ function makeDetail(overrides: Partial<SongDetail> = {}): SongDetail {
     stems: { vocals: 'https://example/vocals.mp3' },
     quick_lyrics: seg,
     lyrics: seg,
-    corrected_lyrics: seg,
     tabs: [{ start_time: 0, end_time: 1, string: 0, fret: 0, midi_pitch: 40, confidence: 1 }],
     songsterr_status: 'ready',
     chord_options: [{ name: 'Community', description: 'Community chord sheet (UG)' }],
@@ -50,10 +49,8 @@ describe('songDetailRefetchInterval', () => {
     ).toBe(12000)
   })
 
-  it('does NOT poll forever when ver3 is missing but the song is otherwise loaded', () => {
-    // ver1 + ver2 present, ver3 absent, no active job: ver3 now only arrives
-    // during processing, so a finished/legacy song must stop polling.
-    const detail = makeDetail({ corrected_lyrics: [], ver3_lyrics: [] })
+  it('stops polling once ver1+ver2 lyrics exist (no merged version to wait for)', () => {
+    const detail = makeDetail()
     expect(songDetailRefetchInterval(detail, false)).toBe(false)
   })
 })

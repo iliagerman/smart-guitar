@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { findActiveTimedIndex } from '../lib/active-timed-index'
 import type { LyricsSegment } from '@/types/song'
 
 interface SyncState {
@@ -9,23 +10,15 @@ interface SyncState {
 }
 
 function computeSync(segments: LyricsSegment[], currentTime: number): SyncState {
-  let activeSegmentIndex = segments.findIndex(
-    (s) => currentTime >= s.start && currentTime < s.end
+  // Most recently started segment — monotonic in time, so the highlight can
+  // never jump backward even if stored timestamps overlap. Gaps keep the
+  // previous segment active until the next one starts.
+  const activeSegmentIndex = findActiveTimedIndex(
+    segments.length,
+    currentTime,
+    (i) => segments[i].start,
+    (i) => segments[i].end,
   )
-
-  // If currentTime falls in a true gap between segments, keep the previous
-  // segment active until the next one starts. This avoids the UI going blank
-  // while still keeping segment boundaries strictly timestamp-driven.
-  if (activeSegmentIndex < 0 && segments.length > 1) {
-    for (let i = 0; i < segments.length - 1; i++) {
-      const a = segments[i]
-      const b = segments[i + 1]
-      if (currentTime >= a.end && currentTime < b.start) {
-        activeSegmentIndex = i
-        break
-      }
-    }
-  }
 
   let activeWordIndex = -1
   if (activeSegmentIndex >= 0) {

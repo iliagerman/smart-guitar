@@ -108,14 +108,10 @@ export interface SongDetail {
   lyrics_source: string | null
   quick_lyrics: LyricsSegment[]
   quick_lyrics_source: string | null
-  corrected_lyrics: LyricsSegment[]
-  corrected_lyrics_source: string | null
   ver1_lyrics?: LyricsSegment[]
   ver1_lyrics_source?: string | null
   ver2_lyrics?: LyricsSegment[]
   ver2_lyrics_source?: string | null
-  ver3_lyrics?: LyricsSegment[]
-  ver3_lyrics_source?: string | null
   ver4_lyrics?: LyricsSegment[]
   ver4_lyrics_source?: string | null
   chord_options: ChordOption[]

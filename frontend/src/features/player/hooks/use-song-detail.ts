@@ -11,20 +11,12 @@ function getVer2Lyrics(detail: SongDetail): SongDetail['lyrics'] {
   return detail.ver2_lyrics ?? detail.lyrics ?? []
 }
 
-function getVer3Lyrics(detail: SongDetail): SongDetail['lyrics'] {
-  return detail.ver3_lyrics ?? detail.corrected_lyrics ?? []
-}
-
 function getVer1Source(detail: SongDetail): string {
   return detail.ver1_lyrics_source ?? detail.quick_lyrics_source ?? ''
 }
 
 function getVer2Source(detail: SongDetail): string {
   return detail.ver2_lyrics_source ?? detail.lyrics_source ?? ''
-}
-
-function getVer3Source(detail: SongDetail): string {
-  return detail.ver3_lyrics_source ?? detail.corrected_lyrics_source ?? ''
 }
 
 /**
@@ -37,7 +29,6 @@ function contentFingerprint(d: SongDetail): string {
     d.chords.length,
     getVer1Lyrics(d).length,
     getVer2Lyrics(d).length,
-    getVer3Lyrics(d).length,
     d.ver4_lyrics?.length ?? 0,
     d.tabs.length,
     d.strums.length,
@@ -54,7 +45,6 @@ function contentFingerprint(d: SongDetail): string {
     d.download_pending,
     getVer1Source(d),
     getVer2Source(d),
-    getVer3Source(d),
   ].join('|')
 }
 
@@ -62,11 +52,7 @@ function contentFingerprint(d: SongDetail): string {
  * Decide how often to refetch a song's detail, based on what's still pending.
  * Returns a poll interval in ms, or `false` to stop polling.
  *
- * Pure function so it can be tested directly. ver3 (corrected) lyrics are no
- * longer generated lazily on GET — they're produced during background
- * processing — so we must NOT poll for ver3 indefinitely. A song that has
- * finished processing (no active job) but lacks ver3 will simply not get it,
- * which is fine: ver3 is an enhancement over ver2.
+ * Pure function so it can be tested directly.
  */
 export function songDetailRefetchInterval(
   detail: SongDetail | undefined,
@@ -77,7 +63,7 @@ export function songDetailRefetchInterval(
   // Audio is being downloaded — keep polling until it completes.
   if (detail.download_pending) return 6000
 
-  // If there's an active job, keep polling until it finishes (ver3 lands here).
+  // If there's an active job, keep polling until it finishes.
   if (detail.active_job) return 6000
 
   const missingAnyStem = detail.stem_types.some((s) => !detail.stems[s.name])
@@ -112,8 +98,6 @@ export function songDetailRefetchInterval(
   // Ver 2 can take longer; poll less aggressively once ver1 exists.
   if (missingVer2Lyrics) return 12000
 
-  // ver3 (merged) lyrics are persisted together with ver2 by background
-  // processing, so once ver2 is present there's nothing left to wait for.
   return false
 }
 
