@@ -41,9 +41,11 @@ resume_shard() {
 
 log "supervisor started (interval ${INTERVAL}s, 2 shards)"
 while true; do
-    done_count=$(grep -c '"status": "done"' "${STATE_FILE}" 2>/dev/null || echo 0)
-    failed_count=$(grep -c '"status": "failed"' "${STATE_FILE}" 2>/dev/null || echo 0)
-    processed=$((done_count + failed_count))
+    # grep -c prints "0" AND exits 1 on zero matches — `|| echo 0` would
+    # produce "0\n0" and break the arithmetic. Default only when empty.
+    done_count=$(grep -c '"status": "done"' "${STATE_FILE}" 2>/dev/null || true)
+    failed_count=$(grep -c '"status": "failed"' "${STATE_FILE}" 2>/dev/null || true)
+    processed=$(( ${done_count:-0} + ${failed_count:-0} ))
 
     if [ "${processed}" -ge "${TOTAL_SONGS}" ]; then
         log "ALL ${TOTAL_SONGS} songs processed (${done_count} done, ${failed_count} failed) — supervisor exiting"
