@@ -16,9 +16,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
+
+_TOKEN_RE = re.compile(r"[^\w\s']", re.UNICODE)
+
+
+def max_consecutive_repeats(text: str) -> int:
+    """Longest run of a consecutively repeated 1-5 token phrase.
+
+    High values usually mean a whisper repetition loop — but some songs
+    legitimately chant ("Hey Hey Hey..."), so this is reported as a
+    warning, not a blocking failure.
+    """
+    tokens = _TOKEN_RE.sub(" ", text.lower()).split()
+    if len(tokens) < 8:
+        return 0
+    best = 0
+    for plen in (1, 2, 3, 4, 5):
+        run = 1
+        for i in range(plen, len(tokens), plen):
+            if tokens[i:i + plen] == tokens[i - plen:i]:
+                run += 1
+                best = max(best, run)
+            else:
+                run = 1
+    return best
 
 
 def check_lyrics(path: Path) -> dict[str, int]:
@@ -99,6 +124,7 @@ def main() -> int:
     lyrics_files = 0
     lyrics_files_with_issues = 0
     lyrics_issue_totals: Counter[str] = Counter()
+    repetition_warnings: list[tuple[str, int]] = []
     chord_files = 0
     chord_files_with_issues = 0
     chord_issue_totals: Counter[str] = Counter()
@@ -123,6 +149,19 @@ def main() -> int:
                 lyrics_files_with_issues += 1
                 lyrics_issue_totals.update(issues)
                 bad_files.append((rel, issues))
+            if name == "lyrics.json":
+                try:
+                    with open(path) as f:
+                        data = json.load(f)
+                    worst = max(
+                        (max_consecutive_repeats(s.get("text", ""))
+                         for s in data.get("segments", [])),
+                        default=0,
+                    )
+                    if worst >= 15:
+                        repetition_warnings.append((rel, worst))
+                except (json.JSONDecodeError, OSError):
+                    pass
         elif name == "chords.json":
             chord_files += 1
             issues, n, with_bass = check_chords(path)
@@ -142,6 +181,9 @@ def main() -> int:
     print(f"  songs w/ slash bass: {songs_with_bass}/{chord_files} "
           f"({total_with_bass}/{total_chords} chords)")
     print(f"Leftover lyrics_corrected.json: {len(leftover_corrected)}")
+    print(f"Repetition warnings (>=15 consecutive repeats, possibly real chants): {len(repetition_warnings)}")
+    for rel, worst in sorted(repetition_warnings, key=lambda x: -x[1])[:20]:
+        print(f"  WARN {worst:4d}x  {rel}")
 
     if args.verbose:
         for rel, issues in bad_files:
