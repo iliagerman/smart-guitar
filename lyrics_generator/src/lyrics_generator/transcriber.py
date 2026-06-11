@@ -60,6 +60,69 @@ def _get_alignment_model(language_code: str = "en"):
     return _alignment_models[language_code]
 
 
+def _temperatures(cfg: WhisperConfig) -> tuple[float, ...]:
+    temperature = cfg.temperature
+    if isinstance(temperature, list):
+        return tuple(temperature)
+    return (temperature,) if temperature else (0.0,)
+
+
+# Known mlx-community conversions of the OpenAI whisper checkpoints.
+_MLX_REPO_TEMPLATE = "mlx-community/whisper-{name}-mlx"
+
+
+def _transcribe_mlx(audio_path: str, cfg: WhisperConfig) -> dict:
+    """Step-1 transcription on the Apple-Silicon GPU via mlx-whisper.
+
+    Returns the same {"segments": [...], "language": ...} shape as the
+    whisperx path so alignment and downstream mapping are shared.
+    """
+    import mlx_whisper  # type: ignore[import-not-found]
+
+    repo = _MLX_REPO_TEMPLATE.format(name=cfg.model_name)
+    return mlx_whisper.transcribe(
+        audio_path,
+        path_or_hf_repo=repo,
+        word_timestamps=True,
+        language=cfg.language,
+        initial_prompt=cfg.initial_prompt,
+        condition_on_previous_text=cfg.condition_on_previous_text,
+        temperature=_temperatures(cfg),
+        no_speech_threshold=cfg.no_speech_threshold,
+        logprob_threshold=cfg.logprob_threshold,
+        compression_ratio_threshold=cfg.compression_ratio_threshold,
+        verbose=None,
+    )
+
+
+def _transcribe_whisperx(audio_path: str, cfg: WhisperConfig) -> dict:
+    """Step-1 transcription via faster-whisper/CTranslate2 (CPU or CUDA)."""
+    # Build asr_options from config for model initialization
+    asr_options: dict = {
+        "beam_size": cfg.beam_size or 5,
+        "patience": cfg.patience or 1.0,
+        "condition_on_previous_text": cfg.condition_on_previous_text,
+        "no_speech_threshold": cfg.no_speech_threshold,
+        "log_prob_threshold": cfg.logprob_threshold,
+        "compression_ratio_threshold": cfg.compression_ratio_threshold,
+        "initial_prompt": cfg.initial_prompt,
+        "temperatures": _temperatures(cfg),
+    }
+    if cfg.best_of is not None:
+        asr_options["best_of"] = cfg.best_of
+
+    model = _get_transcription_model(cfg.model_name, cfg.compute_type, asr_options=asr_options)
+
+    # Update per-request options on the cached model (safe with concurrency=1)
+    model.options.initial_prompt = cfg.initial_prompt
+    model.options.condition_on_previous_text = cfg.condition_on_previous_text
+    model.options.no_speech_threshold = cfg.no_speech_threshold
+    model.options.log_prob_threshold = cfg.logprob_threshold
+    model.options.compression_ratio_threshold = cfg.compression_ratio_threshold
+
+    return model.transcribe(audio_path, language=cfg.language)
+
+
 def transcribe(
     audio_path: str,
     output_dir: str,
@@ -67,7 +130,7 @@ def transcribe(
     language: str | None = "en",
     whisper_config: WhisperConfig | None = None,
 ) -> list[SegmentInfo]:
-    """Run WhisperX transcription + forced alignment on an audio file.
+    """Run whisper transcription + forced alignment on an audio file.
 
     Args:
         audio_path: Path to the input audio file.
@@ -84,35 +147,6 @@ def transcribe(
     if cfg is None:
         cfg = WhisperConfig(model_name=model_name, language=language)
 
-    # Build asr_options from config for model initialization
-    asr_options: dict = {
-        "beam_size": cfg.beam_size or 5,
-        "patience": cfg.patience or 1.0,
-        "condition_on_previous_text": cfg.condition_on_previous_text,
-        "no_speech_threshold": cfg.no_speech_threshold,
-        "log_prob_threshold": cfg.logprob_threshold,
-        "compression_ratio_threshold": cfg.compression_ratio_threshold,
-        "initial_prompt": cfg.initial_prompt,
-    }
-
-    temperature = cfg.temperature
-    if isinstance(temperature, list):
-        asr_options["temperatures"] = tuple(temperature)
-    else:
-        asr_options["temperatures"] = (temperature,) if temperature else (0.0,)
-
-    if cfg.best_of is not None:
-        asr_options["best_of"] = cfg.best_of
-
-    model = _get_transcription_model(cfg.model_name, cfg.compute_type, asr_options=asr_options)
-
-    # Update per-request options on the cached model (safe with concurrency=1)
-    model.options.initial_prompt = cfg.initial_prompt
-    model.options.condition_on_previous_text = cfg.condition_on_previous_text
-    model.options.no_speech_threshold = cfg.no_speech_threshold
-    model.options.log_prob_threshold = cfg.logprob_threshold
-    model.options.compression_ratio_threshold = cfg.compression_ratio_threshold
-
     os.makedirs(output_dir, exist_ok=True)
 
     try:
@@ -122,17 +156,21 @@ def transcribe(
         size = None
 
     logger.info(
-        "Running WhisperX transcription on: %s (language=%s, size_bytes=%s)",
+        "Running %s transcription on: %s (language=%s, size_bytes=%s)",
+        cfg.engine,
         audio_path,
         cfg.language,
         size,
     )
 
-    # Step 1: Transcription via whisperx pipeline (wraps faster-whisper)
-    result = model.transcribe(audio_path, language=cfg.language)
+    # Step 1: Transcription (engine-selectable; output shape is shared)
+    if cfg.engine == "mlx":
+        result = _transcribe_mlx(audio_path, cfg)
+    else:
+        result = _transcribe_whisperx(audio_path, cfg)
 
     detected_lang = result.get("language", cfg.language or "en")
-    logger.info("WhisperX detected language: %s", detected_lang)
+    logger.info("Whisper detected language: %s", detected_lang)
 
     # Step 2: Forced alignment via wav2vec2 (if enabled)
     if cfg.enable_alignment and result.get("segments"):

@@ -29,6 +29,13 @@ class AppConfig(BaseModel):
 class WhisperConfig(BaseModel):
     model_name: str = "base"
     language: str | None = None
+    # Transcription engine for Step 1:
+    #   "whisperx" — faster-whisper/CTranslate2 (CPU or CUDA). Default; works
+    #                everywhere including the x86 production Lambda.
+    #   "mlx"      — mlx-whisper on the Apple-Silicon GPU (macOS only, much
+    #                faster locally). Greedy + temperature fallback decoding
+    #                (beam_size is not supported by MLX).
+    engine: str = "whisperx"
     word_timestamps: bool = True
     # CTranslate2 compute type: "int8" is optimal for CPU/Lambda with torch.
     compute_type: str = "int8"

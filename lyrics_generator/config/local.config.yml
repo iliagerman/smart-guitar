@@ -1,5 +1,11 @@
 environment: "local"
 
+whisper:
+  # Local dev runs on Apple Silicon — transcribe on the GPU via mlx-whisper
+  # (many times faster than CPU CTranslate2). Prod keeps the default
+  # "whisperx" engine (x86 Lambda, no Metal).
+  engine: "mlx"
+
 storage:
   backend: "local"
   # NOTE: lyrics_generator/ is a sibling of local_bucket/ in the repo.
