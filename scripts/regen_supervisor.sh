@@ -21,7 +21,7 @@ current_load() { sysctl -n vm.loadavg | awk '{print int($2)}'; }
 restart_chords() {
     log "RESTART chords service (8001, background QoS)"
     cd "${PROJECT_DIR}/chords_generator"
-    TF_USE_LEGACY_KERAS=1 APP_ENV=local OMP_NUM_THREADS=2 nohup taskpolicy -c utility uv run uvicorn chords_generator.api:app \
+    TF_USE_LEGACY_KERAS=1 APP_ENV=local nohup uv run uvicorn chords_generator.api:app \
         --host 0.0.0.0 --port 8001 >> /tmp/chords_service.log 2>&1 &
 }
 
