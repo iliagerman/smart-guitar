@@ -454,14 +454,6 @@ async def _persist_results(
     storage,
 ) -> None:
     """Persist song stem keys + chords key and mark job completed."""
-    from .lyrics_chords import cleanup_lyrics_preamble, ensure_corrected_lyrics
-
-    # Generate ver3 (corrected) lyrics before marking the job complete, so it's
-    # present the moment the song's active job clears. Doing it here (orchestrator
-    # context) keeps the LLM merge off the API request path. Runs before the DB
-    # session opens so the merge doesn't hold a connection.
-    await ensure_corrected_lyrics(storage, song_name)
-
     async with safe_session() as session:
         job_dao = JobDAO(session)
         song_dao = SongDAO(session)
@@ -494,7 +486,6 @@ async def _persist_results(
 
         lyrics_key = f"{song_name}/lyrics.json"
         if storage.file_exists(lyrics_key):
-            await cleanup_lyrics_preamble(storage, lyrics_key)
             song_changes["lyrics_key"] = lyrics_key
             song_changes["lyrics_failed"] = False
         else:
@@ -503,11 +494,6 @@ async def _persist_results(
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         if storage.file_exists(lyrics_quick_key):
             song_changes["lyrics_quick_key"] = lyrics_quick_key
-
-        lyrics_corrected_key = f"{song_name}/lyrics_corrected.json"
-        if storage.file_exists(lyrics_corrected_key):
-            song_changes["lyrics_corrected_key"] = lyrics_corrected_key
-            song_changes["lyrics_corrected"] = True
 
         tabs_key = f"{song_name}/tabs.json"
         if storage.file_exists(tabs_key):

@@ -1,4 +1,9 @@
-"""Lyrics transcription and Gemini chord detection background tasks."""
+"""Lyrics transcription and Gemini chord detection background tasks.
+
+Lyrics are served exactly as transcribed: no LLM merge (the old ver3
+"corrected" lyrics) and no LLM preamble cleanup. Both produced corrupted,
+non-monotonic timestamps that made playback highlighting jump around.
+"""
 
 import asyncio
 import logging
@@ -10,122 +15,12 @@ import uuid
 from guitar_player.app_state import get_storage
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
-from guitar_player.services.llm_service import LlmService
-from guitar_player.services.lyrics_correction import merge_lyrics_with_llm
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.storage import StorageBackend
 
-from .constants import LYRICS_CLEANUP_TIMEOUT_S
 from .helpers import stem_candidates
 
 logger = logging.getLogger(__name__)
-
-
-async def cleanup_lyrics_preamble(
-    storage: StorageBackend,
-    lyrics_key: str,
-) -> None:
-    """Remove non-lyrics preamble segments from a stored lyrics.json using LLM.
-
-    Non-fatal: logs a warning on failure.
-    """
-    from guitar_player.config import get_settings
-
-    try:
-        raw = storage.read_json(lyrics_key)
-        if not isinstance(raw, dict):
-            return
-        segments = raw.get("segments", [])
-        if len(segments) < 2:
-            return
-
-        texts = [s.get("text", "") for s in segments[:15]]
-
-        settings = get_settings()
-
-        if not settings.aws.use_iam_role and not settings.aws.access_key:
-            logger.debug(
-                "Lyrics preamble cleanup skipped for %s: no AWS credentials",
-                lyrics_key,
-            )
-            return
-
-        llm = LlmService(settings)
-        first_index = await asyncio.wait_for(
-            llm.cleanup_lyrics_preamble(texts),
-            timeout=LYRICS_CLEANUP_TIMEOUT_S,
-        )
-
-        if first_index <= 0:
-            return
-
-        logger.info(
-            "Removing %d non-lyrics preamble segment(s) from %s",
-            first_index, lyrics_key,
-        )
-        raw["segments"] = segments[first_index:]
-
-        import json as _json
-
-        tmp_path = os.path.join(
-            tempfile.gettempdir(), f"lyrics_cleaned_{uuid.uuid4()}.json"
-        )
-        with open(tmp_path, "w") as f:
-            _json.dump(raw, f, indent=2)
-        storage.upload_file(tmp_path, lyrics_key)
-        os.unlink(tmp_path)
-    except asyncio.TimeoutError:
-        logger.warning(
-            "Lyrics preamble cleanup timed out for %s (non-fatal)", lyrics_key
-        )
-    except Exception as e:
-        logger.warning(
-            "Lyrics preamble cleanup failed for %s (non-fatal): %s", lyrics_key, e
-        )
-
-
-async def ensure_corrected_lyrics(storage: StorageBackend, song_name: str) -> bool:
-    """Generate ver3 corrected lyrics (``lyrics_corrected.json``) when missing.
-
-    ver3 aligns the quick-lyrics wording onto the regular-lyrics timing via an
-    LLM merge. This runs the LLM call in a worker thread and is meant to be
-    invoked from the processing/orchestrator context — NEVER the API request
-    path (a synchronous merge there caused the 10s song-load timeout).
-
-    Safe to call repeatedly: returns early if ver3 already exists or either
-    source file is missing. Returns True if ver3 exists after the call.
-    """
-    corrected_key = f"{song_name}/lyrics_corrected.json"
-    if storage.file_exists(corrected_key):
-        return True
-
-    quick_key = f"{song_name}/lyrics_quick.json"
-    regular_key = f"{song_name}/lyrics.json"
-    if not (storage.file_exists(quick_key) and storage.file_exists(regular_key)):
-        return False
-
-    from guitar_player.config import get_settings
-
-    try:
-        quick_data = storage.read_json(quick_key)
-        regular_data = storage.read_json(regular_key)
-        llm = LlmService(get_settings())
-        merged, diagnostics = await asyncio.to_thread(
-            merge_lyrics_with_llm, quick_data, regular_data, llm,
-        )
-        storage.write_json(corrected_key, merged)
-        logger.info(
-            "Generated lyrics ver3 for %s (%s/%s words aligned, %s groups)",
-            song_name, diagnostics.aligned_words, diagnostics.total_words,
-            diagnostics.mapping_groups,
-        )
-        return True
-    except Exception:
-        logger.warning(
-            "Failed to generate lyrics ver3 for %s (non-fatal)", song_name,
-            exc_info=True,
-        )
-        return False
 
 
 async def _persist_lyrics_results(
@@ -134,9 +29,6 @@ async def _persist_lyrics_results(
     song_name: str,
 ) -> None:
     """Persist lyrics_key and lyrics_quick_key if the files are now present."""
-    # Generate ver3 here (background/orchestrator context) so the GET request
-    # path never has to run the LLM merge synchronously.
-    await ensure_corrected_lyrics(storage, song_name)
     async with safe_session() as session:
         song_dao = SongDAO(session)
         song = await song_dao.get_by_id(song_id)
@@ -146,19 +38,13 @@ async def _persist_lyrics_results(
         lyrics_key = f"{song_name}/lyrics.json"
         lyrics_present = storage.file_exists(lyrics_key)
         if lyrics_present and not song.lyrics_key:
-            await cleanup_lyrics_preamble(storage, lyrics_key)
             changes["lyrics_key"] = lyrics_key
-        lyrics_corrected_key = f"{song_name}/lyrics_corrected.json"
-        lyrics_corrected_present = storage.file_exists(lyrics_corrected_key)
-        if lyrics_corrected_present and not song.lyrics_corrected_key:
-            changes["lyrics_corrected_key"] = lyrics_corrected_key
-            changes["lyrics_corrected"] = True
         lyrics_quick_key = f"{song_name}/lyrics_quick.json"
         lyrics_quick_present = storage.file_exists(lyrics_quick_key)
         if lyrics_quick_present and not song.lyrics_quick_key:
             changes["lyrics_quick_key"] = lyrics_quick_key
         # Clear failure flag and attempt timestamp on success.
-        if lyrics_present or lyrics_corrected_present or lyrics_quick_present:
+        if lyrics_present or lyrics_quick_present:
             if song.lyrics_failed:
                 changes["lyrics_failed"] = False
             if song.lyrics_attempted_at is not None:

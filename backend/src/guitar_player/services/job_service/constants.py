@@ -156,5 +156,3 @@ STEM_LIKE_AUDIO_FILENAMES: set[str] = {
     "piano.mp3",
     "other.mp3",
 }
-
-LYRICS_CLEANUP_TIMEOUT_S = 30

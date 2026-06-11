@@ -32,6 +32,7 @@ from .helpers import (
     STEM_NAMES,
     parse_lyrics_payload,
 )
+from .sheet_alignment import align_sheet_lines_to_segments
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +65,6 @@ async def build_song_detail(
     t3 = time.perf_counter()
 
     lyrics_data = await _load_all_lyrics(storage, song, song_dao)
-    # ver3 (corrected) lyrics are generated in background processing
-    # (ensure_corrected_lyrics), never synchronously here — a synchronous LLM
-    # merge in this request path caused intermittent 10s song-load timeouts.
     t4 = time.perf_counter()
 
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
@@ -127,14 +125,10 @@ async def build_song_detail(
         lyrics_source=lyrics_data["lyrics_source"],
         quick_lyrics=lyrics_data["quick_lyrics"],
         quick_lyrics_source=lyrics_data["quick_lyrics_source"],
-        corrected_lyrics=lyrics_data["corrected_lyrics"],
-        corrected_lyrics_source=lyrics_data["corrected_lyrics_source"],
         ver1_lyrics=lyrics_data["quick_lyrics"],
         ver1_lyrics_source=lyrics_data["quick_lyrics_source"],
         ver2_lyrics=lyrics_data["lyrics"],
         ver2_lyrics_source=lyrics_data["lyrics_source"],
-        ver3_lyrics=lyrics_data["corrected_lyrics"],
-        ver3_lyrics_source=lyrics_data["corrected_lyrics_source"],
         ver4_lyrics=songsterr_data["ver4_lyrics"],
         ver4_lyrics_source=songsterr_data["ver4_lyrics_source"],
         tabs=final_tabs,
@@ -242,7 +236,6 @@ async def _load_all_lyrics(
     result: dict[str, Any] = {
         "lyrics": [], "lyrics_source": None, "lyrics_payload": None,
         "quick_lyrics": [], "quick_lyrics_source": None, "quick_lyrics_payload": None,
-        "corrected_lyrics": [], "corrected_lyrics_source": None, "corrected_key": None,
     }
 
     if song.lyrics_key and storage.file_exists(song.lyrics_key):
@@ -255,7 +248,6 @@ async def _load_all_lyrics(
             logger.warning("Failed to read lyrics for %s: %s", song.song_name, e)
 
     await _load_quick_lyrics(storage, song, song_dao, result)
-    await _load_corrected_lyrics_key(storage, song, song_dao, result)
 
     return result
 
@@ -282,28 +274,6 @@ async def _load_quick_lyrics(
         )
     except Exception as e:
         logger.warning("Failed to read quick lyrics for %s: %s", song.song_name, e)
-
-
-async def _load_corrected_lyrics_key(
-    storage: StorageBackend, song: SongRecord, song_dao: SongDAO,
-    result: dict[str, Any],
-) -> None:
-    corrected_key = song.lyrics_corrected_key
-    if not corrected_key and song.song_name:
-        candidate = f"{song.song_name}/lyrics_corrected.json"
-        if storage.file_exists(candidate):
-            corrected_key = candidate
-            await song_dao.update_by_id(song.id, lyrics_corrected_key=candidate)
-    result["corrected_key"] = corrected_key
-
-    if corrected_key and storage.file_exists(corrected_key):
-        try:
-            raw = storage.read_json(corrected_key)
-            result["corrected_lyrics"], result["corrected_lyrics_source"], _ = (
-                parse_lyrics_payload(raw)
-            )
-        except Exception as e:
-            logger.warning("Failed to read corrected lyrics for %s: %s", song.song_name, e)
 
 
 async def _load_tabs_and_strums(
@@ -417,12 +387,13 @@ def _static_lines_to_chord_option(
     name: str,
     capo: int = 0,
     key: str = "",
+    line_windows: list[tuple[float, float] | None] | None = None,
 ) -> ChordOption:
     """Convert static chord lines (position-based) to a ChordOption (time-based).
 
-    Estimates timing for each line by distributing evenly across the song
-    duration. This allows the chords to flow through the standard
-    transformation pipeline (capo, beginner, transpose).
+    When *line_windows* (from whisper alignment) is provided, each line gets
+    its real audio time window so the sheet auto-scrolls in sync. Otherwise
+    timing falls back to even distribution across the song duration.
     """
     lyric_lines = [
         line for line in raw_lines
@@ -435,23 +406,28 @@ def _static_lines_to_chord_option(
     lyrics: list[LyricsSegment] = []
 
     line_idx = 0
-    for line in raw_lines:
+    for raw_idx, line in enumerate(raw_lines):
         if not isinstance(line, dict):
             continue
         line_type = line.get("type", "")
         if line_type not in ("lyric", "instrumental"):
             continue
 
-        seg_start = line_idx * line_duration
-        seg_end = seg_start + line_duration
+        window = line_windows[raw_idx] if line_windows else None
+        if window:
+            seg_start, seg_end = window
+        else:
+            seg_start = line_idx * line_duration
+            seg_end = seg_start + line_duration
+        seg_span = max(seg_end - seg_start, 0.0)
         text = line.get("text", "")
         raw_chords = line.get("chords", [])
 
         # Build ChordEntry objects from position-based chords
         chord_count = len(raw_chords)
         for ci, c in enumerate(raw_chords):
-            chord_start = seg_start + (ci / max(chord_count, 1)) * line_duration
-            chord_end = seg_start + ((ci + 1) / max(chord_count, 1)) * line_duration
+            chord_start = seg_start + (ci / max(chord_count, 1)) * seg_span
+            chord_end = seg_start + ((ci + 1) / max(chord_count, 1)) * seg_span
             chords.append(ChordEntry(
                 start_time=round(chord_start, 3),
                 end_time=round(chord_end, 3),
@@ -461,7 +437,7 @@ def _static_lines_to_chord_option(
         # Build LyricsSegment from lyric text
         if text:
             words_raw = text.split()
-            word_dur = (seg_end - seg_start) / max(len(words_raw), 1)
+            word_dur = seg_span / max(len(words_raw), 1)
             words = [
                 LyricsWord(
                     word=w,
@@ -482,6 +458,8 @@ def _static_lines_to_chord_option(
     description = "Community chord sheet"
     if key:
         description += f" (Key: {key})"
+    if line_windows:
+        description += " · synced to audio"
 
     return ChordOption(
         name=name,
@@ -518,6 +496,18 @@ def _load_community_chord_options(
         if not isinstance(raw, dict):
             return [], None
 
+        # Whisper lyrics (ver2) give real line timing when the sheet matches.
+        whisper_segments: list[LyricsSegment] = lyrics_data.get("lyrics") or []
+
+        def _build_option(raw_lines: list[dict], name: str, capo: int, song_key: str) -> ChordOption:
+            line_windows = align_sheet_lines_to_segments(
+                raw_lines, whisper_segments, duration=duration,
+            )
+            return _static_lines_to_chord_option(
+                raw_lines, duration, name=name, capo=capo, key=song_key,
+                line_windows=line_windows,
+            )
+
         options: list[ChordOption] = []
 
         # New multi-version format: {"versions": [...]}
@@ -529,24 +519,17 @@ def _load_community_chord_options(
                 raw_lines = version.get("lines", [])
                 if not raw_lines:
                     continue
-                option = _static_lines_to_chord_option(
-                    raw_lines, duration,
-                    name=f"Sheet {i + 1}",
-                    capo=version.get("capo", 0),
-                    key=version.get("key", ""),
-                )
-                options.append(option)
+                options.append(_build_option(
+                    raw_lines, f"Sheet {i + 1}",
+                    version.get("capo", 0), version.get("key", ""),
+                ))
         else:
             # Legacy single-version format: {"lines": [...]}
             raw_lines = raw.get("lines", [])
             if raw_lines:
-                option = _static_lines_to_chord_option(
-                    raw_lines, duration,
-                    name="Sheet 1",
-                    capo=raw.get("capo", 0),
-                    key=raw.get("key", ""),
-                )
-                options.append(option)
+                options.append(_build_option(
+                    raw_lines, "Sheet 1", raw.get("capo", 0), raw.get("key", ""),
+                ))
 
         # Parse tab content (raw text tab from UG)
         tab_notes: list[TabNote] | None = None
@@ -589,16 +572,14 @@ async def _assemble_chord_options(
         logger.warning("Failed to load chord vote counts for %s: %s", song_id, e)
         await chord_vote_dao.rollback()
 
-    # Best system lyrics: ver3 > ver2 > ver1
+    # Best system lyrics: ver2 (whisper, verbatim) > ver1 (online quick)
     best_lyrics = (
-        lyrics_data["corrected_lyrics"]
-        or lyrics_data["lyrics"]
+        lyrics_data["lyrics"]
         or lyrics_data["quick_lyrics"]
         or None
     )
     best_lyrics_source = (
-        lyrics_data["corrected_lyrics_source"]
-        or lyrics_data["lyrics_source"]
+        lyrics_data["lyrics_source"]
         or lyrics_data["quick_lyrics_source"]
     )
 

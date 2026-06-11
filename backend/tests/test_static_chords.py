@@ -318,6 +318,92 @@ async def test_community_chords_have_timing(settings, storage):
         await close_db()
 
 
+@pytest.mark.asyncio
+async def test_community_sheet_synced_to_whisper_lyrics(settings, storage):
+    """When whisper lyrics exist and match the sheet text, community sheet
+    lines must carry the REAL whisper timing (not even distribution), so the
+    sheet auto-scrolls in sync with the audio."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_aligned_{uuid.uuid4().hex[:8]}/test_song"
+    static_key = f"{song_name}/static_chords.json"
+    lyrics_key = f"{song_name}/lyrics.json"
+    created_dirs: list[Path] = []
+
+    whisper = {
+        "source": "whisper",
+        "segments": [
+            {
+                "start": 42.0, "end": 46.5,
+                "text": "When I find myself in times of trouble",
+                "words": [
+                    {"word": "When", "start": 42.0, "end": 42.5},
+                    {"word": "trouble", "start": 45.8, "end": 46.5},
+                ],
+            },
+            {
+                "start": 47.0, "end": 50.0,
+                "text": "Mother Mary comes to me",
+                "words": [{"word": "Mother", "start": 47.0, "end": 47.6}],
+            },
+        ],
+    }
+
+    try:
+        chords_path = _write_static_chords_to_storage(settings, static_key, SAMPLE_STATIC_CHORDS_MULTI)
+        _write_static_chords_to_storage(settings, lyrics_key, whisper)
+        created_dirs.append(chords_path.parent.parent)
+
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.create(
+                title="Test Aligned",
+                artist="Test Artist",
+                song_name=song_name,
+                audio_key=f"{song_name}/audio.mp3",
+                duration_seconds=180,
+                static_chords_key=static_key,
+                lyrics_key=lyrics_key,
+            )
+            await song_dao.commit()
+            song_id = song.id
+
+        async with factory() as session:
+            song_service = _make_song_service(session, storage)
+            detail = await song_service.get_song_detail(song_id)
+
+        community_opts = [
+            o for o in detail.chord_options
+            if o.description.startswith("Community chord sheet")
+        ]
+        assert len(community_opts) >= 1
+        opt = community_opts[0]
+
+        by_text = {seg.text: seg for seg in opt.lyrics}
+        trouble = by_text["When I find myself in times of trouble"]
+        mother = by_text["Mother Mary comes to me"]
+        assert trouble.start == 42.0
+        assert trouble.end == 46.5
+        assert mother.start == 47.0
+        assert mother.end == 50.0
+        # The line's chords must fall inside the real line window.
+        line_chords = [
+            c for c in opt.chords if 42.0 <= c.start_time < 46.5
+        ]
+        assert {c.chord for c in line_chords} == {"Am", "C"}
+    finally:
+        async with factory() as session:
+            song_dao = SongDAO(session)
+            song = await song_dao.get_by_song_name(song_name)
+            if song:
+                await song_dao.delete_by_id(song.id)
+                await session.commit()
+        for d in created_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+        await close_db()
+
+
 class TestUGContentParser:
     """Tests for parse_ug_content — the Ultimate Guitar chord sheet parser."""
 

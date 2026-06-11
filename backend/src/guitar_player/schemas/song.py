@@ -161,14 +161,10 @@ class SongDetailResponse(BaseModel):
     lyrics_source: str | None = None
     quick_lyrics: list[LyricsSegment] = []
     quick_lyrics_source: str | None = None
-    corrected_lyrics: list[LyricsSegment] = []
-    corrected_lyrics_source: str | None = None
     ver1_lyrics: list[LyricsSegment] = []
     ver1_lyrics_source: str | None = None
     ver2_lyrics: list[LyricsSegment] = []
     ver2_lyrics_source: str | None = None
-    ver3_lyrics: list[LyricsSegment] = []
-    ver3_lyrics_source: str | None = None
     ver4_lyrics: list[LyricsSegment] = []
     ver4_lyrics_source: str | None = None
     tabs: list[TabNote] = []
