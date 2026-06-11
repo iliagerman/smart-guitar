@@ -392,6 +392,9 @@ async def test_community_sheet_synced_to_whisper_lyrics(settings, storage):
             c for c in opt.chords if 42.0 <= c.start_time < 46.5
         ]
         assert {c.chord for c in line_chords} == {"Am", "C"}
+        # The option must advertise real timing so the player enables
+        # timestamp-driven auto-scroll for it.
+        assert opt.lyrics_synced is True
     finally:
         async with factory() as session:
             song_dao = SongDAO(session)

@@ -49,6 +49,8 @@ export interface ChordOption {
   chords: ChordEntry[]
   lyrics?: LyricsSegment[] | null
   lyrics_source?: string | null
+  /** True when line timing comes from real audio alignment (whisper). */
+  lyrics_synced?: boolean
   version_key?: string | null
   created_by?: string | null
   vote_score?: number

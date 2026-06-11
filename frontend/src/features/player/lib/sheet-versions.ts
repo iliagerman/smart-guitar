@@ -103,14 +103,15 @@ export function getSheetVersionLabel(
 /**
  * Lyrics-tracking mode that should be active for a given sheet selection.
  *
- * Community/UG sheets only have estimated word timing, so per-word
- * highlighting looks broken — auto-scroll ('none') is the right default.
- * Detected and user-edited sheets have real timing and should highlight.
+ * Unsynced community/UG sheets only have estimated timing, so per-word
+ * highlighting looks broken — manual auto-scroll ('none') is the right
+ * default. Whisper-synced community sheets, detected, and user-edited
+ * sheets have real timing and should highlight + follow the audio.
  */
 export function lyricsModeForActiveVersion(
   option: ChordOption | undefined,
 ): LyricsHighlightMode {
-  if (option && isCommunityOption(option)) {
+  if (option && isCommunityOption(option) && !option.lyrics_synced) {
     return 'none'
   }
   return 'highlight'
@@ -128,7 +129,9 @@ export function getSheetVersionDescription(option: ChordOption | undefined): str
     return 'Audio-detected chord timeline'
   }
   if (isCommunityOption(option)) {
-    return 'Community chord sheet'
+    // Pass the backend description through — it carries the key and the
+    // "synced to audio" marker when whisper alignment succeeded.
+    return option.description || 'Community chord sheet'
   }
   return option.description || 'Choose a sheet source'
 }

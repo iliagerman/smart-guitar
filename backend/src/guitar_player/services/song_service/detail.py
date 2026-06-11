@@ -468,6 +468,7 @@ def _static_lines_to_chord_option(
         chords=chords,
         lyrics=lyrics,
         lyrics_source="community",
+        lyrics_synced=line_windows is not None,
     )
 
 

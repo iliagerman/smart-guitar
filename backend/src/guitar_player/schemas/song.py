@@ -84,6 +84,9 @@ class ChordOption(BaseModel):
     chords: list[ChordEntry] = []
     lyrics: list["LyricsSegment"] | None = None
     lyrics_source: str | None = None
+    # True when the option's line timing comes from real audio alignment
+    # (whisper), so the player can use timestamp-driven auto-scroll.
+    lyrics_synced: bool = False
     version_key: str | None = None
     created_by: str | None = None
     vote_score: int = 0
