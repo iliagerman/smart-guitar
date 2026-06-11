@@ -147,10 +147,15 @@ def project_root() -> Path:
 
 
 def _kill_port(port: int) -> None:
-    """Kill any process listening on the given port."""
+    """Kill any process LISTENING on the given port.
+
+    Must filter on LISTEN state: a bare `lsof -ti :PORT` also matches
+    processes with client connections to that port and would kill them
+    (e.g. a bulk-regeneration driver talking to a local service).
+    """
     try:
         result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
+            ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
             capture_output=True,
             text=True,
         )
