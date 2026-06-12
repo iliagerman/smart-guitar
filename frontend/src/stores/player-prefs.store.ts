@@ -106,7 +106,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
     (set, get) => ({
       transposeSemitones: 0,
       showStrums: true,
-      showBassNotes: false,
+      showBassNotes: true,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
       lyricsMode: 'highlight' as LyricsHighlightMode,
@@ -182,7 +182,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
     }),
     {
       name: 'player-prefs',
-      migrate: (persisted: unknown) => {
+      migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
         if (state) {
           const currentMode = state.lyricsMode as string | undefined
@@ -289,9 +289,16 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.countInEnabled = true
         }
 
+        // v16 → v17: slash bass notes now default ON — the whole catalog
+        // carries detected slash chords, so show them out of the box.
+        // One-time flip of the previously persisted default.
+        if (state && version < 17) {
+          state.showBassNotes = true
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 16,
+      version: 17,
     }
   )
 )
