@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/cn'
 import { formatChordName } from '@/lib/chord-colors'
 import { getPrimaryVoicing, normalizeChordName } from '../lib/chord-shapes'
+import { splitSlashBass } from '../lib/chord-voicings'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
 import { StrumPatternCard } from './StrumPatternCard'
 import { Fretboard } from './Fretboard'
@@ -16,17 +17,29 @@ interface ChordDiagramProps {
  * Renders the built-in (primary) fingering diagram for a chord. Used by the always-visible
  * chord map and current-chord panel; richer alternate voicings are loaded on demand in the
  * voicing browser popover.
+ *
+ * Slash chords (E/B) render the ROOT chord's fingering with the label kept as
+ * written and a bass-note hint — that's how players read them: same shape,
+ * different bass.
  */
 export function ChordDiagram({ chord }: ChordDiagramProps) {
-    const voicing = getPrimaryVoicing(chord)
+    const { root, bass } = splitSlashBass(formatChordName(chord))
+    const voicing = getPrimaryVoicing(root)
     if (!voicing) return null
 
+    const label = bass ? `${root}/${bass}` : root
+
     return (
-        <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3" aria-label={`${formatChordName(chord)} chord diagram`}>
+        <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3" aria-label={`${label} chord diagram`}>
             <div className="mb-2 text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>
-                {formatChordName(chord)}
+                {label}
             </div>
             <Fretboard voicing={voicing} />
+            {bass && (
+                <div className="mt-1.5 text-[11px] text-smoke-400" dir="ltr">
+                    {root} shape · play <span className="font-semibold text-smoke-200">{bass}</span> in the bass
+                </div>
+            )}
         </div>
     )
 }

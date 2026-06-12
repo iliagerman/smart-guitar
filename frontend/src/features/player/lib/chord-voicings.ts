@@ -81,12 +81,21 @@ const SUFFIX_TO_DB: Record<string, string> = {
   aug9: 'aug9',
 }
 
+/**
+ * Split a slash chord into its root chord and bass note (C/G -> {C, G}).
+ * Extension slashes (C6/9) are NOT slash basses and stay on the root.
+ */
+export function splitSlashBass(name: string): { root: string; bass: string | null } {
+  const slashIdx = name.lastIndexOf('/')
+  if (slashIdx <= 0) return { root: name, bass: null }
+  const after = name.slice(slashIdx + 1)
+  if (!/^[A-G][#b]?$/.test(after)) return { root: name, bass: null }
+  return { root: name.slice(0, slashIdx), bass: after }
+}
+
 /** Drop a trailing slash bass note (C/G -> C). Keeps extension slashes (C6/9). */
 function stripSlashBass(name: string): string {
-  const slashIdx = name.lastIndexOf('/')
-  if (slashIdx <= 0) return name
-  const after = name.slice(slashIdx + 1)
-  return /^[A-G][#b]?$/.test(after) ? name.slice(0, slashIdx) : name
+  return splitSlashBass(name).root
 }
 
 /**

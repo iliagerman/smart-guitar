@@ -5,6 +5,7 @@ import {
   dbPositionToVoicing,
   resolveVoicingsFromDb,
   type GuitarChordDb,
+  splitSlashBass,
 } from './chord-voicings'
 
 // Cast once: the raw JSON is a huge literal type; treat it as our minimal shape.
@@ -130,5 +131,21 @@ describe('resolveVoicingsFromDb', () => {
   it('returns an empty list for the no-chord token', () => {
     expect(resolveVoicingsFromDb('N', db)).toEqual([])
     expect(resolveVoicingsFromDb('', db)).toEqual([])
+  })
+})
+
+describe('splitSlashBass', () => {
+  it('splits a slash chord into root and bass', () => {
+    expect(splitSlashBass('C/G')).toEqual({ root: 'C', bass: 'G' })
+    expect(splitSlashBass('E/B')).toEqual({ root: 'E', bass: 'B' })
+    expect(splitSlashBass('Bbm/F#')).toEqual({ root: 'Bbm', bass: 'F#' })
+  })
+
+  it('keeps extension slashes intact (C6/9 is not a slash bass)', () => {
+    expect(splitSlashBass('C6/9')).toEqual({ root: 'C6/9', bass: null })
+  })
+
+  it('returns no bass for plain chords', () => {
+    expect(splitSlashBass('Am')).toEqual({ root: 'Am', bass: null })
   })
 })

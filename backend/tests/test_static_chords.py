@@ -412,6 +412,34 @@ async def test_community_sheet_synced_to_whisper_lyrics(settings, storage):
         await close_db()
 
 
+def test_static_chords_placed_by_character_position():
+    """UG sheets give each chord an exact character position in the lyric
+    line. Chord timing inside the line window must be proportional to that
+    position — even-index spreading misplaces chords and leaves big gaps."""
+    from guitar_player.services.song_service.detail import _static_lines_to_chord_option
+
+    text = "When I find myself in times of trouble"  # len 39
+    lines = [{
+        "type": "lyric",
+        "text": text,
+        "chords": [
+            {"chord": "C", "position": 0},
+            {"chord": "Am", "position": 30},  # near the end of the line
+        ],
+    }]
+    option = _static_lines_to_chord_option(
+        lines, duration=240.0, name="Sheet 1",
+        line_windows=[(42.0, 46.5)],
+    )
+    by_name = {c.chord: c for c in option.chords}
+    assert by_name["C"].start_time == pytest.approx(42.0, abs=0.15)
+    # 30/39 of the way through a 4.5s window ≈ 45.46 — NOT the even-split 44.25.
+    assert by_name["Am"].start_time == pytest.approx(42.0 + (30 / 39) * 4.5, abs=0.3)
+    # Windows stay ordered and inside the line.
+    assert by_name["C"].end_time <= by_name["Am"].start_time + 0.001
+    assert by_name["Am"].end_time <= 46.5 + 0.001
+
+
 @pytest.mark.asyncio
 async def test_song_detail_serves_bar_grid_from_chord_meta(settings, storage):
     """bpm + bar_starts from chord_meta.json must reach the detail response

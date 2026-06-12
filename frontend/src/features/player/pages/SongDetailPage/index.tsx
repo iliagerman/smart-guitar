@@ -7,6 +7,7 @@ import { useLyricsSync } from '../../hooks/use-lyrics-sync'
 import { useCountIn } from '../../hooks/use-count-in'
 import { CountInOverlay } from '../../components/CountInOverlay'
 import { resumeTickContext } from '../../lib/count-in-audio'
+import { formatChordWithBass } from '@/lib/chord-colors'
 import { normalizeWords } from '../../lib/normalize-words'
 import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../../lib/strum-pattern'
 import { OnboardingTour } from '../../components/OnboardingTour'
@@ -122,6 +123,7 @@ export function SongDetailPage() {
   const globalTranspose = usePlayerPrefsStore((s) => s.transposeSemitones)
   const globalLyricsOffset = usePlayerPrefsStore((s) => s.lyricsOffsetMs)
   const globalStrumSource = usePlayerPrefsStore((s) => s.strumSource)
+  const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
   const songOverrides = usePlayerPrefsStore((s) => s.songOverrides[songId!])
   const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
 
@@ -439,8 +441,12 @@ export function SongDetailPage() {
 
   const chordNamesForMap = useMemo(() => {
     const source = isEditMode ? editingChords : displayChords
-    return source.flatMap((c) => (c.chord ? [c.chord] : []))
-  }, [isEditMode, editingChords, displayChords])
+    // Slash-labeled entries (E/B) get their own chord-map card with a
+    // bass-note hint, so players can see how to voice what the sheet shows.
+    return source.flatMap((c) =>
+      c.chord ? [formatChordWithBass(c.chord, c.bass, showBassNotes)] : [],
+    )
+  }, [isEditMode, editingChords, displayChords, showBassNotes])
 
   const representativeStrumPattern = useMemo(() => {
     if (!detail) return []

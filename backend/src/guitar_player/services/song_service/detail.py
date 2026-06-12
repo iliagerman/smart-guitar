@@ -433,14 +433,25 @@ def _static_lines_to_chord_option(
         text = line.get("text", "")
         raw_chords = line.get("chords", [])
 
-        # Build ChordEntry objects from position-based chords
+        # Build ChordEntry objects from position-based chords. The sheet gives
+        # each chord an exact character position in the line — time it
+        # proportionally to that position so it lands over the right word.
+        # Lines without text (instrumental) fall back to even spacing.
         chord_count = len(raw_chords)
+        text_len = len(text)
+        starts: list[float] = []
         for ci, c in enumerate(raw_chords):
-            chord_start = seg_start + (ci / max(chord_count, 1)) * seg_span
-            chord_end = seg_start + ((ci + 1) / max(chord_count, 1)) * seg_span
+            if text_len > 0:
+                fraction = min(max(c.get("position", 0), 0), text_len) / text_len
+            else:
+                fraction = ci / max(chord_count, 1)
+            starts.append(seg_start + fraction * seg_span)
+        for ci, c in enumerate(raw_chords):
+            chord_start = starts[ci]
+            chord_end = starts[ci + 1] if ci + 1 < chord_count else seg_end
             chords.append(ChordEntry(
                 start_time=round(chord_start, 3),
-                end_time=round(chord_end, 3),
+                end_time=round(max(chord_end, chord_start), 3),
                 chord=c.get("chord", ""),
             ))
 
