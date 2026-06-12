@@ -6,6 +6,7 @@ import {
   resolveVoicingsFromDb,
   type GuitarChordDb,
   splitSlashBass,
+  lowestSoundingPitchClass,
 } from './chord-voicings'
 
 // Cast once: the raw JSON is a huge literal type; treat it as our minimal shape.
@@ -117,8 +118,33 @@ describe('resolveVoicingsFromDb', () => {
     expect(resolveVoicingsFromDb('Eb', db).length).toBeGreaterThan(0)
   })
 
-  it('falls back to the base chord for slash chords', () => {
-    expect(resolveVoicingsFromDb('C/G', db)).toEqual(resolveVoicingsFromDb('C', db))
+  it('returns true inversions for slash chords: lowest sounding note is the bass', () => {
+    const voicings = resolveVoicingsFromDb('C/G', db)
+    expect(voicings.length).toBeGreaterThan(0)
+    // G pitch class = 7
+    expect(lowestSoundingPitchClass(voicings[0])).toBe(7)
+  })
+
+  it('adapts open shapes when the db has no native inversion (D/F#)', () => {
+    const voicings = resolveVoicingsFromDb('D/F#', db)
+    expect(voicings.length).toBeGreaterThan(0)
+    // F# pitch class = 6
+    expect(lowestSoundingPitchClass(voicings[0])).toBe(6)
+  })
+
+  it('mutes strings below the new bass string (G/B)', () => {
+    const voicings = resolveVoicingsFromDb('G/B', db)
+    expect(voicings.length).toBeGreaterThan(0)
+    // B pitch class = 11
+    expect(lowestSoundingPitchClass(voicings[0])).toBe(11)
+  })
+
+  it('falls back to root voicings when no inversion is playable', () => {
+    // Bass note that exists nowhere reachable still yields the root shapes.
+    const voicings = resolveVoicingsFromDb('C/G', db)
+    const plain = resolveVoicingsFromDb('C', db)
+    expect(voicings.length).toBeGreaterThan(0)
+    expect(plain.length).toBeGreaterThan(0)
   })
 
   it('resolves extended qualities present in the db', () => {

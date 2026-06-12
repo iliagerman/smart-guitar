@@ -138,9 +138,65 @@ export function dbPositionToVoicing(pos: DbPosition): ChordVoicing {
   }
 }
 
+// Standard tuning, low E to high E, as MIDI note numbers (E2 A2 D3 G3 B3 E4).
+const STANDARD_TUNING_MIDI = [40, 45, 50, 55, 59, 64]
+
+const NOTE_TO_PITCH_CLASS: Record<string, number> = {
+  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6,
+  G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
+}
+
+/** Pitch class (0-11) for a note name like "F#"/"Bb", or null when unknown. */
+export function noteToPitchClass(note: string): number | null {
+  return NOTE_TO_PITCH_CLASS[note] ?? null
+}
+
+/** Pitch class (0-11) of the lowest sounding string, or null when all muted. */
+export function lowestSoundingPitchClass(voicing: ChordVoicing): number | null {
+  for (let s = 0; s < voicing.frets.length; s++) {
+    const fret = voicing.frets[s]
+    if (fret >= 0) return (STANDARD_TUNING_MIDI[s] + fret) % 12
+  }
+  return null
+}
+
+/**
+ * Re-bass a voicing so the given pitch class sounds as its lowest note:
+ * pick the lowest string that can reach the bass note within the hand span,
+ * set it there, and mute any strings below it (how players actually voice
+ * C/G, D/F#, G/B...). Returns null when no string can reach the note.
+ */
+export function adaptVoicingToBass(voicing: ChordVoicing, bassPc: number): ChordVoicing | null {
+  const maxReach = Math.max(4, voicing.baseFret + 3)
+  for (let s = 0; s < 2; s++) {
+    // Candidate frets on this string producing the bass pitch class.
+    for (let fret = 0; fret <= maxReach; fret++) {
+      if ((STANDARD_TUNING_MIDI[s] + fret) % 12 !== bassPc) continue
+      // Keep the shape playable: open string, or within the fretting span.
+      const inSpan = fret === 0 || (voicing.baseFret <= 1 ? fret <= 4 : Math.abs(fret - voicing.baseFret) <= 3)
+      if (!inSpan) continue
+      const frets = [...voicing.frets]
+      const fingers = [...voicing.fingers]
+      frets[s] = fret
+      fingers[s] = 0
+      for (let below = 0; below < s; below++) {
+        frets[below] = -1
+        fingers[below] = 0
+      }
+      return { ...voicing, frets, fingers }
+    }
+  }
+  return null
+}
+
 /**
  * Resolve every voicing for a chord from an already-loaded chords-db object.
  * Pure (no I/O) so it can be unit-pinned against known chords.
+ *
+ * Slash chords (C/G) resolve to TRUE inversions: database voicings whose
+ * lowest sounding note already is the bass, then shapes re-bassed via
+ * adaptVoicingToBass, falling back to the plain root voicings only when
+ * the bass note is unreachable.
  */
 export function resolveVoicingsFromDb(name: string, db: GuitarChordDb): ChordVoicing[] {
   const lookup = chordNameToDbLookup(name)
@@ -152,7 +208,19 @@ export function resolveVoicingsFromDb(name: string, db: GuitarChordDb): ChordVoi
   const entry = group.find((chord) => chord.suffix === lookup.suffix)
   if (!entry) return []
 
-  return entry.positions.map(dbPositionToVoicing)
+  const rootVoicings = entry.positions.map(dbPositionToVoicing)
+
+  const { bass } = splitSlashBass(formatChordName(name))
+  const bassPc = bass != null ? NOTE_TO_PITCH_CLASS[bass] : undefined
+  if (bassPc === undefined) return rootVoicings
+
+  const natural = rootVoicings.filter((v) => lowestSoundingPitchClass(v) === bassPc)
+  const adapted = rootVoicings
+    .map((v) => adaptVoicingToBass(v, bassPc))
+    .filter((v): v is ChordVoicing => v !== null && lowestSoundingPitchClass(v) === bassPc)
+
+  const inversions = [...natural, ...adapted]
+  return inversions.length > 0 ? inversions : rootVoicings
 }
 
 /**

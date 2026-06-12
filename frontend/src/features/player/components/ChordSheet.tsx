@@ -178,10 +178,11 @@ function ChordLabel({
   )
 
   // Playback: tapping a chord opens the "how to play it" voicing browser.
+  // Pass the slash bass through so the popover shows the true inversion.
   if (!isEditMode) {
     return (
       <ChordVoicingPopover
-        chordName={chord.chord}
+        chordName={formatChordWithBass(chord.chord, chord.bass, showBassNotes)}
         onPlayFromHere={onSeek ? () => onSeek(chord.start_time) : undefined}
       >
         {chordButton}

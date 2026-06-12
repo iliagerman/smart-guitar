@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/cn'
 import { formatChordName } from '@/lib/chord-colors'
 import { getPrimaryVoicing, normalizeChordName } from '../lib/chord-shapes'
-import { splitSlashBass } from '../lib/chord-voicings'
+import { adaptVoicingToBass, noteToPitchClass, splitSlashBass } from '../lib/chord-voicings'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
 import { StrumPatternCard } from './StrumPatternCard'
 import { Fretboard } from './Fretboard'
@@ -18,15 +18,17 @@ interface ChordDiagramProps {
  * chord map and current-chord panel; richer alternate voicings are loaded on demand in the
  * voicing browser popover.
  *
- * Slash chords (E/B) render the ROOT chord's fingering with the label kept as
- * written and a bass-note hint — that's how players read them: same shape,
- * different bass.
+ * Slash chords (E/B) render the TRUE inversion when reachable: the root shape
+ * re-bassed so the slash note sounds lowest, with a hint naming the bass.
  */
 export function ChordDiagram({ chord }: ChordDiagramProps) {
     const { root, bass } = splitSlashBass(formatChordName(chord))
-    const voicing = getPrimaryVoicing(root)
-    if (!voicing) return null
+    const rootVoicing = getPrimaryVoicing(root)
+    if (!rootVoicing) return null
 
+    const bassPc = bass != null ? noteToPitchClass(bass) : null
+    const inversion = bassPc != null ? adaptVoicingToBass(rootVoicing, bassPc) : null
+    const voicing = inversion ?? rootVoicing
     const label = bass ? `${root}/${bass}` : root
 
     return (
@@ -37,7 +39,11 @@ export function ChordDiagram({ chord }: ChordDiagramProps) {
             <Fretboard voicing={voicing} />
             {bass && (
                 <div className="mt-1.5 text-[11px] text-smoke-400" dir="ltr">
-                    {root} shape · play <span className="font-semibold text-smoke-200">{bass}</span> in the bass
+                    {inversion ? (
+                        <><span className="font-semibold text-smoke-200">{bass}</span> in the bass</>
+                    ) : (
+                        <>{root} shape · play <span className="font-semibold text-smoke-200">{bass}</span> in the bass</>
+                    )}
                 </div>
             )}
         </div>

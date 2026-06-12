@@ -3,8 +3,15 @@ import * as Popover from '@radix-ui/react-popover'
 import { ChevronLeft, ChevronRight, Loader2, Play } from 'lucide-react'
 
 import { formatChordName } from '@/lib/chord-colors'
-import { loadChordVoicings, type ChordVoicing } from '../lib/chord-voicings'
+import { loadChordVoicings, splitSlashBass, type ChordVoicing } from '../lib/chord-voicings'
 import { Fretboard } from './Fretboard'
+
+/** Format a chord title, keeping a slash bass intact (Em/B stays Em/B). */
+function formatPopoverTitle(name: string): string {
+  const { root, bass } = splitSlashBass(name)
+  const formatted = formatChordName(root)
+  return bass ? `${formatted}/${bass}` : formatted
+}
 
 interface ChordVoicingPopoverProps {
   chordName: string
@@ -71,7 +78,7 @@ export function ChordVoicingPopover({ chordName, onPlayFromHere, children }: Cho
               style={{ unicodeBidi: 'isolate' }}
               data-testid="chord-voicing-name"
             >
-              {formatChordName(chordName)}
+              {formatPopoverTitle(chordName)}
             </span>
             {total > 1 && (
               <div className="flex items-center gap-1">
