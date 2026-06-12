@@ -580,7 +580,8 @@ sync-artifacts-to-prod apply="false":
         --include "*/chords.json" \
         --include "*/chords_beginner*.json" \
         --include "*/chords_intermediate.json" \
-        --include "*/chords_capo_*.json"
+        --include "*/chords_capo_*.json" \
+        --include "*/chord_meta.json"
 
     echo "── Deleting legacy lyrics_corrected.json objects from prod"
     aws s3api list-objects-v2 --bucket "${BUCKET}" --query "Contents[?ends_with(Key, 'lyrics_corrected.json')].Key" --output text \
