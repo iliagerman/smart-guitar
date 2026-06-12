@@ -48,7 +48,7 @@ describe('getAvailableLyricsSources', () => {
     const options = getAvailableLyricsSources(detail, undefined)
     const auto = options.find((o) => o.key === 'auto')
     expect(auto?.segments).toEqual(whisperSegs)
-    expect(options.some((o) => o.key === 'ver3')).toBe(false)
+    expect(options.some((o) => (o.key as string) === 'ver3')).toBe(false)
     expect(options.some((o) => o.label === 'Merged')).toBe(false)
   })
 

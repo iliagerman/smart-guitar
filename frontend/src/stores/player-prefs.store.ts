@@ -25,7 +25,7 @@ export interface SongOverrides {
   playbackRate?: number
   chordDisplayMode?: 'standard' | 'beginner' | 'capo'
   chordCapoFret?: number
-  sheetMode?: 'chords' | 'tabs'
+  sheetMode?: 'chords' | 'tabs' | 'bars'
   /** Per-stem volume levels (0–1). Key is stem name (e.g. 'vocals', 'drums'). */
   stemVolumes?: Record<string, number>
 }
