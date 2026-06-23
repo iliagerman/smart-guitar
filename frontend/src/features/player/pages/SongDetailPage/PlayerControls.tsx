@@ -1,6 +1,8 @@
-import { Heart, Pencil } from 'lucide-react'
+import { useState } from 'react'
+import { Heart, Pencil, Timer } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
+import { MetronomePanel } from '@/features/metronome/components/MetronomePanel'
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
@@ -221,6 +223,9 @@ function PrimaryControls({
   getRecordingTap,
 }: PrimaryControlsProps) {
   const isEditMode = useChordEditStore((s) => s.isEditMode)
+  const currentTime = usePlaybackStore((s) => s.currentTime)
+  const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  const [showMetronome, setShowMetronome] = useState(false)
 
   return (
     <>
@@ -286,6 +291,34 @@ function PrimaryControls({
           iconOnly
           onOpenTutorial={onOpenTutorial}
         />
+      </div>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setShowMetronome((value) => !value)}
+          className={cn(
+            'inline-flex items-center justify-center rounded-lg w-16 h-16',
+            'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
+            'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+            showMetronome && 'border-flame-400/40 text-flame-400 bg-flame-400/10',
+          )}
+          aria-label="Open metronome"
+          data-testid="song-metronome-toggle"
+        >
+          <Timer size={25} aria-hidden="true" />
+        </button>
+        {showMetronome && (
+          <div className="fixed inset-x-3 bottom-24 z-50 sm:absolute sm:bottom-auto sm:left-1/2 sm:top-20 sm:w-96 sm:-translate-x-1/2">
+            <MetronomePanel
+              autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
+              mode="playback"
+              playbackTime={currentTime}
+              playbackPlaying={isPlaying}
+              compact
+            />
+          </div>
+        )}
       </div>
     </>
   )

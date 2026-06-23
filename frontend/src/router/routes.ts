@@ -10,6 +10,7 @@ export const ROUTES = {
   ANALYTICS: '/analytics',
   SONG_DETAIL: '/songs/:songId',
   TUNER: '/tuner',
+  METRONOME: '/metronome',
   PROFILE: '/profile',
   SUBSCRIPTION_SUCCESS: '/subscription/success',
   SUBSCRIPTION_FAIL: '/subscription/fail',

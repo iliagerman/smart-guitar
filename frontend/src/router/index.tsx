@@ -20,6 +20,7 @@ const SongDetailPage = lazy(() => import('@/features/player/pages/SongDetailPage
 const SubscriptionSuccessPage = lazy(() => import('@/features/subscription/pages/SubscriptionSuccessPage').then(m => ({ default: m.SubscriptionSuccessPage })))
 const SubscriptionFailPage = lazy(() => import('@/features/subscription/pages/SubscriptionFailPage').then(m => ({ default: m.SubscriptionFailPage })))
 const TunerPage = lazy(() => import('@/features/tuner/pages/TunerPage').then(m => ({ default: m.TunerPage })))
+const MetronomePage = lazy(() => import('@/features/metronome/pages/MetronomePage').then(m => ({ default: m.MetronomePage })))
 
 export const router = createBrowserRouter([
   {
@@ -83,6 +84,15 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SuspenseWrapper><TunerPage /></SuspenseWrapper>
+          </AuthGuard>
+        ),
+      },
+      // Metronome: auth only, no subscription required
+      {
+        path: ROUTES.METRONOME,
+        element: (
+          <AuthGuard>
+            <SuspenseWrapper><MetronomePage /></SuspenseWrapper>
           </AuthGuard>
         ),
       },

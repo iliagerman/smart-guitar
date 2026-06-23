@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Music, Heart, Settings, BarChart3, Mic } from 'lucide-react'
+import { Music, Heart, Settings, BarChart3, Mic, Timer } from 'lucide-react'
 import { ROUTES } from '@/router/routes'
 import { cn } from '@/lib/cn'
 import { useIsAdmin } from '@/features/analytics/hooks/use-is-admin'
@@ -10,6 +10,7 @@ export function SidebarNav() {
         { to: ROUTES.SONGS, icon: Music, label: 'Songs', testId: 'sidebar-songs' },
         { to: ROUTES.FAVORITES, icon: Heart, label: 'Favorites', testId: 'sidebar-favorites' },
         { to: ROUTES.TUNER, icon: Mic, label: 'Tuner', testId: 'sidebar-tuner' },
+        { to: ROUTES.METRONOME, icon: Timer, label: 'Metronome', testId: 'sidebar-metronome' },
         ...(canUseAnalytics ? [{ to: ROUTES.ANALYTICS, icon: BarChart3, label: 'Analytics', testId: 'sidebar-analytics' }] : []),
     ]
 
