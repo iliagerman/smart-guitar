@@ -352,7 +352,36 @@ def _load_songsterr_data(storage: StorageBackend, song: SongRecord) -> dict[str,
     if song.song_name:
         _load_songsterr_lyrics(storage, song.song_name, result)
 
+    # On-demand tutorial recovery writes {song_name}/tutorial.json directly to
+    # storage (no DB pointer). Surface it when the Songsterr file had none.
+    if not result["tutorial_url"] and song.song_name:
+        _load_tutorial_fallback(storage, song.song_name, result)
+
     return result
+
+
+def _load_tutorial_fallback(
+    storage: StorageBackend, song_name: str, result: dict[str, Any],
+) -> None:
+    """Read tutorial fields from the on-demand {song_name}/tutorial.json file.
+
+    Independent of external_strums_key (NULL for songs that never ran the
+    Songsterr step), so backfilled tutorials surface for old songs too.
+    """
+    key = f"{song_name}/tutorial.json"
+    if not storage.file_exists(key):
+        return
+    try:
+        raw = storage.read_json(key)
+    except Exception as e:
+        logger.warning("Failed to read tutorial.json for %s: %s", song_name, e)
+        return
+    if not isinstance(raw, dict):
+        return
+    if raw.get("tutorial_url"):
+        result["tutorial_url"] = raw["tutorial_url"]
+    if isinstance(raw.get("tutorial_links"), list):
+        result["tutorial_links"] = raw["tutorial_links"]
 
 
 def _load_songsterr_lyrics(

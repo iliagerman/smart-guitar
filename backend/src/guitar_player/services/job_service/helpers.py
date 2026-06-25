@@ -1,6 +1,5 @@
 """Utility functions for job processing pipeline."""
 
-import asyncio
 import logging
 import time
 import uuid
@@ -49,58 +48,47 @@ def score_tutorial_link(title: str, url: str) -> int:
 async def search_youtube_tutorial(
     title: str, artist: str
 ) -> tuple[str, list[dict]]:
-    """Search YouTube for guitar tutorials when Tavily has none.
+    """Search YouTube for guitar tutorials via the prod-hardened YoutubeService.
+
+    Goes through ``YoutubeService.search`` so the request uses the configured
+    proxy / cookies / PO-token (and its without-proxy retry). A bare yt-dlp
+    search is bot-blocked from datacenter IPs, which is why tutorials were
+    missing in prod even though audio downloads worked.
 
     Returns (best_url, all_links) where all_links is a list of
     {"url", "title"} dicts sorted by score descending.
     """
-    import yt_dlp
+    from guitar_player.config import get_settings
+    from guitar_player.dependencies import get_youtube_service
     from guitar_player.services.llm_service import _tutorial_search_suffix
 
     query = f"{title} {artist} {_tutorial_search_suffix(title, artist)}"
 
-    def _search() -> tuple[str, list[dict]]:
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-            "skip_download": True,
-        }
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                result = ydl.extract_info(f"ytsearch5:{query}", download=False)
-                entries = result.get("entries", []) if result else []
-        except Exception as e:
-            logger.warning("YouTube tutorial fallback search failed: %s", e)
-            return "", []
+    try:
+        youtube = get_youtube_service(get_settings())
+        results = await youtube.search_tutorials(query, max_results=5)
+    except Exception as e:
+        logger.warning("YouTube tutorial search failed: %s", e)
+        return "", []
 
-        if not entries:
-            return "", []
+    if not results:
+        return "", []
 
-        candidates = []
-        for entry in entries:
-            if not entry:
-                continue
-            vid_title = entry.get("title") or ""
-            vid_id = entry.get("id") or ""
-            url = f"https://www.youtube.com/watch?v={vid_id}"
-            score = score_tutorial_link(vid_title, url)
-            candidates.append((url, vid_title, score))
+    candidates = []
+    for r in results:
+        vid_title = r.title or ""
+        url = f"https://www.youtube.com/watch?v={r.youtube_id}"
+        candidates.append((url, vid_title, score_tutorial_link(vid_title, url)))
 
-        if not candidates:
-            return "", []
-
-        candidates.sort(key=lambda x: x[2], reverse=True)
-        best_url, best_title, best_score = candidates[0]
-        logger.info(
-            "YouTube fallback tutorial selected: %r (%r, score=%d) "
-            "from %d candidates for %r by %r",
-            best_url, best_title, best_score, len(candidates), title, artist,
-        )
-        all_links = [{"url": u, "title": t} for u, t, _s in candidates]
-        return best_url, all_links
-
-    return await asyncio.to_thread(_search)
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    best_url, best_title, best_score = candidates[0]
+    logger.info(
+        "YouTube tutorial selected: %r (%r, score=%d) from %d candidates "
+        "for %r by %r",
+        best_url, best_title, best_score, len(candidates), title, artist,
+    )
+    all_links = [{"url": u, "title": t} for u, t, _s in candidates]
+    return best_url, all_links
 
 
 def stem_candidates(song_name: str, *stem_names: str) -> list[str]:

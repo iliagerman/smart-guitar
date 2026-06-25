@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from datetime import datetime
 
 from guitar_player.app_state import get_storage
 from guitar_player.dao.job_dao import JobDAO
@@ -19,6 +20,7 @@ from .background_tasks import (
     MERGE_TASKS,
     STATIC_CHORDS_TASKS,
     TABS_TASKS,
+    TUTORIAL_TASKS,
     WEB_CHORDS_TASKS,
 )
 from .constants import (
@@ -27,6 +29,7 @@ from .constants import (
     DERIVED_STEMS,
     LIGHTWEIGHT_TASK_COOLDOWN_SECONDS,
     STEM_FILE_VARIANTS,
+    TUTORIAL_RETRY_COOLDOWN_SECONDS,
 )
 from guitar_player.services.source_match import accept_match, match_components
 
@@ -769,6 +772,67 @@ class JobService:
         )
         _pkg_enqueue("_enqueue_external_strums_fetch", song_id)
         return True
+
+    async def trigger_tutorial_if_missing(self, song_id: uuid.UUID) -> bool:
+        """Lazily fetch a YouTube tutorial when a song has none (S3-only).
+
+        Independent of the heavier Songsterr pipeline and of the DB pointer:
+        reads/writes only ``{song_name}/tutorial.json``. Skips when a tutorial
+        already exists (here or in songsterr_data.json) and cools down after a
+        recent failed lookup so repeated opens don't re-search.
+        """
+        song = await self._song_dao.get_by_id(song_id)
+        if not song or not song.song_name or not song.artist or not song.title:
+            return False
+
+        if self._existing_tutorial_url(song.song_name, song.external_strums_key):
+            return False
+
+        marker_key = f"{song.song_name}/tutorial.json"
+        if self._storage.file_exists(marker_key):
+            marker = self._storage.read_json(marker_key)
+            if isinstance(marker, dict) and self._tutorial_marker_on_cooldown(marker):
+                return False
+
+        existing_task = TUTORIAL_TASKS.get(song_id)
+        if existing_task and not existing_task.done():
+            return False
+
+        logger.info(
+            "Tutorial: enqueuing fetch for %s (%s - %s)",
+            song_id, song.artist, song.title,
+        )
+        _pkg_enqueue("_enqueue_tutorial_fetch", song_id)
+        return True
+
+    def _existing_tutorial_url(
+        self, song_name: str, external_strums_key: str | None,
+    ) -> str | None:
+        """Return an existing tutorial_url from any per-song file, if present."""
+        candidate_keys = [
+            external_strums_key,
+            f"{song_name}/songsterr_data.json",
+            f"{song_name}/tutorial.json",
+        ]
+        for key in candidate_keys:
+            if not key or not self._storage.file_exists(key):
+                continue
+            data = self._storage.read_json(key)
+            if isinstance(data, dict) and (data.get("tutorial_url") or "").strip():
+                return data["tutorial_url"]
+        return None
+
+    def _tutorial_marker_on_cooldown(self, marker: dict) -> bool:
+        """A recent failed tutorial lookup suppresses retries until cooldown lapses."""
+        attempted_at = marker.get("attempted_at")
+        if not attempted_at:
+            return False
+        try:
+            attempted = datetime.fromisoformat(attempted_at)
+            age_s = (utcnow() - to_aware_utc(attempted)).total_seconds()
+        except Exception:
+            return False
+        return age_s < TUTORIAL_RETRY_COOLDOWN_SECONDS
 
     async def trigger_web_chords_if_missing(
         self, song_id: uuid.UUID, *, force: bool = False,

@@ -13,6 +13,7 @@ MERGE_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 LYRICS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 TABS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 EXTERNAL_STRUMS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
+TUTORIAL_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 WEB_CHORDS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 STATIC_CHORDS_TASKS: dict[uuid.UUID, asyncio.Task] = {}
 
@@ -121,6 +122,16 @@ def enqueue_external_strums_fetch(song_id: uuid.UUID) -> None:
     _enqueue_singleton(
         EXTERNAL_STRUMS_TASKS, song_id, fetch_external_strums(song_id),
         label=f"external_strums({song_id})",
+    )
+
+
+def enqueue_tutorial_fetch(song_id: uuid.UUID) -> None:
+    """Fire-and-forget tutorial-only YouTube lookup in the background."""
+    from .external_data import fetch_tutorial_only
+
+    _enqueue_singleton(
+        TUTORIAL_TASKS, song_id, fetch_tutorial_only(song_id),
+        label=f"tutorial_only({song_id})",
     )
 
 

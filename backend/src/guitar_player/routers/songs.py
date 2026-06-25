@@ -541,6 +541,7 @@ async def _run_background_healing(
         ("lyrics", lambda: job_service.trigger_lyrics_transcription_if_missing(song_id)),
         ("tabs", lambda: job_service.trigger_tabs_generation_if_missing(song_id)),
         ("external strums", lambda: job_service.trigger_external_strums_if_missing(song_id)),
+        ("tutorial", lambda: job_service.trigger_tutorial_if_missing(song_id)),
         ("web chords", lambda: job_service.trigger_web_chords_if_missing(song_id)),
         ("static chords", lambda: job_service.trigger_static_chords_if_missing(song_id)),
     ]

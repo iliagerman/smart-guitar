@@ -10,7 +10,13 @@ from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
 from guitar_player.services.processing_service import ProcessingService
 
-from .helpers import find_stem, score_tutorial_link, search_youtube_tutorial, stem_candidates
+from .helpers import (
+    find_stem,
+    score_tutorial_link,
+    search_youtube_tutorial,
+    stem_candidates,
+    utcnow,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +386,42 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                 "Failed to persist static_chords_failed for %s",
                 song_id, exc_info=True,
             )
+
+
+async def fetch_tutorial_only(song_id: uuid.UUID) -> None:
+    """On-demand: find a YouTube guitar tutorial and store it (S3-only).
+
+    Lightweight path used when a song is opened without a tutorial. Writes
+    ``{song_name}/tutorial.json`` with the best link, or a ``failed`` marker so
+    we cool down before retrying. Does not touch the DB or the heavier Songsterr
+    pipeline, and surfaces independently of ``external_strums_key``.
+    """
+    try:
+        storage = get_storage()
+    except Exception:
+        return
+
+    async with safe_session() as session:
+        song = await SongDAO(session).get_by_id(song_id)
+        if not song or not song.song_name or not song.artist:
+            return
+        artist = song.artist
+        title = song.title
+        song_name = song.song_name
+
+    tutorial_url, tutorial_links = await search_youtube_tutorial(title, artist)
+
+    payload: dict = {
+        "tutorial_url": tutorial_url,
+        "tutorial_links": tutorial_links,
+        "attempted_at": utcnow().isoformat(),
+        "status": "ready" if tutorial_url else "failed",
+    }
+    storage.write_json(f"{song_name}/tutorial.json", payload)
+    logger.info(
+        "tutorial_only: %s for %r by %r (%d links) song_id=%s",
+        payload["status"], title, artist, len(tutorial_links), song_id,
+    )
 
 
 async def fetch_external_strums(song_id: uuid.UUID) -> None:

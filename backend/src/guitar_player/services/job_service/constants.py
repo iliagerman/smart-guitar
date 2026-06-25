@@ -82,6 +82,10 @@ STALE_ACTIVE_JOB_AFTER_SECONDS = 60 * 16  # 16 minutes
 # Cooldown for lightweight background tasks (lyrics/merge).
 LIGHTWEIGHT_TASK_COOLDOWN_SECONDS = 300  # 5 minutes
 
+# After a failed tutorial lookup we keep the failed marker for this long before
+# retrying on the next song open, so we don't re-search every visit.
+TUTORIAL_RETRY_COOLDOWN_SECONDS = 60 * 60 * 24 * 30  # 30 days
+
 # Throttle INFO logs for repeated "blocked" outcomes.
 ADMIN_HEAL_LOG_THROTTLE_SECONDS = 600  # 10 minutes
 

@@ -7,6 +7,7 @@ from .background_tasks import (
     enqueue_lyrics_transcription,
     enqueue_static_chords_fetch,
     enqueue_tabs_generation,
+    enqueue_tutorial_fetch,
     enqueue_vocals_guitar_merge,
     enqueue_web_chords_fetch,
 )
@@ -28,6 +29,7 @@ _enqueue_tabs_generation = enqueue_tabs_generation
 _enqueue_vocals_guitar_merge = enqueue_vocals_guitar_merge
 _enqueue_job_processing = enqueue_job_processing
 _enqueue_external_strums_fetch = enqueue_external_strums_fetch
+_enqueue_tutorial_fetch = enqueue_tutorial_fetch
 _enqueue_web_chords_fetch = enqueue_web_chords_fetch
 _enqueue_static_chords_fetch = enqueue_static_chords_fetch
 
@@ -47,6 +49,7 @@ __all__ = [
     "_enqueue_vocals_guitar_merge",
     "_enqueue_job_processing",
     "_enqueue_external_strums_fetch",
+    "_enqueue_tutorial_fetch",
     "_enqueue_web_chords_fetch",
     "_enqueue_static_chords_fetch",
 ]

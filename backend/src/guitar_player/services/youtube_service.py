@@ -530,6 +530,59 @@ class YoutubeService:
         """Search YouTube and return typed results."""
         return await asyncio.to_thread(self._search_sync, query, max_results)
 
+    def _search_tutorials_sync(
+        self, query: str, max_results: int = 5
+    ) -> list[YouTubeSearchResult]:
+        """Keyword search tuned for guitar tutorials.
+
+        Unlike ``_search_sync`` (which finds the song to download) this does NOT
+        rewrite the query toward the official audio and does NOT cap by duration
+        or drop live titles — tutorials are often long. It still reuses the
+        proxy / cookies / realistic-headers machinery and the without-proxy
+        retry so it works from datacenter IPs.
+        """
+        if max_results <= 0:
+            return []
+
+        ydl_opts: dict[str, Any] = {
+            **self._base_opts(
+                use_proxy=bool(self._proxy),
+                include_cookies=self._use_cookies_for_public_videos,
+            ),
+            "extract_flat": True,
+        }
+        fetch_n = min(max_results * 5, 50)
+        search_url = f"ytsearch{fetch_n}:{query}"
+
+        def _extract(opts: dict[str, Any]) -> list[Any]:
+            with yt_dlp.YoutubeDL(cast(Any, opts)) as ydl:
+                result = ydl.extract_info(search_url, download=False)
+            return result.get("entries", []) if result else []
+
+        try:
+            entries = _extract(ydl_opts)
+        except Exception as exc:
+            if "proxy" in ydl_opts and self._is_probable_proxy_transport_error(exc):
+                logger.warning("Tutorial search proxy error, retrying direct: %s", exc)
+                entries = _extract(self._without_proxy(ydl_opts))
+            else:
+                raise
+
+        results: list[YouTubeSearchResult] = []
+        for entry in entries:
+            if not entry:
+                continue
+            results.append(self._build_search_result(cast(dict[str, Any], entry)))
+            if len(results) >= max_results:
+                break
+        return results
+
+    async def search_tutorials(
+        self, query: str, max_results: int = 5
+    ) -> list[YouTubeSearchResult]:
+        """Async wrapper for tutorial-tuned YouTube search."""
+        return await asyncio.to_thread(self._search_tutorials_sync, query, max_results)
+
     async def fetch_title(self, youtube_id: str) -> str | None:
         """Fetch just the video title via YouTube oEmbed (no PO-token/proxy needed).
 
