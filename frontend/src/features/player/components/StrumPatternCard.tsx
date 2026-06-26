@@ -51,7 +51,11 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
   const hasTutorials = (tutorialLinks && tutorialLinks.length > 0) || !!tutorialUrl
   const [playingSection, setPlayingSection] = useState<string | null>(null)
 
-  if (sectionPatterns.length === 0 && !loading) return null
+  // Render whenever there are strum patterns OR tutorial links. The "Learn to play"
+  // button lives inside this card, so returning null when patterns are empty would
+  // also hide the YouTube tutorial links for songs that have a tutorial but no
+  // generated strumming (e.g. Songsterr returned 0 sections).
+  if (sectionPatterns.length === 0 && !loading && !hasTutorials) return null
 
   return (
     <>
