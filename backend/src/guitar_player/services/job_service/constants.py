@@ -86,6 +86,11 @@ LIGHTWEIGHT_TASK_COOLDOWN_SECONDS = 300  # 5 minutes
 # retrying on the next song open, so we don't re-search every visit.
 TUTORIAL_RETRY_COOLDOWN_SECONDS = 60 * 60 * 24 * 30  # 30 days
 
+# When a song's external-strums file exists but has no strum patterns, we
+# re-generate it (the LLM may now produce one), but not more often than this so
+# songs with no derivable pattern aren't re-run on every open.
+STRUM_RETRY_COOLDOWN_SECONDS = 60 * 60 * 24 * 7  # 7 days
+
 # Throttle INFO logs for repeated "blocked" outcomes.
 ADMIN_HEAL_LOG_THROTTLE_SECONDS = 600  # 10 minutes
 

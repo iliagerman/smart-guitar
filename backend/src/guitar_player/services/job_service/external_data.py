@@ -495,7 +495,10 @@ async def fetch_external_strums(song_id: uuid.UUID) -> None:
                 song_id,
                 external_strums_key=songsterr_key,
                 external_strums_failed=False,
-                external_strums_attempted_at=None,
+                # Keep the attempt timestamp when no strum pattern was produced so
+                # the on-demand heal honors a cooldown instead of re-running the
+                # LLM on every open; clear it once we actually have sections.
+                external_strums_attempted_at=None if sections_data else utcnow(),
             )
             await song_dao.commit()
 
@@ -620,11 +623,12 @@ async def _fetch_strum_patterns(
     try:
         from guitar_player.services.llm_service import LlmService
 
-        # Tavily disabled — pass None so LLM works without web search context.
-        # YouTube fallback below still provides tutorial links.
+        # Use Tavily web search (when configured) to ground the LLM in real
+        # guitar-tutorial content — without it the model usually returns no
+        # strum sections. YouTube fallback below still provides tutorial links.
         llm = LlmService(settings)
         llm_result = await llm.lookup_strum_patterns(
-            artist, title, tavily_api_key=None,
+            artist, title, tavily_api_key=settings.tavily.api_key,
         )
         if llm_result and llm_result.sections:
             for llm_sec in llm_result.sections:

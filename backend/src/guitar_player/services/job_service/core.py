@@ -29,6 +29,7 @@ from .constants import (
     DERIVED_STEMS,
     LIGHTWEIGHT_TASK_COOLDOWN_SECONDS,
     STEM_FILE_VARIANTS,
+    STRUM_RETRY_COOLDOWN_SECONDS,
     TUTORIAL_RETRY_COOLDOWN_SECONDS,
 )
 from guitar_player.services.source_match import accept_match, match_components
@@ -640,6 +641,14 @@ class JobService:
             return None
         return (utcnow() - to_aware_utc(attempted_at)).total_seconds()
 
+    def _external_strums_has_patterns(self, key: str) -> bool:
+        """True when the stored songsterr sheet actually contains strum sections."""
+        try:
+            data = self._storage.read_json(key)
+        except Exception:
+            return False
+        return isinstance(data, dict) and bool(data.get("sections"))
+
     def _sheet_match_is_valid(
         self, key: str, song_artist: str, song_title: str, label: str,
     ) -> bool:
@@ -717,6 +726,7 @@ class JobService:
             return False
 
         invalidated = False
+        regenerate_empty = False
 
         if not force:
             current_key = song.external_strums_key
@@ -724,15 +734,24 @@ class JobService:
                 if self._sheet_match_is_valid(
                     current_key, song.artist, song.title, "External strums",
                 ):
-                    return False
-                self._delete_invalid_external_strums(current_key, song.song_name)
-                await self._song_dao.update_by_id(
-                    song.id,
-                    external_strums_key=None,
-                    external_strums_failed=False,
-                    external_strums_attempted_at=None,
-                )
-                invalidated = True
+                    if self._external_strums_has_patterns(current_key):
+                        return False
+                    # Valid sheet but no strum patterns. Re-generate (Tavily may
+                    # now yield one), but only after a cooldown so songs with no
+                    # derivable pattern aren't re-run on every open.
+                    age = self._get_attempt_age(song.external_strums_attempted_at)
+                    if age is not None and age < STRUM_RETRY_COOLDOWN_SECONDS:
+                        return False
+                    regenerate_empty = True
+                else:
+                    self._delete_invalid_external_strums(current_key, song.song_name)
+                    await self._song_dao.update_by_id(
+                        song.id,
+                        external_strums_key=None,
+                        external_strums_failed=False,
+                        external_strums_attempted_at=None,
+                    )
+                    invalidated = True
 
             else:
                 candidate = f"{song.song_name}/external_strums.json"
@@ -747,9 +766,10 @@ class JobService:
                     self._delete_invalid_external_strums(candidate, song.song_name)
                     invalidated = True
 
-        # If we just deleted a stale file, bypass the cooldown so the
-        # refetch happens immediately rather than waiting for the timer.
-        effective_force = force or invalidated
+        # If we just deleted a stale file (or are regenerating an empty-strum
+        # sheet past its cooldown), bypass the generic cooldown so the refetch
+        # happens now rather than waiting for the timer.
+        effective_force = force or invalidated or regenerate_empty
         if not self._should_enqueue_by_cooldown(
             song.external_strums_failed,
             song.external_strums_attempted_at,
