@@ -248,6 +248,29 @@ function getEffectivePattern(section: SongSection): ('down' | 'up' | 'miss')[] |
 }
 
 /**
+ * The strumming hand moves in a fixed down/up cycle locked to the beat grid:
+ * down on every count (1, 2, 3, 4) and up on every offbeat (&, e, a). A stored
+ * "miss" keeps the hand moving in its grid direction but skips the strings, so an
+ * arrow's direction is a function of its slot, not the source data. Deriving it
+ * here guarantees downstrokes land on the counts and upstrokes on the offbeats —
+ * matching the beat labels in StrumPatternCard — instead of trusting the noisy
+ * directions the LLM sometimes emits (e.g. a downstroke on the "&").
+ *
+ * - <= 4 steps: quarter-note feel, all downstrokes.
+ * - otherwise (eighths/sixteenths): even index = down (count), odd index = up.
+ */
+function gridDirection(index: number, length: number): 'down' | 'up' {
+  if (length <= 4) return 'down'
+  return index % 2 === 0 ? 'down' : 'up'
+}
+
+function patternToGridSymbols(pattern: ('down' | 'up' | 'miss')[]): StrumSymbol[] {
+  return pattern.map((dir, i) =>
+    dir === 'miss' ? directionToSymbol('miss') : directionToSymbol(gridDirection(i, pattern.length)),
+  )
+}
+
+/**
  * Build section strum patterns from pre-computed strum_pattern on each section.
  * Groups by canonical section name (e.g. "Verse 1" + "Verse 2" → "Verse"),
  * picks the most common pattern per group, and skips non-playable sections.
@@ -292,8 +315,10 @@ export function getSectionStrumPatterns(
     }
     if (!best) continue
 
-    const patternKey = best.pattern.join('')
-    // Skip if we've already shown an identical pattern under a different name
+    const symbols = patternToGridSymbols(best.pattern)
+    // Dedup on the rendered arrows: normalization can collapse two source
+    // patterns that share miss positions and length into the same display.
+    const patternKey = symbols.map((s) => s.direction).join('|')
     if (seenPatterns.has(patternKey)) continue
     seenPatterns.add(patternKey)
 
@@ -303,7 +328,7 @@ export function getSectionStrumPatterns(
 
     result.push({
       name,
-      pattern: best.pattern.map(directionToSymbol),
+      pattern: symbols,
       llm_generated: isLlm || undefined,
     })
   }
