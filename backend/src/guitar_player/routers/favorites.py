@@ -71,7 +71,7 @@ async def remove_favorite(
 @router.get("", response_model=FavoriteListResponse)
 async def list_favorites(
     offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(1000, ge=1, le=1000),
     user: CurrentUser = Depends(require_active_subscription),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> FavoriteListResponse:

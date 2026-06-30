@@ -33,7 +33,7 @@ class StrumPatternSection(BaseModel):
     """A strumming pattern for one song section."""
 
     section: str  # e.g. "Verse", "Chorus", "Bridge"
-    pattern: list[str]  # e.g. ["down", "down", "down", "down", "up"]
+    pattern: list[str]  # e.g. ["down", "chuck", "up", "up", "down", "up"]
 
 
 class TutorialLink(BaseModel):
@@ -329,10 +329,10 @@ class LlmService:
                                             },
                                             "pattern": {
                                                 "type": "array",
-                                                "description": "Strum directions for one measure. Use 'down', 'up', or 'miss' (hand moves but doesn't hit strings). Always include ALL beats in the time signature (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &).",
+                                                "description": "Strum directions for one measure. Use 'down', 'up', 'chuck' (muted/percussive downstroke), or 'miss' (hand moves but doesn't hit strings). Always include ALL beats in the time signature (e.g. 8 entries for 4/4 in eighth notes: 1 & 2 & 3 & 4 &).",
                                                 "items": {
                                                     "type": "string",
-                                                    "enum": ["down", "up", "miss"],
+                                                    "enum": ["down", "up", "chuck", "miss"],
                                                 },
                                             },
                                         },
@@ -424,7 +424,7 @@ class LlmService:
 
         common_rules = (
             "- Return the pattern for ONE measure (one bar) in the song's time signature.\n"
-            "- Use 'down', 'up', or 'miss' (hand moves in natural direction but skips the strings).\n"
+            "- Use 'down', 'up', 'chuck' (muted/percussive downstroke), or 'miss' (hand moves in natural direction but skips the strings).\n"
             "- IMPORTANT: Include ALL beats in the measure (e.g. 8 entries for 4/4 in eighth notes: "
             "1 & 2 & 3 & 4 &). Use 'miss' for skipped beats.\n"
             f"{time_sig_line}"

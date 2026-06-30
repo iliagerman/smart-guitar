@@ -135,7 +135,7 @@ class SongSection(BaseModel):
     name: str
     start_time: float
     end_time: float
-    strum_pattern: list[str] = []  # e.g. ["down", "down", "up", "down", "up"]
+    strum_pattern: list[str] = []  # e.g. ["down", "chuck", "up", "up", "down", "up"]
     songsterr_pattern: list[str] | None = None
     llm_pattern: list[str] | None = None
     llm_generated: bool = False

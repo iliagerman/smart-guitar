@@ -377,6 +377,10 @@ db-migrate:
 db-rollback:
     cd {{project_dir}}/backend && APP_ENV=local uv run alembic downgrade -1
 
+# Backfill muted DDUUDU strums in stored songsterr_data.json
+backfill-strum-chucks:
+    cd {{project_dir}}/backend && uv run python scripts/backfill_strum_chucks.py
+
 # Run all backend tests with cleanup (removes downloaded outputs after tests)
 test-backend cleanup='true':
     #!/usr/bin/env bash

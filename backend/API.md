@@ -703,7 +703,7 @@ List the current user's favorited songs, ordered by most recently added.
 | Param    | Type | Default |
 | -------- | ---- | ------- |
 | `offset` | int  | 0       |
-| `limit`  | int  | 50      |
+| `limit`  | int  | 1000    |
 
 **Response** `200`
 ```json

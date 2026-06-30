@@ -114,8 +114,10 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
   // single, local coordination concern, so this pattern is intentional.
   // oxlint-disable-next-line react-doctor/no-event-handler
   const rawPattern = section.pattern.map((s) => s.direction)
-  // Filter out 'miss' entries for audio playback — only play actual strokes
-  const playablePattern = rawPattern.filter((d): d is 'down' | 'up' => d !== 'miss')
+  // Filter out 'miss' entries for audio playback; chucks play as muted downstrokes.
+  const playablePattern = rawPattern
+    .filter((d) => d !== 'miss')
+    .map((d) => d === 'chuck' ? 'down' : d)
   // oxlint-disable-next-line react-doctor/no-event-handler
   const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(playablePattern, bpm)
   const labels = beatLabels(rawPattern.length)
@@ -160,7 +162,8 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
       <div className="flex flex-wrap gap-0.5 items-end">
         {section.pattern.map((step, index) => {
           const isMiss = step.direction === 'miss'
-          const isDown = step.direction === 'down'
+          const isChuck = step.direction === 'chuck'
+          const isDown = step.direction === 'down' || isChuck
           // Map display index to playable index for highlight sync
           const playableIndex = rawPattern.slice(0, index + 1).filter(d => d !== 'miss').length - 1
           const isActive = isPlaying && !isMiss && currentBeatIndex === playableIndex
@@ -193,14 +196,19 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
                   <div className="flex flex-col items-center">
                     <div className={cn(
                       'w-0.5 h-3 rounded-full',
-                      isActive ? 'bg-emerald-300' : 'bg-emerald-400/70',
+                      isChuck
+                        ? isActive ? 'bg-rose-200' : 'bg-rose-300/70'
+                        : isActive ? 'bg-emerald-300' : 'bg-emerald-400/70',
                     )} />
                     <span className={cn(
                       'text-lg font-bold leading-none -mt-0.5',
-                      isActive ? 'text-emerald-300' : 'text-emerald-400',
+                      isChuck
+                        ? isActive ? 'text-rose-200' : 'text-rose-300'
+                        : isActive ? 'text-emerald-300' : 'text-emerald-400',
                     )}>
                       ↓
                     </span>
+                    {isChuck && <span className="text-[9px] font-bold leading-none -mt-1 text-rose-300">×</span>}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">

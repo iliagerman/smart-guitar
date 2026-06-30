@@ -86,9 +86,9 @@ export interface SongSection {
   name: string
   start_time: number
   end_time: number
-  strum_pattern: ('down' | 'up' | 'miss')[]
-  songsterr_pattern?: ('down' | 'up' | 'miss')[] | null
-  llm_pattern?: ('down' | 'up' | 'miss')[] | null
+  strum_pattern: ('down' | 'up' | 'miss' | 'chuck')[]
+  songsterr_pattern?: ('down' | 'up' | 'miss' | 'chuck')[] | null
+  llm_pattern?: ('down' | 'up' | 'miss' | 'chuck')[] | null
   llm_generated?: boolean
 }
 

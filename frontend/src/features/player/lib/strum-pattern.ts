@@ -1,12 +1,20 @@
 import type { ChordEntry, RhythmInfo, SongSection, StrumEvent } from '@/types/song'
 
-function directionToSymbol(direction: 'down' | 'up' | 'miss'): StrumSymbol {
+function directionToSymbol(direction: StrumDirection): StrumSymbol {
   if (direction === 'miss') {
     return {
       symbol: '·',
       className: 'text-smoke-600',
       title: 'miss (skip)',
-      direction: 'miss',
+      direction,
+    }
+  }
+  if (direction === 'chuck') {
+    return {
+      symbol: '↓×',
+      className: 'text-rose-300',
+      title: 'chuck (muted downstroke)',
+      direction,
     }
   }
   return {
@@ -18,11 +26,13 @@ function directionToSymbol(direction: 'down' | 'up' | 'miss'): StrumSymbol {
 }
 import { buildGridSlots, chooseSubdivision, quantizeStrumsToSlots, type GridSlot, type QuantizedStrum } from './strum-grid'
 
+export type StrumDirection = 'down' | 'up' | 'miss' | 'chuck'
+
 export interface StrumSymbol {
   symbol: string
   className: string
   title: string
-  direction: 'down' | 'up' | 'miss'
+  direction: StrumDirection
 }
 
 export interface StrumGridCell {
@@ -243,31 +253,12 @@ function canonicalSectionName(name: string): string {
  * Get the effective strum pattern for a section.
  * Prefers llm_pattern (from Tavily+LLM), falls back to strum_pattern.
  */
-function getEffectivePattern(section: SongSection): ('down' | 'up' | 'miss')[] | null {
+function getEffectivePattern(section: SongSection): StrumDirection[] | null {
   return section.llm_pattern ?? section.strum_pattern ?? null
 }
 
-/**
- * The strumming hand moves in a fixed down/up cycle locked to the beat grid:
- * down on every count (1, 2, 3, 4) and up on every offbeat (&, e, a). A stored
- * "miss" keeps the hand moving in its grid direction but skips the strings, so an
- * arrow's direction is a function of its slot, not the source data. Deriving it
- * here guarantees downstrokes land on the counts and upstrokes on the offbeats —
- * matching the beat labels in StrumPatternCard — instead of trusting the noisy
- * directions the LLM sometimes emits (e.g. a downstroke on the "&").
- *
- * - <= 4 steps: quarter-note feel, all downstrokes.
- * - otherwise (eighths/sixteenths): even index = down (count), odd index = up.
- */
-function gridDirection(index: number, length: number): 'down' | 'up' {
-  if (length <= 4) return 'down'
-  return index % 2 === 0 ? 'down' : 'up'
-}
-
-function patternToGridSymbols(pattern: ('down' | 'up' | 'miss')[]): StrumSymbol[] {
-  return pattern.map((dir, i) =>
-    dir === 'miss' ? directionToSymbol('miss') : directionToSymbol(gridDirection(i, pattern.length)),
-  )
+function patternToGridSymbols(pattern: StrumDirection[]): StrumSymbol[] {
+  return pattern.map(directionToSymbol)
 }
 
 /**
@@ -284,7 +275,7 @@ export function getSectionStrumPatterns(
   const skipSections = new Set(['intro', 'outro', 'instrumental', 'solo', 'breakdown', 'post-chorus', 'interlude'])
 
   // Group sections by canonical name, pick most common pattern
-  const groups = new Map<string, Map<string, { pattern: ('down' | 'up' | 'miss')[]; count: number }>>()
+  const groups = new Map<string, Map<string, { pattern: StrumDirection[]; count: number }>>()
 
   for (const section of sections) {
     const pattern = getEffectivePattern(section)
@@ -309,7 +300,7 @@ export function getSectionStrumPatterns(
 
   for (const [name, bucket] of groups) {
     // Pick most common pattern for this section type
-    let best: { pattern: ('down' | 'up' | 'miss')[]; count: number } | undefined
+    let best: { pattern: StrumDirection[]; count: number } | undefined
     for (const cur of bucket.values()) {
       if (!best || cur.count > best.count) best = cur
     }
