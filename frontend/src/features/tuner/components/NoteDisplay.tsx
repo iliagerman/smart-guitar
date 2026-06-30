@@ -31,12 +31,12 @@ export function NoteDisplay({
   const displayOctave = detectedNote?.octave ?? ''
 
   return (
-    <div className="text-center space-y-1">
+    <div className="space-y-2 text-center">
       {/* Note name */}
       <div className="flex items-baseline justify-center gap-1">
         <span
           className={cn(
-            'text-7xl font-display tracking-wide transition-colors',
+            'text-8xl font-display tracking-wide transition-colors sm:text-9xl',
             active && detectedNote ? getCentsColor(cents) : 'text-smoke-600'
           )}
         >

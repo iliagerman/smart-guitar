@@ -33,10 +33,10 @@ export function TrackSelector({
         <button
           type="button"
           className={cn(
-            'inline-flex h-16 w-16 items-center justify-center rounded-lg border bg-charcoal-700 text-flame-400/70 transition-colors',
+            'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl border bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur transition-colors',
             isDisabled
-              ? 'cursor-not-allowed border-charcoal-700 opacity-50'
-              : 'border-charcoal-600 hover:border-flame-400/30 hover:text-flame-400',
+              ? 'cursor-not-allowed border-white/10 opacity-50'
+              : 'border-white/10 hover:border-flame-400/30 hover:text-flame-400',
             'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
           )}
           title="Stem mixer"
@@ -44,7 +44,8 @@ export function TrackSelector({
           data-testid="track-selector"
           disabled={isDisabled}
         >
-          <MixerIcon size={48} />
+          <MixerIcon size={31} />
+          <span className="text-[11px] font-medium text-smoke-200">Mixer</span>
         </button>
       </Popover.Trigger>
 
@@ -55,7 +56,7 @@ export function TrackSelector({
           align="center"
           collisionPadding={8}
           className={cn(
-            'z-50 flex flex-col rounded-xl border border-charcoal-600 bg-charcoal-800 shadow-xl',
+            'z-50 flex flex-col rounded-[1.35rem] border border-flame-400/25 bg-charcoal-950/92 shadow-[0_0_44px_rgba(250,204,21,0.16),0_26px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl',
             'max-h-[var(--radix-popover-content-available-height)] w-72 max-w-[calc(100vw-1rem)]',
             'animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           )}
@@ -79,7 +80,7 @@ export function TrackSelector({
                 <div
                   key={name}
                   className={cn(
-                    'flex flex-col gap-1.5 rounded-lg px-3 py-2',
+                    'flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2',
                     !available && 'opacity-40',
                   )}
                   data-testid={`track-selector-stem-${name}`}
@@ -101,7 +102,7 @@ export function TrackSelector({
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       onSetStemVolume(name, Number(e.target.value))
                     }
-                    className="h-1 w-full cursor-pointer appearance-none rounded-full bg-charcoal-600 accent-flame-500 disabled:cursor-not-allowed"
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-flame-400 disabled:cursor-not-allowed"
                     aria-label={`${label} volume`}
                     data-testid={`track-selector-volume-${name}`}
                   />

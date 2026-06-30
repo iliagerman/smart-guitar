@@ -32,7 +32,7 @@ export function MetronomePanel({
   const initialBpm = clampBpm(autoBpm ?? 120)
   const [manualBpm, setManualBpm] = useState(initialBpm)
   const [manualOverride, setManualOverride] = useState(!autoBpm)
-  const [enabled, setEnabled] = useState(false)
+  const [enabled, setEnabled] = useState(mode === 'playback')
   const [soundEnabled, setSoundEnabled] = useState(false)
   const bpm = manualOverride ? manualBpm : clampBpm(autoBpm ?? manualBpm)
 
@@ -67,17 +67,81 @@ export function MetronomePanel({
     if (next) triggerClick()
   }
 
+  if (compact) {
+    return (
+      <section className="min-w-0 flex-1" data-testid="metronome-panel">
+        <div className="flex items-center gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-4 gap-1.5" aria-label="Beat indicator">
+            {[0, 1, 2, 3].map((index) => {
+              const active = beat === index && enabled
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    'h-10 rounded-xl border transition-[border-color,background-color,box-shadow] duration-100',
+                    active
+                      ? 'border-flame-300 bg-flame-300 shadow-[0_0_22px_rgba(250,204,21,0.45)]'
+                      : 'border-white/10 bg-white/[0.055]',
+                  )}
+                  data-testid={`metronome-beat-${index}`}
+                />
+              )
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => updateBpm(bpm - 1)}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-smoke-100 transition-colors hover:border-flame-400/30"
+            aria-label="Decrease tempo"
+            data-testid="metronome-tempo-decrease"
+          >
+            <Minus size={17} aria-hidden="true" />
+          </button>
+
+          <div className="w-14 shrink-0 text-center">
+            <div className="text-xl font-black leading-none text-smoke-100" data-testid="metronome-bpm">{bpm}</div>
+            <div className="text-[10px] uppercase tracking-wide text-smoke-500">BPM</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => updateBpm(bpm + 1)}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-smoke-100 transition-colors hover:border-flame-400/30"
+            aria-label="Increase tempo"
+            data-testid="metronome-tempo-increase"
+          >
+            <Plus size={17} aria-hidden="true" />
+          </button>
+
+          {autoBpm && (
+            <button
+              type="button"
+              onClick={useSongTempo}
+              className="hidden shrink-0 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-smoke-300 transition-colors hover:border-flame-400/30 sm:block"
+              data-testid="metronome-auto-sync-button"
+            >
+              Song
+            </button>
+          )}
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section
       className={cn(
-        'rounded-2xl border border-charcoal-700 bg-charcoal-900/75 p-4 shadow-xl shadow-black/20',
-        compact ? 'w-full' : 'mx-auto w-full max-w-xl',
+        'border border-white/10 bg-[#111215]/95 shadow-[0_0_60px_rgba(250,204,21,0.16),0_24px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl',
+        compact
+          ? 'w-full rounded-2xl p-4'
+          : 'mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center rounded-[2rem] p-6 sm:p-8',
       )}
       data-testid="metronome-panel"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-flame-400">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-flame-300">
             <Music2 size={18} aria-hidden="true" />
             Metronome
           </div>
@@ -101,29 +165,48 @@ export function MetronomePanel({
         </button>
       </div>
 
-      <div className="mt-5 flex items-center justify-center gap-3" aria-label="Beat indicator">
-        {[0, 1, 2, 3].map((index) => (
-          <div
-            key={index}
-            className={cn(
-              'h-4 w-4 rounded-full border transition-colors duration-100',
-              beat === index && enabled
-                ? 'border-flame-300 bg-flame-400 shadow-lg shadow-flame-400/30'
-                : 'border-charcoal-600 bg-charcoal-800',
-            )}
-            data-testid={`metronome-beat-${index}`}
-          />
-        ))}
+      <div className={cn('grid grid-cols-4 gap-3', compact ? 'mt-5' : 'mt-10 sm:gap-5')} aria-label="Beat indicator">
+        {[0, 1, 2, 3].map((index) => {
+          const active = beat === index && enabled
+          return (
+            <div
+              key={index}
+              className={cn(
+                'flex flex-col items-center justify-end rounded-3xl border transition-[border-color,background-color,box-shadow,transform] duration-100',
+                compact ? 'h-16 p-2' : 'h-32 p-3 sm:h-44 sm:p-4',
+                active
+                  ? 'scale-[1.03] border-flame-300 bg-flame-300/18 shadow-[0_0_40px_rgba(250,204,21,0.30)]'
+                  : 'border-white/10 bg-white/[0.045]',
+              )}
+              data-testid={`metronome-beat-${index}`}
+            >
+              <div
+                className={cn(
+                  'w-full rounded-full transition-[height,background-color,box-shadow] duration-100',
+                  compact ? 'max-h-10' : 'max-h-28 sm:max-h-36',
+                  active
+                    ? 'h-full bg-flame-300 shadow-[0_0_24px_rgba(250,204,21,0.55)]'
+                    : index === 0
+                      ? 'h-2/3 bg-smoke-600/60'
+                      : 'h-1/2 bg-smoke-700/60',
+                )}
+              />
+              <span className={cn('mt-2 font-mono text-xs', active ? 'text-flame-200' : 'text-smoke-500')}>
+                {index + 1}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
-      <div className="mt-5 text-center">
-        <div className="text-5xl font-display text-smoke-100" data-testid="metronome-bpm">
+      <div className={cn('text-center', compact ? 'mt-5' : 'mt-8')}>
+        <div className={cn('font-display text-smoke-100', compact ? 'text-5xl' : 'text-7xl sm:text-8xl')} data-testid="metronome-bpm">
           {bpm}
         </div>
         <div className="text-xs uppercase tracking-wide text-smoke-500">BPM</div>
       </div>
 
-      <div className="mt-5 flex items-center gap-3">
+      <div className={cn('flex items-center gap-3', compact ? 'mt-5' : 'mt-8')}>
         <button
           type="button"
           onClick={() => updateBpm(bpm - 1)}

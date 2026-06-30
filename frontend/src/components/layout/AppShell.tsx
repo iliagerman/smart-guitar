@@ -12,13 +12,13 @@ export function AppShell() {
   const isAuthPage = authPaths.includes(location.pathname)
 
   return (
-    <div className="bg-charcoal-950 overflow-hidden" style={{ height: 'var(--vv-height)' }}>
+    <div className="h-[var(--vv-height)] overflow-hidden bg-charcoal-950">
       {isAuthPage ? (
-        <main style={{ minHeight: 'var(--vv-height)' }}>
+        <main className="min-h-[var(--vv-height)]">
           <Outlet />
         </main>
       ) : (
-        <div className="flex overflow-hidden" style={{ height: 'var(--vv-height)' }}>
+        <div className="flex h-[var(--vv-height)] overflow-hidden">
           <SidebarNav />
           <div className="flex-1 min-w-0 flex flex-col">
             <main

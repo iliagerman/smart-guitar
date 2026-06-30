@@ -1,7 +1,6 @@
 import { Mic } from 'lucide-react'
 import { PageBackground } from '@/components/shared/PageBackground'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { PageContainer } from '@/components/shared/PageContainer'
 import { useTuner } from '../hooks/use-tuner'
 import { TunerGauge } from '../components/TunerGauge'
 import { NoteDisplay } from '../components/NoteDisplay'
@@ -35,39 +34,43 @@ export function TunerPage() {
   }
 
   return (
-    <div className="relative h-full flex flex-col overflow-hidden" data-testid="tuner-page">
+    <div className="relative flex h-full flex-col overflow-hidden" data-testid="tuner-page">
       <PageBackground />
-      <div className="shrink-0">
-        <PageHeader title="Tuner" icon={<Mic size={24} />} />
+      <PageHeader title="Tuner" icon={<Mic size={24} />} />
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-4">
+        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-between rounded-[2rem] border border-white/10 bg-[#111215]/95 p-5 shadow-[0_0_60px_rgba(250,204,21,0.12),0_24px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl sm:p-8">
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-5 sm:gap-7">
+            <TunerGauge cents={cents} active={isListening && !!detectedNote} />
+
+            <NoteDisplay
+              detectedNote={detectedNote}
+              detectedFrequency={detectedFrequency}
+              cents={cents}
+              selectedString={selectedString}
+              nearestString={nearestString}
+              active={isListening}
+            />
+
+            <TuningOffsetSelector offset={semitoneOffset} onChange={setSemitoneOffset} />
+
+            <StringSelector
+              selectedString={selectedString}
+              nearestString={nearestString}
+              active={isListening}
+              tuning={activeTuning}
+              onSelect={selectString}
+            />
+          </div>
+
+          <div className="mt-6 shrink-0">
+            <TunerControls
+              isListening={isListening}
+              permissionDenied={permissionDenied}
+              onToggle={handleToggle}
+            />
+          </div>
+        </div>
       </div>
-      <PageContainer className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center gap-6 py-6 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-6">
-        <TunerGauge cents={cents} active={isListening && !!detectedNote} />
-
-        <NoteDisplay
-          detectedNote={detectedNote}
-          detectedFrequency={detectedFrequency}
-          cents={cents}
-          selectedString={selectedString}
-          nearestString={nearestString}
-          active={isListening}
-        />
-
-        <TuningOffsetSelector offset={semitoneOffset} onChange={setSemitoneOffset} />
-
-        <StringSelector
-          selectedString={selectedString}
-          nearestString={nearestString}
-          active={isListening}
-          tuning={activeTuning}
-          onSelect={selectString}
-        />
-
-        <TunerControls
-          isListening={isListening}
-          permissionDenied={permissionDenied}
-          onToggle={handleToggle}
-        />
-      </PageContainer>
     </div>
   )
 }

@@ -503,10 +503,10 @@ export function ChordSheet({
     <div
       ref={scrollRef}
       className={cn(
-        'flex-1 min-h-0 overflow-y-auto overflow-x-hidden wrap-break-word scrollbar-hide font-mono text-xl md:text-2xl text-smoke-300 rounded-xl p-4',
+        'flex-1 min-h-0 overflow-y-auto overflow-x-hidden wrap-break-word scrollbar-hide font-mono text-[1.35rem] leading-relaxed text-smoke-200 p-4 sm:p-5 md:text-2xl',
         isEditMode
-          ? 'bg-charcoal-900/60 border border-dashed border-flame-400/30'
-          : 'bg-charcoal-900/40'
+          ? 'bg-flame-400/8 ring-1 ring-inset ring-flame-400/30'
+          : 'bg-[linear-gradient(180deg,rgba(18,20,24,0.94),rgba(9,10,12,0.96))]'
       )}
       data-testid="chord-sheet"
     >

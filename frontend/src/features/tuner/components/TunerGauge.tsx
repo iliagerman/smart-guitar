@@ -17,14 +17,14 @@ export function TunerGauge({ cents, active }: TunerGaugeProps) {
     // so role="meter" on a styled container is intentional.
     // oxlint-disable-next-line react-doctor/prefer-tag-over-role
     <div role="meter"
-      className="w-full max-w-xs mx-auto"
+      className="mx-auto w-full max-w-lg"
       aria-label="Tuning accuracy"
       aria-valuenow={active ? Math.round(cents) : 0}
       aria-valuemin={-50}
       aria-valuemax={50}
       data-testid="tuner-gauge"
     >
-      <svg viewBox="0 0 300 170" className="w-full" aria-hidden="true">
+      <svg viewBox="0 0 300 170" className="w-full drop-shadow-[0_0_28px_rgba(250,204,21,0.10)]" aria-hidden="true">
         {/* Background arc segments */}
         <defs>
           <linearGradient id="gauge-gradient" x1="0" y1="0" x2="1" y2="0">

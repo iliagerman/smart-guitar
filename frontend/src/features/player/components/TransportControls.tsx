@@ -38,7 +38,7 @@ export function TransportControls({
       {/* oxlint-disable-next-line react-doctor/prefer-tag-over-role */}
       <div role="slider"
         className={cn(
-          'relative h-1.5 rounded-full bg-charcoal-700 group',
+          'group relative h-2 rounded-full bg-white/10 shadow-inner',
           isPlaybackDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         )}
         aria-label="Playback progress"
@@ -72,28 +72,28 @@ export function TransportControls({
         }}
       >
         <div
-          className="absolute inset-y-0 left-0 bg-flame-400 rounded-full transition-all"
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-flame-300 via-flame-400 to-fire-400 transition-[width]"
           style={{ width: `${progress}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 size-3 bg-flame-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)] opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: `${progress}%`, marginLeft: '-6px' }}
+          className="absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-flame-300 opacity-0 shadow-[0_0_18px_rgba(250,204,21,0.7)] transition-opacity group-hover:opacity-100"
+          style={{ left: `${progress}%`, marginLeft: '-8px' }}
         />
       </div>
-      <div className="flex items-center justify-between text-xs text-smoke-500 font-mono">
+      <div className="flex items-center justify-between px-1 font-mono text-xs text-smoke-500">
         <span>{formatDuration(currentTime)}<span className="text-smoke-600">.{String(Math.floor((currentTime % 1) * 1000)).padStart(3, '0')}</span></span>
         <span>{formatDuration(duration)}</span>
       </div>
       {/* Primary controls row */}
       {primaryControls && (
-        <div className="flex items-center gap-2 justify-center pt-1 pb-3 overflow-x-auto scrollbar-hide">
+        <div className="grid w-full auto-cols-fr grid-flow-col gap-2 px-0.5 pb-2 pt-1">
           {primaryControls}
         </div>
       )}
 
       {/* Pinned controls row — always visible (mobile + desktop) */}
       {pinnedControls && (
-        <div className="flex flex-wrap items-center gap-1 justify-center pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
           {pinnedControls}
         </div>
       )}
@@ -103,7 +103,7 @@ export function TransportControls({
         <>
           <button
             type="button"
-            className="sm:hidden flex items-center gap-1.5 text-smoke-400 hover:text-smoke-200 mx-auto py-1 transition-colors"
+            className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-smoke-400 transition-colors hover:bg-white/10 hover:text-smoke-200 sm:hidden"
             onClick={() => setShowSecondary(!showSecondary)}
             aria-label="Toggle secondary controls"
             data-testid="transport-toggle-secondary"
@@ -113,8 +113,8 @@ export function TransportControls({
           </button>
           <div
             className={cn(
-              'flex flex-wrap items-center gap-1 justify-center border-t border-charcoal-700/40 pt-1.5 mt-0.5',
-              'opacity-75 hover:opacity-100 transition-opacity',
+              'mt-1 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-2',
+              'opacity-80 transition-opacity hover:opacity-100',
               showSecondary ? 'flex' : 'hidden sm:flex',
             )}
             data-tour="secondary-controls"
@@ -142,7 +142,7 @@ export function TransportControls({
           type="button"
           onClick={onTogglePlay}
           className={cn(
-            'flex h-14 w-14 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 transition-colors',
+            'flex h-14 w-14 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 shadow-[0_12px_32px_rgba(250,204,21,0.28)] transition-colors',
             isPlaying && 'animate-flame-pulse',
             isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-flame-500',
           )}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Heart, Pencil, Timer } from 'lucide-react'
+import { Heart, Pause, Pencil, Play, Timer, X } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { MetronomePanel } from '@/features/metronome/components/MetronomePanel'
@@ -73,7 +73,7 @@ function AudioStatusBanner({ message }: AudioStatusBannerProps) {
 
   return (
     <div
-      className="flex items-center justify-center gap-2 rounded-lg border border-charcoal-700 bg-charcoal-900/40 px-3 py-2 text-sm text-smoke-300"
+      className="flex items-center justify-center gap-2 rounded-2xl border border-flame-400/20 bg-flame-400/10 px-3 py-2 text-sm font-medium text-flame-100 shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
       aria-live="polite"
     >
       <LoadingSpinner size="xs" inline />
@@ -124,7 +124,7 @@ export function PlayerControls({
   getRecordingTap,
 }: PlayerControlsProps) {
   return (
-    <div className="flex flex-col gap-4" data-testid="player-controls">
+    <div className="flex flex-col gap-3" data-testid="player-controls">
       {showAudioStatus && <AudioStatusBanner message={audioStatusMessage} />}
       <TransportControls
         onTogglePlay={onTogglePlay}
@@ -143,6 +143,7 @@ export function PlayerControls({
             representativeStrumPattern={representativeStrumPattern}
             sectionStrumPatterns={sectionStrumPatterns}
             onToggleFavorite={onToggleFavorite}
+            onTogglePlay={onTogglePlay}
             onEnterEditMode={onEnterEditMode}
             onOpenTutorial={onOpenTutorial}
             onSetStemVolume={onSetStemVolume}
@@ -202,6 +203,7 @@ interface PrimaryControlsProps {
   onSetStemVolume: (stemName: string, volume: number) => void
   stemVolumes?: Record<string, number>
   getRecordingTap: () => { context: AudioContext; node: GainNode } | null
+  onTogglePlay: () => void
 }
 
 function PrimaryControls({
@@ -216,6 +218,7 @@ function PrimaryControls({
   representativeStrumPattern,
   sectionStrumPatterns,
   onToggleFavorite,
+  onTogglePlay,
   onEnterEditMode,
   onOpenTutorial,
   onSetStemVolume,
@@ -233,9 +236,9 @@ function PrimaryControls({
         type="button"
         onClick={onToggleFavorite}
         className={cn(
-          'inline-flex items-center justify-center rounded-lg w-16 h-16',
-          'bg-charcoal-700 border border-charcoal-600',
-          'hover:border-flame-400/30 transition-colors',
+          'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+          'border border-flame-400/25 bg-[#111215] shadow-[0_0_24px_rgba(250,204,21,0.13),0_12px_28px_rgba(0,0,0,0.34)]',
+          'hover:border-flame-400/50 hover:bg-flame-400/15 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
         )}
         data-tour="favorite"
@@ -243,12 +246,13 @@ function PrimaryControls({
         aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
       >
         <Heart
-          size={28}
+          size={25}
           className={cn(
             'transition-colors',
-            isFavorited ? 'fill-flame-400 text-flame-400 animate-favorite-ignite' : 'text-flame-400/70',
+            isFavorited ? 'fill-flame-300 text-flame-300 animate-favorite-ignite' : 'text-flame-300',
           )}
         />
+        <span className="text-[11px] font-medium text-smoke-200">Heart</span>
       </button>
       <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
       <div className="contents" data-tour="chord-edit">
@@ -257,15 +261,16 @@ function PrimaryControls({
             type="button"
             onClick={onEnterEditMode}
             className={cn(
-              'inline-flex items-center justify-center rounded-lg w-16 h-16',
-              'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
+              'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+              'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
               'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
               'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
             )}
             aria-label="Edit chords"
             data-testid="chord-edit-toggle"
           >
-            <Pencil size={24} />
+            <Pencil size={23} />
+            <span className="text-[11px] font-medium text-smoke-200">Edit</span>
           </button>
         )}
       </div>
@@ -297,8 +302,8 @@ function PrimaryControls({
           type="button"
           onClick={() => setShowMetronome((value) => !value)}
           className={cn(
-            'inline-flex items-center justify-center rounded-lg w-16 h-16',
-            'bg-charcoal-700 border border-charcoal-600 text-flame-400/70',
+            'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+            'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
             'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
             'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
             showMetronome && 'border-flame-400/40 text-flame-400 bg-flame-400/10',
@@ -306,17 +311,36 @@ function PrimaryControls({
           aria-label="Open metronome"
           data-testid="song-metronome-toggle"
         >
-          <Timer size={25} aria-hidden="true" />
+          <Timer size={23} aria-hidden="true" />
+          <span className="text-[11px] font-medium text-smoke-200">Metro</span>
         </button>
         {showMetronome && (
-          <div className="fixed inset-x-3 bottom-24 z-50 sm:absolute sm:bottom-auto sm:left-1/2 sm:top-20 sm:w-96 sm:-translate-x-1/2">
-            <MetronomePanel
-              autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
-              mode="playback"
-              playbackTime={currentTime}
-              playbackPlaying={isPlaying}
-              compact
-            />
+          <div className="fixed inset-x-2 top-2 z-50 rounded-[1.5rem] border border-white/10 bg-black/92 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:inset-x-4 sm:top-4">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onTogglePlay}
+                className="grid size-11 shrink-0 place-items-center rounded-full bg-flame-300 text-charcoal-950 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition-colors hover:bg-flame-400"
+                aria-label={isPlaying ? 'Pause song' : 'Start song'}
+              >
+                {isPlaying ? <Pause size={19} aria-hidden="true" /> : <Play size={19} aria-hidden="true" />}
+              </button>
+              <MetronomePanel
+                autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
+                mode="playback"
+                playbackTime={currentTime}
+                playbackPlaying={isPlaying}
+                compact
+              />
+              <button
+                type="button"
+                onClick={() => setShowMetronome(false)}
+                className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/10 text-smoke-200 transition-colors hover:bg-white/15"
+                aria-label="Close metronome"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
           </div>
         )}
       </div>

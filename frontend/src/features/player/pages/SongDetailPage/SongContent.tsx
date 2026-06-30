@@ -90,7 +90,7 @@ export function SongContent({
 
   return (
     <div className="relative z-10 flex-1 min-h-0 flex flex-col" data-testid="song-content">
-      <div className="max-w-7xl mx-auto p-4 w-full flex-1 min-h-0 flex flex-col">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-3 sm:p-4">
         <ProcessButton
           songId={songId}
           songTitle={headerTitle}
@@ -129,14 +129,14 @@ export function SongContent({
                   />,
                   document.body,
                 )}
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 items-stretch">
+                <div className="flex min-h-0 flex-1 flex-col items-stretch gap-3 lg:flex-row lg:gap-4">
                   <CurrentChordPanel chords={displayChords} />
-                  <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
+                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#121418]/88 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
                     {/* Fullscreen toggle — mobile only */}
                     <button
                       type="button"
                       onClick={toggleFullscreen}
-                      className="absolute top-2 right-2 z-10 p-1.5 rounded-lg lg:hidden bg-charcoal-700/80 border border-charcoal-600 text-smoke-300 hover:text-smoke-100 hover:border-flame-400/30 transition-colors"
+                      className="absolute right-2 top-2 z-10 rounded-xl border border-white/10 bg-charcoal-800/80 p-2 text-smoke-300 shadow-lg transition-colors hover:border-flame-400/30 hover:text-smoke-100 lg:hidden"
                       aria-label="Fullscreen"
                       title="Expand to fullscreen"
                       data-testid="fullscreen-toggle"

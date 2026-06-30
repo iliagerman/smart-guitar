@@ -108,6 +108,10 @@ export function useSongDetail(songId: string, opts?: { pollForTabs?: boolean }) 
     queryKey: queryKeys.songs.detail(songId),
     queryFn: () => songsApi.detail(songId),
     enabled: !!songId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: 'always',
     refetchInterval: (query) =>
       songDetailRefetchInterval(query.state.data as SongDetail | undefined, pollForTabs),
     // Each poll returns new presigned S3 URLs even when content (chords, lyrics,

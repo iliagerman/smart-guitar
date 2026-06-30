@@ -109,6 +109,7 @@ export function SongDetailPage() {
   const setCurrentSong = usePlaybackStore((s) => s.setCurrentSong)
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  const currentTime = usePlaybackStore((s) => s.currentTime)
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   useWakeLock(isPlaying)
   const {
@@ -592,29 +593,33 @@ export function SongDetailPage() {
 
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
+  const beatBpm = detail.source_bpm ?? detail.rhythm?.bpm ?? null
+  const beatNumber = beatBpm ? Math.floor(currentTime / (60 / beatBpm)) : 0
+  const showBeatGlow = isPlaying && !!beatBpm
 
   return (
-    <div className="relative h-full flex flex-col overflow-hidden pb-16 lg:pb-0" data-testid="song-detail-page">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#15171c_0%,#090a0d_58%,#050506_100%)] pb-16 lg:pb-0" data-testid="song-detail-page">
       <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
+      {showBeatGlow && <div key={beatNumber} className="pointer-events-none fixed inset-0 z-20 animate-beat-screen-glow" />}
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div
           className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-3xl scale-125"
           style={{ backgroundImage: `url("${thumbnailSrc}")` }}
         />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_18%,rgba(10,10,10,0.22)_58%,rgba(10,10,10,0.72)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(20,23,28,0.12)_0%,rgba(8,9,11,0.72)_58%,rgba(3,3,4,0.94)_100%)]" />
       </div>
 
       {/* Fixed top section: song header + player controls */}
-      <div className="relative z-30 shrink-0 bg-charcoal-950 border-b border-charcoal-800/50">
+      <div className="relative z-30 shrink-0 border-b border-white/10 bg-[#090a0c]/95 shadow-[0_18px_70px_rgba(0,0,0,0.44)] backdrop-blur-2xl">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
-            className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-2xl scale-125"
+            className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-10 blur-2xl scale-125"
             style={{ backgroundImage: `url("${thumbnailSrc}")` }}
           />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,10,10,0.2)_0%,rgba(10,10,10,0.45)_55%,rgba(10,10,10,0.7)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,20,24,0.28)_0%,rgba(8,9,11,0.78)_55%,rgba(6,6,7,0.96)_100%)]" />
         </div>
-        <div className="relative max-w-7xl mx-auto p-3 pb-2 sm:p-4 sm:pb-3 flex flex-col gap-3 sm:gap-4">
+        <div className="relative mx-auto flex max-w-7xl flex-col gap-3 p-2.5 pb-2 sm:gap-4 sm:p-4 sm:pb-3">
           <SongHeader
             songId={songId!}
             title={headerTitle}

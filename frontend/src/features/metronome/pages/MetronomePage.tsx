@@ -1,4 +1,5 @@
-import { PageContainer } from '@/components/shared/PageContainer'
+import { Timer } from 'lucide-react'
+import { PageBackground } from '@/components/shared/PageBackground'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { MetronomePanel } from '../components/MetronomePanel'
 
@@ -7,14 +8,16 @@ import { MetronomePanel } from '../components/MetronomePanel'
  */
 export function MetronomePage() {
   return (
-    <div data-testid="metronome-page">
-      <PageContainer>
-        <PageHeader
-          title="Metronome"
-          subtitle="Practice with a visual pulse, click track, or both."
-        />
+    <div className="relative flex h-full flex-col overflow-hidden" data-testid="metronome-page">
+      <PageBackground />
+      <PageHeader
+        title="Metronome"
+        subtitle="Practice with a visual pulse, click track, or both."
+        icon={<Timer size={24} />}
+      />
+      <div className="relative z-10 flex min-h-0 flex-1 px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom)+var(--vv-bottom-offset))] lg:pb-4">
         <MetronomePanel mode="standalone" />
-      </PageContainer>
+      </div>
     </div>
   )
 }

@@ -166,19 +166,19 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
   const filename = buildFilename(artist, songTitle) + (useVideo ? '.mp4' : '.mp3')
 
   return (
-    <div data-tour="record" className="flex items-center gap-1.5">
+    <div data-tour="record" className="min-w-0">
       <Popover.Root open={showModeSelector && !isRecording} onOpenChange={setShowModeSelector}>
         <Popover.Trigger asChild>
           <button
             type="button"
             onClick={handleRecordButtonClick}
             className={cn(
-              'inline-flex items-center justify-center rounded-lg w-16 h-16',
-              'border transition-colors',
+              'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+              'border shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors',
               'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
               isRecording
-                ? 'bg-red-600/20 border-red-500 hover:border-red-400'
-                : 'bg-charcoal-700 border-charcoal-600 hover:border-flame-400/30',
+                ? 'border-red-500 bg-red-600/20 hover:border-red-400'
+                : 'border-white/10 bg-[#111215] hover:border-flame-400/30',
             )}
             aria-label={isRecording ? 'Stop recording' : 'Start recording'}
             data-testid="record-button"
@@ -191,7 +191,10 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
                 </span>
               </div>
             ) : (
-              <Circle size={28} className="fill-current text-red-500 transition-colors" />
+              <>
+                <Circle size={27} className="fill-current text-red-500 transition-colors" />
+                <span className="text-[11px] font-medium text-smoke-200">Record</span>
+              </>
             )}
           </button>
         </Popover.Trigger>
