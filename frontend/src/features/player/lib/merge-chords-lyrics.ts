@@ -39,11 +39,6 @@ function isValidLyricsSegment(segment: LyricsSegment): boolean {
   return true
 }
 
-/**
- * Two chord changes closer than this (seconds) are treated as the same musical
- * moment, so they're allowed to share a word column instead of being spread out.
- */
-const COINCIDENT_S = 0.15
 
 /** Character offset of the start of each word (one entry per word). */
 function getWordStartOffsets(words: LyricsWord[]): number[] {
@@ -62,19 +57,16 @@ function getWordStartOffsets(words: LyricsWord[]): number[] {
  */
 function naturalColumn(chordStart: number, words: LyricsWord[]): number {
   for (let i = 0; i < words.length; i++) {
-    if (chordStart <= words[i].end) return i
+    if (chordStart < words[i].end) return i
   }
   return words.length - 1
 }
 
 /**
- * Assign each chord to a word column so the rendered chord row reads correctly:
- *  - chords are laid out in start_time order (charOffset is non-decreasing), so
- *    the active-chord highlight always advances left-to-right with playback;
- *  - non-simultaneous chords that would land on the same word are spread onto
- *    later free columns instead of stacking in one place (prevents clutter);
- *  - when there are more chords than words, the surplus stack in the last
- *    column but stay in time order.
+ * Assign each chord to the lyric word whose timing contains the chord start.
+ * Multiple chord changes inside the same word intentionally stack in that word's
+ * column; spreading them onto later words makes the highlighted chord appear
+ * offset from the lyric timing.
  *
  * Mutates and returns `chords`, sorted by start_time.
  */
@@ -92,20 +84,8 @@ function assignChordColumns(chords: PositionedChord[], words: LyricsWord[]): Pos
   }
 
   const offsets = getWordStartOffsets(words)
-  const lastCol = offsets.length - 1
-  let prevCol = -1
-  let prevStart = -Infinity
-
   for (const chord of chords) {
-    let col = naturalColumn(chord.start_time, words)
-    if (col < prevCol) col = prevCol // never move backwards
-    if (col === prevCol && chord.start_time - prevStart >= COINCIDENT_S) {
-      // Distinct, non-simultaneous chord: push it to the next free column.
-      col = Math.min(prevCol + 1, lastCol)
-    }
-    chord.charOffset = offsets[col]
-    prevCol = col
-    prevStart = chord.start_time
+    chord.charOffset = offsets[naturalColumn(chord.start_time, words)]
   }
 
   return chords
@@ -161,19 +141,29 @@ export function mergeChordLyrics(
     const direction = getLineDirection(segment, words)
     const segmentChords: PositionedChord[] = []
 
-    // Use a tolerance window so chords near segment boundaries aren't missed.
-    // IMPORTANT: attach chords based on interval overlap, not only chord start.
-    // Otherwise a chord that starts slightly before the lyric segment but sustains
-    // into it won't render above the lyric line.
+    // Don't pull previous chords into the lyric line. Autochord intervals can
+    // overlap heavily; if all carry-over chords are attached here they get
+    // spread across the lyric words and the active chord appears offset. Keep at
+    // most the latest chord that was already sustaining at the lyric start.
     const segStart = segment.start - SEGMENT_TOLERANCE_S
     const segEnd = segment.end
+    let carryInChordIndex = -1
+    let carryInStart = -Infinity
+    for (let ci = 0; ci < chords.length; ci++) {
+      const chord = chords[ci]
+      if (assignedChordIndices.has(ci) || chord.chord === 'N') continue
+      if (chord.start_time < segStart && chord.end_time > segment.start && chord.start_time > carryInStart) {
+        carryInChordIndex = ci
+        carryInStart = chord.start_time
+      }
+    }
 
     for (let ci = 0; ci < chords.length; ci++) {
       if (assignedChordIndices.has(ci)) continue
       const chord = chords[ci]
       if (chord.chord === 'N') continue
-      const overlaps = chord.end_time > segStart && chord.start_time < segEnd
-      if (overlaps) {
+      const startsInSegment = chord.start_time >= segment.start && chord.start_time < segEnd
+      if (startsInSegment || ci === carryInChordIndex) {
         assignedChordIndices.add(ci)
         segmentChords.push({
           chord: chord.chord,

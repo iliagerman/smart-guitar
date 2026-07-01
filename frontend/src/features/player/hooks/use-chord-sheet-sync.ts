@@ -7,23 +7,22 @@ import { findActiveChordIndex, type ChordSheetLine } from '../lib/merge-chords-l
 interface SyncState {
   activeLineIndex: number
   activeWordIndex: number
+  activeChordLineIndex: number
   activeChordIndex: number
 }
 
 function computeSync(
   lines: ChordSheetLine[],
-  params: { rawTime: number; adjustedLyricsTime: number }
+  adjustedLyricsTime: number,
 ): SyncState {
-  const { rawTime, adjustedLyricsTime } = params
   // Most recently started line — monotonic in time, so the highlight can
   // never jump backward even if stored timestamps overlap. Gaps keep the
-  // previous line active until the next one starts.
-  // IMPORTANT: line selection is based on the *audio timebase* (rawTime) so
-  // chord highlighting/scrolling stays aligned even when the user tweaks the
-  // lyrics offset.
+  // previous line active until the next one starts. Use the same lyrics-adjusted
+  // timebase as word selection so the active line and active word do not fight
+  // each other when the user tweaks the lyrics offset.
   const activeLineIndex = findActiveTimedIndex(
     lines.length,
-    rawTime,
+    adjustedLyricsTime,
     (i) => lines[i].startTime,
     (i) => lines[i].endTime,
   )
@@ -53,22 +52,32 @@ function computeSync(
     }
   }
 
-  // Active chord: the latest chord started at or before the current time.
-  // This advances monotonically with playback (chords are laid out in
-  // start_time order) and keeps the highlight on the current chord during
-  // gaps instead of flickering off — matching the active-word behavior above.
+  // Active chord: find the latest started rendered chord globally, not only on
+  // the active lyric line. Chords near lyric boundaries can render on the
+  // previous/next line; tying chord highlight to the lyric line makes those
+  // chords get skipped during playback.
+  let activeChordLineIndex = -1
   let activeChordIndex = -1
-  if (activeLineIndex >= 0) {
-    activeChordIndex = findActiveChordIndex(lines[activeLineIndex].chords, rawTime)
+  let activeChordStart = -Infinity
+  for (let i = 0; i < lines.length; i++) {
+    const chordIndex = findActiveChordIndex(lines[i].chords, adjustedLyricsTime)
+    if (chordIndex < 0) continue
+    const chordStart = lines[i].chords[chordIndex].start_time
+    if (chordStart > activeChordStart) {
+      activeChordStart = chordStart
+      activeChordLineIndex = i
+      activeChordIndex = chordIndex
+    }
   }
 
-  return { activeLineIndex, activeWordIndex, activeChordIndex }
+  return { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex }
 }
 
 function sameState(a: SyncState, b: SyncState): boolean {
   return (
     a.activeLineIndex === b.activeLineIndex &&
     a.activeWordIndex === b.activeWordIndex &&
+    a.activeChordLineIndex === b.activeChordLineIndex &&
     a.activeChordIndex === b.activeChordIndex
   )
 }
@@ -84,22 +93,20 @@ export function useChordSheetSync(lines: ChordSheetLine[]) {
 
   const offsetRef = useRef(usePlayerPrefsStore.getState().lyricsOffsetMs)
 
-  const getTimes = useCallback(() => {
-    const rawTime = usePlaybackStore.getState().currentTime
+  const getAdjustedLyricsTime = useCallback(() => {
     // Positive offset = delay lyrics (subtract from time so lyrics lag behind).
-    const adjustedLyricsTime = rawTime - offsetRef.current / 1000
-    return { rawTime, adjustedLyricsTime }
+    return usePlaybackStore.getState().currentTime - offsetRef.current / 1000
   }, [])
 
   const [state, setState] = useState<SyncState>(() =>
-    computeSync(lines, getTimes())
+    computeSync(lines, getAdjustedLyricsTime())
   )
 
   // Recompute helper — called from both playback and prefs subscriptions.
   const recompute = useCallback(() => {
-    const next = computeSync(linesRef.current, getTimes())
+    const next = computeSync(linesRef.current, getAdjustedLyricsTime())
     setState((prev) => (sameState(prev, next) ? prev : next))
-  }, [getTimes])
+  }, [getAdjustedLyricsTime])
 
   useEffect(() => {
     // Recompute when lines change

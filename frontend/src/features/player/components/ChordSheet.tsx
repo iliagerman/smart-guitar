@@ -314,7 +314,7 @@ export function ChordSheet({
 }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
   const lines = mergeChordLyrics(chords, lyrics)
-  const { activeLineIndex, activeWordIndex, activeChordIndex } = useChordSheetSync(lines)
+  const { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex } = useChordSheetSync(lines)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
   const activeWordRef = useRef<HTMLDivElement>(null)
@@ -521,6 +521,7 @@ export function ChordSheet({
           showHighlight={showHighlight}
           isEditMode={isEditMode}
           activeWordIndex={activeWordIndex}
+          activeChordLineIndex={activeChordLineIndex}
           activeChordIndex={activeChordIndex}
           selectedChordIndex={selectedChordIndex}
           globalChordIndexMap={globalChordIndexMap}

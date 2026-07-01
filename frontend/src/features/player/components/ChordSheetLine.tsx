@@ -10,6 +10,7 @@ interface ChordSheetLineProps {
   showHighlight: boolean
   isEditMode: boolean
   activeWordIndex: number
+  activeChordLineIndex: number
   activeChordIndex: number
   selectedChordIndex: number | null | undefined
   globalChordIndexMap: Map<object, number>
@@ -81,6 +82,7 @@ export function ChordSheetLine({
   showHighlight,
   isEditMode,
   activeWordIndex,
+  activeChordLineIndex,
   activeChordIndex,
   selectedChordIndex,
   globalChordIndexMap,
@@ -101,6 +103,7 @@ export function ChordSheetLine({
 }: ChordSheetLineProps) {
   const isInstrumental = line.segmentIndex === -1
   const isRtl = line.direction === 'rtl'
+  const lineActiveChordIndex = lineIndex === activeChordLineIndex ? activeChordIndex : -1
 
   return (
     <div
@@ -119,7 +122,7 @@ export function ChordSheetLine({
           isActive={isActive}
           showHighlight={showHighlight}
           isEditMode={isEditMode}
-          activeChordIndex={activeChordIndex}
+          activeChordIndex={lineActiveChordIndex}
           globalChordIndexMap={globalChordIndexMap}
           renderChordLabel={renderChordLabel}
         />
@@ -132,7 +135,7 @@ export function ChordSheetLine({
           isEditMode={isEditMode}
           isRtl={isRtl}
           activeWordIndex={activeWordIndex}
-          activeChordIndex={activeChordIndex}
+          activeChordIndex={lineActiveChordIndex}
           selectedChordIndex={selectedChordIndex}
           globalChordIndexMap={globalChordIndexMap}
           lookAheadWord={lookAheadWord}

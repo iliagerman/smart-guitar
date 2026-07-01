@@ -31,7 +31,7 @@ describe('mergeChordLyrics chord layout', () => {
     }
   })
 
-  it('spreads several non-simultaneous chords on one long word to distinct columns', () => {
+  it('stacks several non-simultaneous chords on the matching long word', () => {
     // The word "one" spans 0..6; all three chords naturally land on it.
     const lyrics = [
       seg(0, 8, 'one two three', [
@@ -49,8 +49,8 @@ describe('mergeChordLyrics chord layout', () => {
     const lines = mergeChordLyrics(chords, lyrics)
     const offsets = lines[0].chords.map((c) => c.charOffset)
 
-    // No clutter: three chords, three distinct word columns.
-    expect(new Set(offsets).size).toBe(3)
+    // Preserve timing: all three chords belong to the word active at their start.
+    expect(new Set(offsets).size).toBe(1)
   })
 
   it('keeps essentially simultaneous chords stacked rather than spreading them', () => {
