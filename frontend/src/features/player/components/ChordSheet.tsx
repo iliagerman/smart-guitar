@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
@@ -313,7 +313,9 @@ export function ChordSheet({
   onWordSelect,
 }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
-  const lines = mergeChordLyrics(chords, lyrics)
+  // Memoized: the merge is expensive (sorting, RTL detection, column layout) and the
+  // sheet re-renders on every active word/chord change during playback.
+  const lines = useMemo(() => mergeChordLyrics(chords, lyrics), [chords, lyrics])
   const { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex } = useChordSheetSync(lines)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
@@ -421,35 +423,38 @@ export function ChordSheet({
   // the inner lookup is O(1) instead of O(n). Indices within each bucket are kept in ascending
   // order and consumed left-to-right so that duplicate (start_time, chord) pairs are matched
   // in the same sequential order as the original findIndex(i >= globalIdx) guard.
-  const chordKeyBuckets = new Map<string, number[]>()
-  for (let i = 0; i < chords.length; i++) {
-    const key = `${chords[i].start_time}_${chords[i].chord}`
-    const bucket = chordKeyBuckets.get(key)
-    if (bucket) {
-      bucket.push(i)
-    } else {
-      chordKeyBuckets.set(key, [i])
-    }
-  }
-  const bucketPointers = new Map<string, number>()
-  const globalChordIndexMap = new Map<object, number>()
-  let globalIdx = 0
-  for (const line of lines) {
-    for (const chord of line.chords) {
-      const key = `${chord.start_time}_${chord.chord}`
+  const globalChordIndexMap = useMemo(() => {
+    const chordKeyBuckets = new Map<string, number[]>()
+    for (let i = 0; i < chords.length; i++) {
+      const key = `${chords[i].start_time}_${chords[i].chord}`
       const bucket = chordKeyBuckets.get(key)
-      if (!bucket) continue
-      let ptr = bucketPointers.get(key) ?? 0
-      // Advance pointer past indices already consumed (< globalIdx)
-      while (ptr < bucket.length && bucket[ptr] < globalIdx) ptr++
-      if (ptr < bucket.length) {
-        const matchIdx = bucket[ptr]
-        globalChordIndexMap.set(chord, matchIdx)
-        globalIdx = matchIdx + 1
-        bucketPointers.set(key, ptr + 1)
+      if (bucket) {
+        bucket.push(i)
+      } else {
+        chordKeyBuckets.set(key, [i])
       }
     }
-  }
+    const bucketPointers = new Map<string, number>()
+    const indexMap = new Map<object, number>()
+    let globalIdx = 0
+    for (const line of lines) {
+      for (const chord of line.chords) {
+        const key = `${chord.start_time}_${chord.chord}`
+        const bucket = chordKeyBuckets.get(key)
+        if (!bucket) continue
+        let ptr = bucketPointers.get(key) ?? 0
+        // Advance pointer past indices already consumed (< globalIdx)
+        while (ptr < bucket.length && bucket[ptr] < globalIdx) ptr++
+        if (ptr < bucket.length) {
+          const matchIdx = bucket[ptr]
+          indexMap.set(chord, matchIdx)
+          globalIdx = matchIdx + 1
+          bucketPointers.set(key, ptr + 1)
+        }
+      }
+    }
+    return indexMap
+  }, [chords, lines])
 
   const renderChordLabel = useCallback(
     ({ chord, ci, gci, isChordActive, isRtl: rtl }: {

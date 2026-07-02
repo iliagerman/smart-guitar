@@ -45,6 +45,7 @@ import {
   getSheetVersionPreferenceKey,
   lyricsModeForActiveVersion,
 } from '../../lib/sheet-versions'
+import type { LyricsSegment } from '@/types/song'
 
 function getAudioUrl(
   songId: string,
@@ -64,6 +65,40 @@ function getAudioUrl(
 
 function formatStemList(stems: string[]): string {
   return stems.map((stem) => stem.replaceAll('_', ' ')).join(', ')
+}
+
+/**
+ * Full-screen glow pulse keyed to the current beat. Isolated so its
+ * per-beat store subscription doesn't re-render the whole page — the
+ * selector returns the beat number, so this only re-renders once per beat
+ * instead of on every playback time tick.
+ */
+function BeatGlow({ bpm }: { bpm: number }) {
+  const beatNumber = usePlaybackStore((s) => Math.floor(s.currentTime / (60 / bpm)))
+  return <div key={beatNumber} className="pointer-events-none fixed inset-0 z-20 animate-beat-screen-glow" />
+}
+
+interface LyricsDebugOverlayProps {
+  lyrics: LyricsSegment[]
+  lyricsSource: string | null
+}
+
+/**
+ * Lyrics-sync debug overlay (Ctrl+Shift+D). Owns the word normalization and
+ * the per-tick sync computation so that work only runs while the overlay is
+ * actually mounted.
+ */
+function LyricsDebugOverlay({ lyrics, lyricsSource }: LyricsDebugOverlayProps) {
+  const segments = useMemo(() => lyrics.map((s) => ({ ...s, words: normalizeWords(s) })), [lyrics])
+  const sync = useLyricsSync(segments)
+  return (
+    <LyricsSyncDebug
+      segments={segments}
+      activeSegmentIndex={sync.activeSegmentIndex}
+      activeWordIndex={sync.activeWordIndex}
+      lyricsSource={lyricsSource}
+    />
+  )
 }
 
 /**
@@ -109,7 +144,6 @@ export function SongDetailPage() {
   const setCurrentSong = usePlaybackStore((s) => s.setCurrentSong)
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
-  const currentTime = usePlaybackStore((s) => s.currentTime)
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   useWakeLock(isPlaying)
   const {
@@ -498,12 +532,6 @@ export function SongDetailPage() {
   )
   const activeLyricsSource = activeLyricsOption?.source ?? null
 
-  const debugNormalizedSegments = useMemo(
-    () => activeLyrics.map((s) => ({ ...s, words: normalizeWords(s) })),
-    [activeLyrics],
-  )
-  const debugSync = useLyricsSync(debugNormalizedSegments)
-
   const markThumbnailFailed = useSongMediaCacheStore((s) => s.markThumbnailFailed)
   const setThumbnailIfMissing = useSongMediaCacheStore((s) => s.setThumbnailIfMissing)
 
@@ -594,13 +622,11 @@ export function SongDetailPage() {
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
   const beatBpm = detail.source_bpm ?? detail.rhythm?.bpm ?? null
-  const beatNumber = beatBpm ? Math.floor(currentTime / (60 / beatBpm)) : 0
-  const showBeatGlow = isPlaying && !!beatBpm
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#15171c_0%,#090a0d_58%,#050506_100%)] pb-16 lg:pb-0" data-testid="song-detail-page">
       <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
-      {showBeatGlow && <div key={beatNumber} className="pointer-events-none fixed inset-0 z-20 animate-beat-screen-glow" />}
+      {isPlaying && beatBpm ? <BeatGlow bpm={beatBpm} /> : null}
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div
@@ -726,12 +752,7 @@ export function SongDetailPage() {
       <OnboardingTour />
 
       {showLyricsDebug && hasVisibleLyrics && (
-        <LyricsSyncDebug
-          segments={debugNormalizedSegments}
-          activeSegmentIndex={debugSync.activeSegmentIndex}
-          activeWordIndex={debugSync.activeWordIndex}
-          lyricsSource={activeLyricsSource}
-        />
+        <LyricsDebugOverlay lyrics={activeLyrics} lyricsSource={activeLyricsSource} />
       )}
     </div>
   )

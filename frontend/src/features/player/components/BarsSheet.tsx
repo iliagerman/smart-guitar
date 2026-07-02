@@ -23,7 +23,6 @@ interface BarsSheetProps {
  * because callers pass the already-transformed chord list.
  */
 export function BarsSheet({ chords, barStarts, duration, bpm, onSeek }: BarsSheetProps) {
-  const currentTime = usePlaybackStore((s) => s.currentTime)
   const showBass = usePlayerPrefsStore((s) => s.showBassNotes)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeBarRef = useRef<HTMLButtonElement>(null)
@@ -33,11 +32,16 @@ export function BarsSheet({ chords, barStarts, duration, bpm, onSeek }: BarsShee
     [chords, barStarts, duration],
   )
 
-  const activeBarIndex = findActiveTimedIndex(
-    bars.length,
-    currentTime,
-    (i) => bars[i].start,
-    (i) => bars[i].end,
+  // The selector derives the active bar index, so the sheet re-renders once per
+  // bar change instead of on every playback time tick (which would re-render
+  // every bar cell ~60x/sec).
+  const activeBarIndex = usePlaybackStore((s) =>
+    findActiveTimedIndex(
+      bars.length,
+      s.currentTime,
+      (i) => bars[i].start,
+      (i) => bars[i].end,
+    ),
   )
 
   useEffect(() => {

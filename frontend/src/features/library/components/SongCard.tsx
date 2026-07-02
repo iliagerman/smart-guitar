@@ -21,9 +21,9 @@ export function SongCard({ song }: SongCardProps) {
     >
       <div className="relative size-14 shrink-0 overflow-hidden rounded-2xl bg-charcoal-700/60 ring-1 ring-white/10 shadow-[0_10px_28px_rgba(0,0,0,0.28)]">
         {thumbnailUrl && !imgFailed ? (
-          <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
+          <img src={thumbnailUrl} alt="" loading="lazy" width={56} height={56} className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
         ) : (
-          <video src="/guitar.mp4" autoPlay loop muted playsInline tabIndex={-1} aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
+          <img src="/art/album-placeholder.png" alt="" loading="lazy" width={56} height={56} aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
         )}
       </div>
       <div className="flex-1 min-w-0">

@@ -28,7 +28,11 @@ export function TransportControls({
   showButtonsOnMobile = false,
 }: TransportControlsProps) {
   const [showSecondary, setShowSecondary] = useState(false)
-  const { isPlaying, currentTime, duration } = usePlaybackStore()
+  // Individual selectors: subscribing to the whole store would re-render this
+  // component on unrelated store changes (sheet mode, stem selection, ...).
+  const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  const currentTime = usePlaybackStore((s) => s.currentTime)
+  const duration = usePlaybackStore((s) => s.duration)
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
@@ -45,6 +49,7 @@ export function TransportControls({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress)}
+        aria-valuetext={`${formatDuration(currentTime)} of ${formatDuration(duration)}`}
         aria-disabled={isPlaybackDisabled}
         tabIndex={isPlaybackDisabled ? -1 : 0}
         data-testid="transport-progress-bar"

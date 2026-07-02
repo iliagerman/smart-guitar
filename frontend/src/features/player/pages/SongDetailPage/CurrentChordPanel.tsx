@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { formatChordWithBass } from '@/lib/chord-colors'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -15,6 +14,20 @@ interface CurrentChordPanelProps {
   chords: ChordEntry[]
 }
 
+function findDisplayChord(chords: ChordEntry[], currentTime: number): ChordEntry | null {
+  const active = chords.find(
+    (c) => currentTime >= c.start_time && currentTime < c.end_time && c.chord !== 'N'
+  )
+  if (active?.chord) return active
+
+  for (let i = chords.length - 1; i >= 0; i--) {
+    const c = chords[i]
+    if (c.chord !== 'N' && currentTime >= c.start_time) return c
+  }
+
+  return null
+}
+
 /**
  * Shows the currently playing chord diagram in the sidebar on large screens.
  * Picks the active chord based on playback time, falling back to the most
@@ -22,21 +35,11 @@ interface CurrentChordPanelProps {
  * detected; the fingering diagram stays the root chord shape.
  */
 export function CurrentChordPanel({ chords }: CurrentChordPanelProps) {
-  const currentTime = usePlaybackStore((s) => s.currentTime)
   const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
-  const displayChord = useMemo(() => {
-    const active = chords.find(
-      (c) => currentTime >= c.start_time && currentTime < c.end_time && c.chord !== 'N'
-    )
-    if (active?.chord) return active
-
-    for (let i = chords.length - 1; i >= 0; i--) {
-      const c = chords[i]
-      if (c.chord !== 'N' && currentTime >= c.start_time) return c
-    }
-
-    return null
-  }, [chords, currentTime])
+  // The selector returns the active chord entry (a stable reference from the
+  // chords array), so this component re-renders only on chord changes rather
+  // than on every playback time tick.
+  const displayChord = usePlaybackStore((s) => findDisplayChord(chords, s.currentTime))
 
   if (!displayChord) return null
 

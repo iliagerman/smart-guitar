@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Heart, Pause, Pencil, Play, Timer, X } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
@@ -16,13 +16,18 @@ import { ChordDisplayControls } from '../../components/ChordDisplayControls'
 import { CountInToggle } from '../../components/CountInToggle'
 import { HighlightToggle } from '../../components/HighlightToggle'
 import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
-import { RecordButton } from '../../components/RecordButton'
 import { ScrollModeControl } from '../../components/ScrollModeControl'
 import { SheetSelector } from '../../components/SheetSelector'
 import { TrackSelector } from '../../components/TrackSelector'
 import { TransportControls } from '../../components/TransportControls'
 import type { LyricsSourceOption } from '../../lib/lyrics-sources'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
+
+// Recording pulls in ffmpeg + mp3-encoder bundles; load them only when the
+// controls actually mount instead of shipping them in the core player chunk.
+const RecordButton = lazy(() =>
+  import('../../components/RecordButton').then((m) => ({ default: m.RecordButton })),
+)
 
 interface PlayerControlsProps {
   songId: string
@@ -206,6 +211,52 @@ interface PrimaryControlsProps {
   onTogglePlay: () => void
 }
 
+interface MetronomePopupProps {
+  autoBpm: number | null
+  onTogglePlay: () => void
+  onClose: () => void
+}
+
+/**
+ * Floating metronome panel. Owns the per-tick `currentTime` subscription so the
+ * rest of the primary controls don't re-render on every playback time update —
+ * this only mounts while the metronome is open.
+ */
+function MetronomePopup({ autoBpm, onTogglePlay, onClose }: MetronomePopupProps) {
+  const currentTime = usePlaybackStore((s) => s.currentTime)
+  const isPlaying = usePlaybackStore((s) => s.isPlaying)
+
+  return (
+    <div className="fixed inset-x-2 top-2 z-50 rounded-[1.5rem] border border-white/10 bg-black/92 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:inset-x-4 sm:top-4">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onTogglePlay}
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-flame-300 text-charcoal-950 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition-colors hover:bg-flame-400"
+          aria-label={isPlaying ? 'Pause song' : 'Start song'}
+        >
+          {isPlaying ? <Pause size={19} aria-hidden="true" /> : <Play size={19} aria-hidden="true" />}
+        </button>
+        <MetronomePanel
+          autoBpm={autoBpm}
+          mode="playback"
+          playbackTime={currentTime}
+          playbackPlaying={isPlaying}
+          compact
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/10 text-smoke-200 transition-colors hover:bg-white/15"
+          aria-label="Close metronome"
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function PrimaryControls({
   songId,
   detail,
@@ -226,8 +277,6 @@ function PrimaryControls({
   getRecordingTap,
 }: PrimaryControlsProps) {
   const isEditMode = useChordEditStore((s) => s.isEditMode)
-  const currentTime = usePlaybackStore((s) => s.currentTime)
-  const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const [showMetronome, setShowMetronome] = useState(false)
 
   return (
@@ -254,7 +303,9 @@ function PrimaryControls({
         />
         <span className="text-[11px] font-medium text-smoke-200">Heart</span>
       </button>
-      <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
+      <Suspense fallback={<div className="h-20 w-full rounded-2xl border border-white/10 bg-[#111215]" aria-hidden="true" />}>
+        <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
+      </Suspense>
       <div className="contents" data-tour="chord-edit">
         {hasChords && !isEditMode && (
           <button
@@ -315,33 +366,11 @@ function PrimaryControls({
           <span className="text-[11px] font-medium text-smoke-200">Metro</span>
         </button>
         {showMetronome && (
-          <div className="fixed inset-x-2 top-2 z-50 rounded-[1.5rem] border border-white/10 bg-black/92 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:inset-x-4 sm:top-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onTogglePlay}
-                className="grid size-11 shrink-0 place-items-center rounded-full bg-flame-300 text-charcoal-950 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition-colors hover:bg-flame-400"
-                aria-label={isPlaying ? 'Pause song' : 'Start song'}
-              >
-                {isPlaying ? <Pause size={19} aria-hidden="true" /> : <Play size={19} aria-hidden="true" />}
-              </button>
-              <MetronomePanel
-                autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
-                mode="playback"
-                playbackTime={currentTime}
-                playbackPlaying={isPlaying}
-                compact
-              />
-              <button
-                type="button"
-                onClick={() => setShowMetronome(false)}
-                className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/10 text-smoke-200 transition-colors hover:bg-white/15"
-                aria-label="Close metronome"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+          <MetronomePopup
+            autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
+            onTogglePlay={onTogglePlay}
+            onClose={() => setShowMetronome(false)}
+          />
         )}
       </div>
     </>
