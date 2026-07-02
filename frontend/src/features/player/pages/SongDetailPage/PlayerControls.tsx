@@ -9,6 +9,7 @@ import type { LyricsSourceMode } from '@/stores/player-prefs.store'
 import type { SongDetail, ChordOption } from '@/types/song'
 import { useChordEditStore } from '@/stores/chord-edit.store'
 
+import { ABLoopControl } from '../../components/ABLoopControl'
 import { ChordMapDialog } from '../../components/ChordMapDialog'
 import { LyricsSourceSelector } from '../../components/LyricsSourceSelector'
 import { LyricsSyncControl } from '../../components/LyricsSyncControl'
@@ -184,6 +185,7 @@ export function PlayerControls({
             <LyricsSyncControl />
             <ScrollModeControl />
             <CountInToggle />
+            <ABLoopControl />
           </>
         }
       />

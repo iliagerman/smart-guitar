@@ -107,6 +107,10 @@ export function SongContent({
         {hasStemsProcessed && hasChords && (
           <>
             <BackgroundProcessingCard
+              songId={songId}
+              songTitle={headerTitle}
+              songArtist={headerArtist}
+              stemNames={detail.stem_types.map(({ name }) => name)}
               jobId={detail.active_job?.id ?? null}
               show={showBackgroundProcessing}
               hasLyrics={hasAnyLyrics}

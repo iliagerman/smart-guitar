@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { toast } from 'sonner'
 import { useSongDetail } from '../../hooks/use-song-detail'
 import { useAudioPlayer } from '../../hooks/use-audio-player'
 import { useWakeLock } from '../../hooks/use-wake-lock'
@@ -15,6 +16,7 @@ import { LyricsSyncDebug } from '../../components/LyricsSyncDebug'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
 import { BlockingErrorState } from '@/components/shared/BlockingErrorState'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useSubscriptionStore } from '@/stores/subscription.store'
@@ -113,14 +115,14 @@ export function SongDetailPage() {
   const { songId } = useParams<{ songId: string }>()
   const lastPlaybackPopupRef = useRef<{ message: string; time: number } | null>(null)
   const showPlaybackErrorPopup = useCallback((message: string) => {
-    if (typeof window === 'undefined') return
     const now = Date.now()
     const lastPopup = lastPlaybackPopupRef.current
     if (lastPopup && lastPopup.message === message && now - lastPopup.time < 2500) {
       return
     }
     lastPlaybackPopupRef.current = { message, time: now }
-    window.alert(message)
+    console.error('Playback error:', message)
+    toast.error('Playback failed — try reloading the page or switching track version.')
   }, [])
   const {
     clear,
@@ -194,6 +196,7 @@ export function SongDetailPage() {
   useEffect(() => { setGlobalStrumSource(strumSource) }, [strumSource, setGlobalStrumSource])
 
   const [showTutorial, setShowTutorial] = useState(false)
+  const [showDeleteChordsConfirm, setShowDeleteChordsConfirm] = useState(false)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
@@ -516,6 +519,42 @@ export function SongDetailPage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // --- Player keyboard shortcuts (Space, arrows, L) ---
+  useEffect(() => {
+    const isBlockedTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return true
+      // The progress bar handles its own arrow-key seeking while focused —
+      // avoid double-seeking when this global handler also fires.
+      if (target.getAttribute('role') === 'slider') return true
+      return !!target.closest('[role="dialog"]')
+    }
+
+    const handler = (e: KeyboardEvent) => {
+      if (isBlockedTarget(e.target)) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        handleTogglePlay()
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handleSeek(Math.max(0, usePlaybackStore.getState().currentTime - 5))
+        return
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleSeek(usePlaybackStore.getState().currentTime + 5)
+        return
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        usePlaybackStore.getState().tapLoopMarker(usePlaybackStore.getState().currentTime)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleTogglePlay, handleSeek])
+
   const availableLyricsSources = useMemo(
     () => (detail ? getAvailableLyricsSources(detail, activeVersion) : []),
     [detail, activeVersion],
@@ -694,11 +733,7 @@ export function SongDetailPage() {
               )
             }}
             onSetLyricsSource={(mode) => setSongOverride(songId!, 'selectedLyricsSource', mode)}
-            onDeleteChords={() => {
-              if (songId && confirm('Delete your chord version?')) {
-                deleteChordsMutation.mutate({ songId })
-              }
-            }}
+            onDeleteChords={() => setShowDeleteChordsConfirm(true)}
             onOpenTutorial={() => setShowTutorial(true)}
             getRecordingTap={getRecordingTap}
             onSetStemVolume={(stemName: string, volume: number) => {
@@ -750,6 +785,18 @@ export function SongDetailPage() {
       )}
 
       <OnboardingTour />
+
+      <ConfirmDialog
+        open={showDeleteChordsConfirm}
+        onOpenChange={setShowDeleteChordsConfirm}
+        title="Delete your chord version?"
+        description="This removes your custom chords for this song. This cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (songId) deleteChordsMutation.mutate({ songId })
+        }}
+      />
 
       {showLyricsDebug && hasVisibleLyrics && (
         <LyricsDebugOverlay lyrics={activeLyrics} lyricsSource={activeLyricsSource} />

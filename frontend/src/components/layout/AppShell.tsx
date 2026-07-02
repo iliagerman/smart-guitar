@@ -3,6 +3,7 @@ import { BottomNav } from './BottomNav'
 import { SidebarNav } from './SidebarNav'
 import { useEventTracker } from '@/hooks/use-event-tracker'
 import { ROUTES } from '@/router/routes'
+import { TrialCountdownBanner } from '@/features/subscription/components/TrialCountdownBanner'
 
 export function AppShell() {
   const location = useLocation()
@@ -21,6 +22,7 @@ export function AppShell() {
         <div className="flex h-[var(--vv-height)] overflow-hidden">
           <SidebarNav />
           <div className="flex-1 min-w-0 flex flex-col">
+            <TrialCountdownBanner />
             <main
               className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >

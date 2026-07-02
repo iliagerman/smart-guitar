@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosError } from 'axios'
 import { fetchAuthSession } from 'aws-amplify/auth'
+import { toast } from 'sonner'
 import { env } from './env'
 import { useAuthStore } from '../stores/auth.store'
 import { useSubscriptionStore } from '../stores/subscription.store'
@@ -81,6 +82,7 @@ api.interceptors.response.use(
           return api(original)
         }
       } catch {
+        toast.error('Session expired — please sign in again')
         useAuthStore.getState().logout()
       }
     }

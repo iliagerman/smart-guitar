@@ -4,6 +4,7 @@ import { usePlaybackStore } from '@/stores/playback.store'
 
 import { useBufferedStemMixer } from './use-buffered-stem-mixer'
 import { isSameAudioSource } from '../lib/audio-source'
+import { getLoopSeekTarget } from '../lib/ab-loop'
 
 type PlaybackMode = 'idle' | 'single' | 'multi'
 
@@ -306,6 +307,20 @@ export function useAudioPlayer({ onPlaybackError }: UseAudioPlayerOptions = {}) 
       destroySingleTrack()
     }
   }, [clearBufferedStems, destroySingleTrack])
+
+  // A/B loop enforcement: mode-agnostic, reads store state directly each frame
+  // (no subscription) so it doesn't add re-renders, and reuses `seek()` so it
+  // works for both single-track and multi-stem playback.
+  useEffect(() => {
+    let frameId: number
+    const tick = () => {
+      const target = getLoopSeekTarget(usePlaybackStore.getState())
+      if (target !== null) seek(target)
+      frameId = requestAnimationFrame(tick)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [seek])
 
   const pauseCurrent = useCallback(() => {
     if (modeRef.current === 'multi') {

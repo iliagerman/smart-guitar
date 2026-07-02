@@ -1,10 +1,18 @@
+import { useCallback, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useJobPolling } from '../hooks/use-job-polling'
 import { useJobStatusUrl } from '../hooks/use-job-status-url'
 import { useJobStatusManifest } from '../hooks/use-job-status-manifest'
+import { useCreateJob } from '../hooks/use-create-job'
+import { useJobWatcherStore } from '@/stores/job-watcher.store'
 import { StatusIcon, type StepStatus } from './StatusIcon'
 
 interface BackgroundProcessingCardProps {
+    songId: string
+    songTitle: string
+    songArtist: string
+    stemNames: string[]
     jobId: string | null
     show: boolean
     hasLyrics: boolean
@@ -19,18 +27,41 @@ function stepStatus(past: boolean, active: boolean): StepStatus {
 }
 
 export function BackgroundProcessingCard({
-    jobId,
+    songId,
+    songTitle,
+    songArtist,
+    stemNames,
+    jobId: activeJobId,
     show,
     hasLyrics,
     hasTabs,
     showTabsStep,
 }: BackgroundProcessingCardProps) {
+    // Overrides the parent-provided jobId immediately after a retry, until the song
+    // detail query refetches (invalidated by useCreateJob) and activeJobId catches up.
+    const [retryJobId, setRetryJobId] = useState<string | null>(null)
+    const jobId = retryJobId ?? activeJobId
+    const createJob = useCreateJob()
+    const watchJob = useJobWatcherStore((s) => s.watchJob)
+
     const { data: job } = useJobPolling(jobId)
     const { data: statusUrl } = useJobStatusUrl(jobId)
 
     const jobStage = job?.stage ?? null
     const isProcessing = job?.status === 'PENDING' || job?.status === 'PROCESSING'
     const isFailed = job?.status === 'FAILED'
+
+    const handleRetry = useCallback(() => {
+        createJob.mutate(
+            { songId, descriptions: stemNames },
+            {
+                onSuccess: (created) => {
+                    setRetryJobId(created.id)
+                    watchJob({ jobId: created.id, songId, songTitle, songArtist })
+                },
+            },
+        )
+    }, [songId, songTitle, songArtist, stemNames, createJob, watchJob])
 
     const manifestPollingEnabled = !!jobId && isProcessing && !isFailed
     const { data: manifest } = useJobStatusManifest(statusUrl?.url ?? null, manifestPollingEnabled)
@@ -123,9 +154,22 @@ export function BackgroundProcessingCard({
                     </div>
                 ))}
 
-                {isFailed && job?.error_message && (
-                    <div className="ml-7.5 text-xs text-red-400">
-                        {job.error_message}
+                {isFailed && (
+                    <div className="ml-7.5 flex items-center justify-between gap-3">
+                        {job?.error_message && (
+                            <span className="text-xs text-red-400">{job.error_message}</span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleRetry}
+                            disabled={createJob.isPending}
+                            className="flex shrink-0 items-center gap-1 rounded-md bg-flame-500/20 px-2 py-1 text-xs font-medium text-flame-400 transition-colors hover:bg-flame-500/30 disabled:opacity-50"
+                            aria-label="Retry background generation"
+                            data-testid="background-processing-retry-button"
+                        >
+                            <RotateCcw size={12} aria-hidden="true" />
+                            Retry
+                        </button>
                     </div>
                 )}
             </div>

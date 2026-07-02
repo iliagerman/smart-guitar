@@ -33,6 +33,8 @@ export function TransportControls({
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const duration = usePlaybackStore((s) => s.duration)
+  const loopStart = usePlaybackStore((s) => s.loopStart)
+  const loopEnd = usePlaybackStore((s) => s.loopEnd)
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
@@ -84,10 +86,31 @@ export function TransportControls({
           className="absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-flame-300 opacity-0 shadow-[0_0_18px_rgba(250,204,21,0.7)] transition-opacity group-hover:opacity-100"
           style={{ left: `${progress}%`, marginLeft: '-8px' }}
         />
+        {loopStart !== null && loopEnd !== null && duration > 0 && (
+          <div
+            className="absolute inset-y-0 bg-sky-400/25"
+            style={{ left: `${(loopStart / duration) * 100}%`, width: `${((loopEnd - loopStart) / duration) * 100}%` }}
+            data-testid="transport-loop-range"
+          />
+        )}
+        {loopStart !== null && duration > 0 && (
+          <div
+            className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-sky-400"
+            style={{ left: `${(loopStart / duration) * 100}%` }}
+            data-testid="transport-loop-marker-a"
+          />
+        )}
+        {loopEnd !== null && duration > 0 && (
+          <div
+            className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-sky-400"
+            style={{ left: `${(loopEnd / duration) * 100}%` }}
+            data-testid="transport-loop-marker-b"
+          />
+        )}
       </div>
       <div className="flex items-center justify-between px-1 font-mono text-xs text-smoke-500">
         <span>{formatDuration(currentTime)}<span className="text-smoke-600">.{String(Math.floor((currentTime % 1) * 1000)).padStart(3, '0')}</span></span>
-        <span>{formatDuration(duration)}</span>
+        <span data-testid="transport-duration">{formatDuration(duration)}</span>
       </div>
       {/* Primary controls row */}
       {primaryControls && (

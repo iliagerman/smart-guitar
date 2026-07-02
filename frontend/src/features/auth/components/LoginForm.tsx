@@ -4,10 +4,11 @@ import axios from 'axios'
 import { useMutation } from '@tanstack/react-query'
 import { useLogin } from '../hooks/use-login'
 import { useGoogleSignIn } from '../hooks/use-google-signin'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation, type Location } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { authApi } from '@/api/auth.api'
 import { trackCustomEvent } from '@/lib/meta-pixel'
+import { OrDivider } from '@/components/shared/OrDivider'
 
 function getErrorDetail(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -25,6 +26,7 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const login = useLogin()
   const navigate = useNavigate()
+  const location = useLocation()
   const { googleError, googlePending, handleGoogleSignIn } = useGoogleSignIn()
   // Resends a confirmation code by email and navigates away; no client-side cached
   // query reflects this action, so there is nothing to invalidate.
@@ -46,7 +48,8 @@ export function LoginForm() {
       {
         onSuccess: () => {
           trackCustomEvent('Login')
-          navigate(ROUTES.LIBRARY)
+          const from = (location.state as { from?: Location } | null)?.from
+          navigate(from ? `${from.pathname}${from.search}` : ROUTES.SONGS)
         },
       },
     )
@@ -124,10 +127,7 @@ export function LoginForm() {
           )}
         </div>
       )}
-      <div className="relative flex items-center gap-4 my-2">
-        <div className="flex-1 h-px bg-charcoal-600" />
-        <div className="flex-1 h-px bg-charcoal-600" />
-      </div>
+      <OrDivider />
       <button
         type="button"
         onClick={() => handleGoogleSignIn(trackCustomEvent, 'Login')}

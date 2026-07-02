@@ -6,6 +6,7 @@ import { useGoogleSignIn } from '../hooks/use-google-signin'
 import { Link, useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { trackEvent } from '@/lib/meta-pixel'
+import { OrDivider } from '@/components/shared/OrDivider'
 
 function getErrorDetail(error: unknown): string | null {
   if (!axios.isAxiosError(error)) return null
@@ -128,10 +129,7 @@ export function RegisterForm() {
           {getErrorDetail(register.error) || 'Registration failed'}
         </p>
       )}
-      <div className="relative flex items-center gap-4 my-2">
-        <div className="flex-1 h-px bg-charcoal-600" />
-        <div className="flex-1 h-px bg-charcoal-600" />
-      </div>
+      <OrDivider />
       <button
         type="button"
         onClick={() => handleGoogleSignIn(trackEvent, 'CompleteRegistration')}
