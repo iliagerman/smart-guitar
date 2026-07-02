@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
-import { findActiveTimedIndex } from '../lib/active-timed-index'
+import { createScanCursor, scanForwardActiveTimedIndex, type ScanCursor } from '../lib/cursor-scan'
 import type { LyricsSegment } from '@/types/song'
 
 interface SyncState {
@@ -9,15 +9,17 @@ interface SyncState {
   activeWordIndex: number
 }
 
-function computeSync(segments: LyricsSegment[], currentTime: number): SyncState {
+function computeSync(segments: LyricsSegment[], currentTime: number, cursor: ScanCursor): SyncState {
   // Most recently started segment — monotonic in time, so the highlight can
   // never jump backward even if stored timestamps overlap. Gaps keep the
-  // previous segment active until the next one starts.
-  const activeSegmentIndex = findActiveTimedIndex(
+  // previous segment active until the next one starts. Scans forward from
+  // the cursor since playback time is monotonic almost all of the time.
+  const activeSegmentIndex = scanForwardActiveTimedIndex(
     segments.length,
     currentTime,
     (i) => segments[i].start,
     (i) => segments[i].end,
+    cursor,
   )
 
   let activeWordIndex = -1
@@ -55,10 +57,16 @@ function sameState(a: SyncState, b: SyncState): boolean {
 
 export function useLyricsSync(segments: LyricsSegment[]) {
   const segmentsRef = useRef(segments)
+  // A fresh cursor whenever `segments` changes reference (new song, edits) —
+  // the previous cursor's position is meaningless for different data.
+  const cursorRef = useRef(createScanCursor())
 
   // Keep the latest segments in a ref for the store subscription callback.
   // Update in a layout effect to avoid accessing refs during render.
   useLayoutEffect(() => {
+    if (segmentsRef.current !== segments) {
+      cursorRef.current = createScanCursor()
+    }
     segmentsRef.current = segments
   }, [segments])
 
@@ -70,12 +78,12 @@ export function useLyricsSync(segments: LyricsSegment[]) {
   }, [])
 
   const [state, setState] = useState<SyncState>(() =>
-    computeSync(segments, getAdjustedTime())
+    computeSync(segments, getAdjustedTime(), cursorRef.current)
   )
 
   // Recompute helper — called from both playback and prefs subscriptions.
   const recompute = useCallback(() => {
-    const next = computeSync(segmentsRef.current, getAdjustedTime())
+    const next = computeSync(segmentsRef.current, getAdjustedTime(), cursorRef.current)
     setState((prev) => {
       if (sameState(prev, next)) return prev
 

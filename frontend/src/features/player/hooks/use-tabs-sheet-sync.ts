@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { createScanCursor, scanForwardMostRecentStarted, type ScanCursor } from '../lib/cursor-scan'
 import type { TabsSheetLine } from '../lib/merge-tabs-lyrics'
 
 /** Max gap (seconds) to keep the previous line highlighted after it ends. */
@@ -11,44 +12,56 @@ const NEXT_LINE_LOOKAHEAD_S = 0.5
 interface SyncState {
   activeLineIndex: number
   activeWordIndex: number
-  /** Start time of the currently active note bucket (notes within 50ms share a bucket). -1 if none. */
   activeNoteTime: number
+}
+
+interface TimedLine {
+  startTime: number
+  endTime: number
+}
+
+/**
+ * Active line index, including the linger/lookahead grace windows around
+ * gaps between lines. Built on `scanForwardMostRecentStarted` — the
+ * candidate it returns is either the containing line (if `time` falls
+ * inside it) or the most recently ended line (since a line whose start is
+ * <= time but whose end is also <= time is, by definition, not the
+ * containing line), which is exactly what the linger/lookahead checks need.
+ */
+export function computeActiveLineIndex(
+  lines: TimedLine[],
+  rawTime: number,
+  cursor: ScanCursor,
+): number {
+  const cand = scanForwardMostRecentStarted(lines.length, rawTime, (i) => lines[i].startTime, cursor)
+
+  if (cand >= 0 && rawTime < lines[cand].endTime) {
+    return cand
+  }
+
+  if (cand >= 0) {
+    if (rawTime - lines[cand].endTime < PREV_LINE_LINGER_S) {
+      return cand
+    }
+    if (cand + 1 < lines.length && lines[cand + 1].startTime - rawTime < NEXT_LINE_LOOKAHEAD_S) {
+      return cand + 1
+    }
+    return -1
+  }
+
+  if (lines.length > 0 && lines[0].startTime - rawTime < NEXT_LINE_LOOKAHEAD_S) {
+    return 0
+  }
+  return -1
 }
 
 function computeSync(
   lines: TabsSheetLine[],
-  params: { rawTime: number; adjustedLyricsTime: number }
+  params: { rawTime: number; adjustedLyricsTime: number },
+  cursor: ScanCursor,
 ): SyncState {
   const { rawTime, adjustedLyricsTime } = params
-  let activeLineIndex = lines.findIndex(
-    (line) => rawTime >= line.startTime && rawTime < line.endTime
-  )
-
-  if (activeLineIndex < 0 && lines.length > 0) {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].endTime <= rawTime) {
-        if (rawTime - lines[i].endTime < PREV_LINE_LINGER_S) {
-          activeLineIndex = i
-          break
-        }
-        if (
-          i + 1 < lines.length &&
-          lines[i + 1].startTime - rawTime < NEXT_LINE_LOOKAHEAD_S
-        ) {
-          activeLineIndex = i + 1
-          break
-        }
-        break
-      }
-    }
-    if (
-      activeLineIndex < 0 &&
-      lines.length > 0 &&
-      lines[0].startTime - rawTime < NEXT_LINE_LOOKAHEAD_S
-    ) {
-      activeLineIndex = 0
-    }
-  }
+  const activeLineIndex = computeActiveLineIndex(lines, rawTime, cursor)
 
   let activeWordIndex = -1
   if (activeLineIndex >= 0) {
@@ -80,12 +93,31 @@ function sameState(a: SyncState, b: SyncState): boolean {
   )
 }
 
-export function useTabsSheetSync(lines: TabsSheetLine[]) {
+const EMPTY_STATE: SyncState = { activeLineIndex: -1, activeWordIndex: -1, activeNoteTime: -1 }
+
+interface UseTabsSheetSyncOptions {
+  /**
+   * When false, skip all per-frame scanning and store subscriptions — used
+   * when the tabs highlight is turned off, so a hidden sheet costs nothing
+   * on every playback tick.
+   */
+  enabled?: boolean
+}
+
+export function useTabsSheetSync(lines: TabsSheetLine[], options?: UseTabsSheetSyncOptions) {
+  const enabled = options?.enabled ?? true
+
   const linesRef = useRef(lines)
+  // A fresh cursor whenever `lines` changes reference — the previous
+  // cursor's position is meaningless for different data.
+  const cursorRef = useRef(createScanCursor())
 
   // Keep the latest lines in a ref for the store subscription callback.
   // Update in a layout effect to avoid accessing refs during render.
   useLayoutEffect(() => {
+    if (linesRef.current !== lines) {
+      cursorRef.current = createScanCursor()
+    }
     linesRef.current = lines
   }, [lines])
 
@@ -99,16 +131,18 @@ export function useTabsSheetSync(lines: TabsSheetLine[]) {
   }, [])
 
   const [state, setState] = useState<SyncState>(() =>
-    computeSync(lines, getTimes())
+    enabled ? computeSync(lines, getTimes(), cursorRef.current) : EMPTY_STATE
   )
 
   // Recompute helper — called from both playback and prefs subscriptions.
   const recompute = useCallback(() => {
-    const next = computeSync(linesRef.current, getTimes())
+    const next = computeSync(linesRef.current, getTimes(), cursorRef.current)
     setState((prev) => (sameState(prev, next) ? prev : next))
   }, [getTimes])
 
   useEffect(() => {
+    if (!enabled) return
+
     // Recompute when lines change
     recompute()
 
@@ -126,7 +160,7 @@ export function useTabsSheetSync(lines: TabsSheetLine[]) {
       unsubPlayback()
       unsubPrefs()
     }
-  }, [lines, recompute])
+  }, [lines, recompute, enabled])
 
-  return state
+  return enabled ? state : EMPTY_STATE
 }

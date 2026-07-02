@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import { cn } from '@/lib/cn'
 import type { PositionedChord, ChordSheetLine as ChordSheetLineType } from '../lib/merge-chords-lyrics'
 import type { LyricsWord } from '@/types/song'
@@ -5,16 +6,17 @@ import { formatChordName } from '@/lib/chord-colors'
 
 interface ChordSheetLineProps {
   line: ChordSheetLineType
-  lineIndex: number
   isActive: boolean
   showHighlight: boolean
   isEditMode: boolean
+  /** Already narrowed by the parent to -1 when this line isn't the active line. */
   activeWordIndex: number
-  activeChordLineIndex: number
+  /** Already narrowed by the parent to -1 when this line doesn't hold the active chord. */
   activeChordIndex: number
   selectedChordIndex: number | null | undefined
   globalChordIndexMap: Map<object, number>
-  lookAheadWord: { lineIndex: number; wordIndex: number } | null
+  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
+  lookAheadWordIndex: number
   activeLineRef: React.RefObject<HTMLDivElement | null>
   activeWordRef: React.RefObject<HTMLDivElement | null>
   lookAheadWordRef: React.RefObject<HTMLDivElement | null>
@@ -75,18 +77,16 @@ function computeWordData(line: ChordSheetLineType): WordLayoutData[] {
  * Renders a single line of the chord sheet (instrumental or lyrics line).
  * Extracted from ChordSheet to keep the main component render under 200 lines.
  */
-export function ChordSheetLine({
+function ChordSheetLineImpl({
   line,
-  lineIndex,
   isActive,
   showHighlight,
   isEditMode,
   activeWordIndex,
-  activeChordLineIndex,
   activeChordIndex,
   selectedChordIndex,
   globalChordIndexMap,
-  lookAheadWord,
+  lookAheadWordIndex,
   activeLineRef,
   activeWordRef,
   lookAheadWordRef,
@@ -103,7 +103,6 @@ export function ChordSheetLine({
 }: ChordSheetLineProps) {
   const isInstrumental = line.segmentIndex === -1
   const isRtl = line.direction === 'rtl'
-  const lineActiveChordIndex = lineIndex === activeChordLineIndex ? activeChordIndex : -1
 
   return (
     <div
@@ -122,23 +121,22 @@ export function ChordSheetLine({
           isActive={isActive}
           showHighlight={showHighlight}
           isEditMode={isEditMode}
-          activeChordIndex={lineActiveChordIndex}
+          activeChordIndex={activeChordIndex}
           globalChordIndexMap={globalChordIndexMap}
           renderChordLabel={renderChordLabel}
         />
       ) : (
         <LyricsContent
           line={line}
-          lineIndex={lineIndex}
           isActive={isActive}
           showHighlight={showHighlight}
           isEditMode={isEditMode}
           isRtl={isRtl}
           activeWordIndex={activeWordIndex}
-          activeChordIndex={lineActiveChordIndex}
+          activeChordIndex={activeChordIndex}
           selectedChordIndex={selectedChordIndex}
           globalChordIndexMap={globalChordIndexMap}
-          lookAheadWord={lookAheadWord}
+          lookAheadWordIndex={lookAheadWordIndex}
           activeWordRef={activeWordRef}
           lookAheadWordRef={lookAheadWordRef}
           onChordClick={onChordClick}
@@ -156,6 +154,14 @@ export function ChordSheetLine({
     </div>
   )
 }
+
+/**
+ * Memoized: the parent already narrows active/look-ahead state to this
+ * specific line (see ChordSheet.tsx), so an unrelated line's props stay
+ * referentially identical while playback advances elsewhere, and this skips
+ * re-rendering entirely.
+ */
+export const ChordSheetLine = memo(ChordSheetLineImpl)
 
 interface InstrumentalContentProps {
   line: ChordSheetLineType
@@ -198,7 +204,6 @@ function InstrumentalContent({
 
 interface LyricsContentProps {
   line: ChordSheetLineType
-  lineIndex: number
   isActive: boolean
   showHighlight: boolean
   isEditMode: boolean
@@ -207,7 +212,8 @@ interface LyricsContentProps {
   activeChordIndex: number
   selectedChordIndex: number | null | undefined
   globalChordIndexMap: Map<object, number>
-  lookAheadWord: { lineIndex: number; wordIndex: number } | null
+  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
+  lookAheadWordIndex: number
   activeWordRef: React.RefObject<HTMLDivElement | null>
   lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onChordClick: (time: number, globalIndex: number) => void
@@ -239,7 +245,6 @@ function LyricsContent(props: LyricsContentProps) {
       {line.words.length > 0 ? (
         <WordsWithChords
           line={props.line}
-          lineIndex={props.lineIndex}
           isActive={isActive}
           showHighlight={showHighlight}
           isEditMode={isEditMode}
@@ -247,7 +252,7 @@ function LyricsContent(props: LyricsContentProps) {
           activeWordIndex={props.activeWordIndex}
           activeChordIndex={props.activeChordIndex}
           globalChordIndexMap={props.globalChordIndexMap}
-          lookAheadWord={props.lookAheadWord}
+          lookAheadWordIndex={props.lookAheadWordIndex}
           activeWordRef={props.activeWordRef}
           lookAheadWordRef={props.lookAheadWordRef}
           onWordClick={props.onWordClick}
@@ -276,7 +281,6 @@ function LyricsContent(props: LyricsContentProps) {
 
 interface WordsWithChordsProps {
   line: ChordSheetLineType
-  lineIndex: number
   isActive: boolean
   showHighlight: boolean
   isEditMode: boolean
@@ -284,7 +288,8 @@ interface WordsWithChordsProps {
   activeWordIndex: number
   activeChordIndex: number
   globalChordIndexMap: Map<object, number>
-  lookAheadWord: { lineIndex: number; wordIndex: number } | null
+  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
+  lookAheadWordIndex: number
   activeWordRef: React.RefObject<HTMLDivElement | null>
   lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onWordClick: (time: number) => void
@@ -310,7 +315,6 @@ interface WordsWithChordsProps {
 // oxlint-disable-next-line react-doctor/no-many-boolean-props
 function WordsWithChords({
   line,
-  lineIndex,
   isActive,
   showHighlight,
   isEditMode,
@@ -318,7 +322,7 @@ function WordsWithChords({
   activeWordIndex,
   activeChordIndex,
   globalChordIndexMap,
-  lookAheadWord,
+  lookAheadWordIndex,
   activeWordRef,
   lookAheadWordRef,
   onWordClick,
@@ -328,15 +332,19 @@ function WordsWithChords({
   renderChordLabel,
   renderEditableWord,
 }: WordsWithChordsProps) {
-  // Pre-compute word offsets and chord assignments before render
-  const wordData = computeWordData(line)
+  // Pre-compute word offsets and chord assignments before render. Memoized so
+  // it's only recomputed when the line's own data changes, not on every
+  // active word/chord tick (this component is memoized as part of
+  // ChordSheetLine, but keep the memo local too since `line` is a stable
+  // reference across the frequent active/highlight-only re-renders).
+  const wordData = useMemo(() => computeWordData(line), [line])
 
   return (
     <>
       {line.words.map((word, wi) => {
         const { wordChords, reservedWidthCh } = wordData[wi]
         const isActiveWord = !isEditMode && isActive && showHighlight && wi === activeWordIndex
-        const isLookAheadWord = lookAheadWord?.lineIndex === lineIndex && lookAheadWord?.wordIndex === wi
+        const isLookAheadWord = wi === lookAheadWordIndex
 
         return (
           // Words render in fixed positional order and never reorder; the index is also

@@ -1,8 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
-import { findActiveTimedIndex } from '../lib/active-timed-index'
-import { findActiveChordIndex, type ChordSheetLine } from '../lib/merge-chords-lyrics'
+import { createScanCursor, scanForwardActiveTimedIndex, scanForwardMostRecentStarted, type ScanCursor } from '../lib/cursor-scan'
+import type { ChordSheetLine } from '../lib/merge-chords-lyrics'
 
 interface SyncState {
   activeLineIndex: number
@@ -11,20 +11,51 @@ interface SyncState {
   activeChordIndex: number
 }
 
+interface FlatChord {
+  lineIndex: number
+  chordIndex: number
+  startTime: number
+}
+
+/**
+ * Flatten every line's chords into a single time-ordered list so the active
+ * chord can be found with one forward-cursor scan instead of a per-frame
+ * loop over every line. Only recomputed when `lines` changes, never per
+ * playback tick.
+ */
+function flattenChordsByStartTime(lines: ChordSheetLine[]): FlatChord[] {
+  const flat: FlatChord[] = []
+  for (let li = 0; li < lines.length; li++) {
+    const chords = lines[li].chords
+    for (let ci = 0; ci < chords.length; ci++) {
+      flat.push({ lineIndex: li, chordIndex: ci, startTime: chords[ci].start_time })
+    }
+  }
+  // Lines and each line's own chords are already time-ordered, but a chord
+  // rendered on an earlier instrumental line can start after a chord on a
+  // later lyric line — sort defensively so the scan cursor's monotonic
+  // assumption holds.
+  return flat.sort((a, b) => a.startTime - b.startTime)
+}
+
 function computeSync(
   lines: ChordSheetLine[],
+  flatChords: FlatChord[],
   adjustedLyricsTime: number,
+  lineCursor: ScanCursor,
+  chordCursor: ScanCursor,
 ): SyncState {
   // Most recently started line — monotonic in time, so the highlight can
   // never jump backward even if stored timestamps overlap. Gaps keep the
   // previous line active until the next one starts. Use the same lyrics-adjusted
   // timebase as word selection so the active line and active word do not fight
   // each other when the user tweaks the lyrics offset.
-  const activeLineIndex = findActiveTimedIndex(
+  const activeLineIndex = scanForwardActiveTimedIndex(
     lines.length,
     adjustedLyricsTime,
     (i) => lines[i].startTime,
     (i) => lines[i].endTime,
+    lineCursor,
   )
 
   // Active word
@@ -56,19 +87,14 @@ function computeSync(
   // the active lyric line. Chords near lyric boundaries can render on the
   // previous/next line; tying chord highlight to the lyric line makes those
   // chords get skipped during playback.
-  let activeChordLineIndex = -1
-  let activeChordIndex = -1
-  let activeChordStart = -Infinity
-  for (let i = 0; i < lines.length; i++) {
-    const chordIndex = findActiveChordIndex(lines[i].chords, adjustedLyricsTime)
-    if (chordIndex < 0) continue
-    const chordStart = lines[i].chords[chordIndex].start_time
-    if (chordStart > activeChordStart) {
-      activeChordStart = chordStart
-      activeChordLineIndex = i
-      activeChordIndex = chordIndex
-    }
-  }
+  const activeFlatIndex = scanForwardMostRecentStarted(
+    flatChords.length,
+    adjustedLyricsTime,
+    (i) => flatChords[i].startTime,
+    chordCursor,
+  )
+  const activeChordLineIndex = activeFlatIndex >= 0 ? flatChords[activeFlatIndex].lineIndex : -1
+  const activeChordIndex = activeFlatIndex >= 0 ? flatChords[activeFlatIndex].chordIndex : -1
 
   return { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex }
 }
@@ -82,12 +108,40 @@ function sameState(a: SyncState, b: SyncState): boolean {
   )
 }
 
-export function useChordSheetSync(lines: ChordSheetLine[]) {
+const EMPTY_STATE: SyncState = {
+  activeLineIndex: -1,
+  activeWordIndex: -1,
+  activeChordLineIndex: -1,
+  activeChordIndex: -1,
+}
+
+interface UseChordSheetSyncOptions {
+  /**
+   * When false, skip all per-frame scanning and store subscriptions — used
+   * when the chord/lyrics highlight is turned off, so a hidden sheet costs
+   * nothing on every playback tick.
+   */
+  enabled?: boolean
+}
+
+export function useChordSheetSync(lines: ChordSheetLine[], options?: UseChordSheetSyncOptions) {
+  const enabled = options?.enabled ?? true
+
   const linesRef = useRef(lines)
+  const flatChordsRef = useRef(flattenChordsByStartTime(lines))
+  // Fresh cursors whenever `lines` changes reference — the previous cursor's
+  // position is meaningless for different data.
+  const lineCursorRef = useRef(createScanCursor())
+  const chordCursorRef = useRef(createScanCursor())
 
   // Keep the latest lines in a ref for the store subscription callback.
   // Update in a layout effect to avoid accessing refs during render.
   useLayoutEffect(() => {
+    if (linesRef.current !== lines) {
+      flatChordsRef.current = flattenChordsByStartTime(lines)
+      lineCursorRef.current = createScanCursor()
+      chordCursorRef.current = createScanCursor()
+    }
     linesRef.current = lines
   }, [lines])
 
@@ -99,16 +153,26 @@ export function useChordSheetSync(lines: ChordSheetLine[]) {
   }, [])
 
   const [state, setState] = useState<SyncState>(() =>
-    computeSync(lines, getAdjustedLyricsTime())
+    enabled
+      ? computeSync(lines, flatChordsRef.current, getAdjustedLyricsTime(), lineCursorRef.current, chordCursorRef.current)
+      : EMPTY_STATE
   )
 
   // Recompute helper — called from both playback and prefs subscriptions.
   const recompute = useCallback(() => {
-    const next = computeSync(linesRef.current, getAdjustedLyricsTime())
+    const next = computeSync(
+      linesRef.current,
+      flatChordsRef.current,
+      getAdjustedLyricsTime(),
+      lineCursorRef.current,
+      chordCursorRef.current,
+    )
     setState((prev) => (sameState(prev, next) ? prev : next))
   }, [getAdjustedLyricsTime])
 
   useEffect(() => {
+    if (!enabled) return
+
     // Recompute when lines change
     recompute()
 
@@ -126,7 +190,7 @@ export function useChordSheetSync(lines: ChordSheetLine[]) {
       unsubPlayback()
       unsubPrefs()
     }
-  }, [lines, recompute])
+  }, [lines, recompute, enabled])
 
-  return state
+  return enabled ? state : EMPTY_STATE
 }

@@ -316,7 +316,9 @@ export function ChordSheet({
   // Memoized: the merge is expensive (sorting, RTL detection, column layout) and the
   // sheet re-renders on every active word/chord change during playback.
   const lines = useMemo(() => mergeChordLyrics(chords, lyrics), [chords, lyrics])
-  const { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex } = useChordSheetSync(lines)
+  const { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex } = useChordSheetSync(lines, {
+    enabled: showHighlight,
+  })
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
   const activeWordRef = useRef<HTMLDivElement>(null)
@@ -416,7 +418,13 @@ export function ChordSheet({
     [onChordDrop]
   )
 
-  const lookAheadWord = computeLookAheadWord(lines, activeLineIndex, activeWordIndex)
+  // Memoized so the object reference is stable when the value doesn't change —
+  // it's passed down to every line, and an unstable reference would defeat
+  // React.memo on ChordSheetLine for lines unrelated to the look-ahead word.
+  const lookAheadWord = useMemo(
+    () => computeLookAheadWord(lines, activeLineIndex, activeWordIndex),
+    [lines, activeLineIndex, activeWordIndex]
+  )
 
   // Build a global chord index map: for each line chord, find its index in the flat chords array.
   // We pre-build a Map<key, number[]> of flat-chord indices grouped by (start_time, chord) so
@@ -515,37 +523,47 @@ export function ChordSheet({
       )}
       data-testid="chord-sheet"
     >
-      {lines.map((line, li) => (
-        // Lines render in fixed positional order and never reorder; the index is also
-        // required as the lineIndex prop, so it is a stable key here.
-        // oxlint-disable-next-line react-doctor/no-array-index-key
-        <ChordSheetLine key={li}
-          line={line}
-          lineIndex={li}
-          isActive={li === activeLineIndex}
-          showHighlight={showHighlight}
-          isEditMode={isEditMode}
-          activeWordIndex={activeWordIndex}
-          activeChordLineIndex={activeChordLineIndex}
-          activeChordIndex={activeChordIndex}
-          selectedChordIndex={selectedChordIndex}
-          globalChordIndexMap={globalChordIndexMap}
-          lookAheadWord={lookAheadWord}
-          activeLineRef={activeLineRef}
-          activeWordRef={activeWordRef}
-          lookAheadWordRef={lookAheadWordRef}
-          onChordClick={handleChordClick}
-          onWordClick={handleWordClick}
-          onChordRename={onChordRename}
-          onChordDelete={onChordDelete}
-          onDragStart={handleDragStart}
-          onWordDragOver={isEditMode ? handleWordDragOver : undefined}
-          onWordDrop={handleWordDrop}
-          onWordRename={onWordRename}
-          renderChordLabel={renderChordLabel}
-          renderEditableWord={onWordRename ? renderEditableWord : undefined}
-        />
-      ))}
+      {lines.map((line, li) => {
+        // Narrow the broadcast active/look-ahead state to this line before it
+        // reaches ChordSheetLine: an unrelated line's props then stay
+        // referentially identical across renders (e.g. -1 both times) even
+        // while the active word/chord/look-ahead moves elsewhere, so
+        // React.memo can skip re-rendering it.
+        const isActive = li === activeLineIndex
+        const lineActiveWordIndex = isActive ? activeWordIndex : -1
+        const lineActiveChordIndex = li === activeChordLineIndex ? activeChordIndex : -1
+        const lineLookAheadWordIndex = lookAheadWord?.lineIndex === li ? lookAheadWord.wordIndex : -1
+
+        return (
+          // Lines render in fixed positional order and never reorder, so the index
+          // is a stable key here.
+          // oxlint-disable-next-line react-doctor/no-array-index-key
+          <ChordSheetLine key={li}
+            line={line}
+            isActive={isActive}
+            showHighlight={showHighlight}
+            isEditMode={isEditMode}
+            activeWordIndex={lineActiveWordIndex}
+            activeChordIndex={lineActiveChordIndex}
+            selectedChordIndex={selectedChordIndex}
+            globalChordIndexMap={globalChordIndexMap}
+            lookAheadWordIndex={lineLookAheadWordIndex}
+            activeLineRef={activeLineRef}
+            activeWordRef={activeWordRef}
+            lookAheadWordRef={lookAheadWordRef}
+            onChordClick={handleChordClick}
+            onWordClick={handleWordClick}
+            onChordRename={onChordRename}
+            onChordDelete={onChordDelete}
+            onDragStart={handleDragStart}
+            onWordDragOver={isEditMode ? handleWordDragOver : undefined}
+            onWordDrop={handleWordDrop}
+            onWordRename={onWordRename}
+            renderChordLabel={renderChordLabel}
+            renderEditableWord={onWordRename ? renderEditableWord : undefined}
+          />
+        )
+      })}
     </div>
   )
 }

@@ -29,17 +29,19 @@ function RecommendedCard({ song }: RecommendedCardProps) {
           <img
             src={thumbnailUrl}
             alt=""
+            loading="lazy"
+            width={56}
+            height={56}
             className="absolute inset-0 w-full h-full object-cover"
             onError={() => setImgFailed(true)}
           />
         ) : (
-          <video
-            src="/guitar.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            tabIndex={-1}
+          <img
+            src="/art/album-placeholder.png"
+            alt=""
+            loading="lazy"
+            width={56}
+            height={56}
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-cover"
           />

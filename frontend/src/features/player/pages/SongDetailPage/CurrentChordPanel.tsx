@@ -1,31 +1,11 @@
 import { formatChordWithBass } from '@/lib/chord-colors'
-import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import type { ChordEntry } from '@/types/song'
 import { ChordDiagram } from '../../components/ChordMap'
-
-interface ChordEntry {
-  chord: string
-  start_time: number
-  end_time: number
-  bass?: string | null
-}
+import { useCurrentChord } from '../../hooks/use-current-chord'
 
 interface CurrentChordPanelProps {
   chords: ChordEntry[]
-}
-
-function findDisplayChord(chords: ChordEntry[], currentTime: number): ChordEntry | null {
-  const active = chords.find(
-    (c) => currentTime >= c.start_time && currentTime < c.end_time && c.chord !== 'N'
-  )
-  if (active?.chord) return active
-
-  for (let i = chords.length - 1; i >= 0; i--) {
-    const c = chords[i]
-    if (c.chord !== 'N' && currentTime >= c.start_time) return c
-  }
-
-  return null
 }
 
 /**
@@ -36,10 +16,10 @@ function findDisplayChord(chords: ChordEntry[], currentTime: number): ChordEntry
  */
 export function CurrentChordPanel({ chords }: CurrentChordPanelProps) {
   const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
-  // The selector returns the active chord entry (a stable reference from the
-  // chords array), so this component re-renders only on chord changes rather
-  // than on every playback time tick.
-  const displayChord = usePlaybackStore((s) => findDisplayChord(chords, s.currentTime))
+  // Cursor-based: scans forward from the last known chord each tick instead
+  // of re-scanning the whole chords array, and only re-renders this
+  // component when the displayed chord entry actually changes.
+  const displayChord = useCurrentChord(chords)
 
   if (!displayChord) return null
 
