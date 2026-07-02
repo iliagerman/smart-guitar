@@ -17,6 +17,14 @@ class ChordResult:
 
 class RecognizeRequest(BaseModel):
     input_path: str = Field(..., min_length=1, description="Local file path (local) or S3 key (prod)")
+    accompaniment_stem_paths: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional non-vocal, non-drum stem paths / S3 keys (e.g. bass, "
+            "guitar, piano, other) to mix and recognize instead of the full "
+            "mix. Falls back to input_path when empty or no listed stem exists."
+        ),
+    )
 
 
 class ChordInfo(BaseModel):

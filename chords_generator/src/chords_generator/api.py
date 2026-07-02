@@ -20,6 +20,7 @@ from chords_generator.bars import compute_bar_starts
 from chords_generator.bass_detect import detect_bass_for_chords
 from chords_generator.beat_align import detect_beats, snap_chords_to_beats
 from chords_generator.config import get_settings
+from chords_generator.mixing import mix_audio_files
 from chords_generator.observability import instrument_runtime_observer
 from chords_generator.recognizer import recognize_chords
 from chords_generator.request_context import RequestContextFilter, RequestContextMiddleware
@@ -103,9 +104,29 @@ def recognize(request: RecognizeRequest):
         # Get local path (no-op for local storage, download for S3)
         local_input = _storage.resolve_input(request.input_path)
 
+        # Recognize on the accompaniment mix (bass/guitar/piano/other, no
+        # vocals or drums) when those stems are already available — closer to
+        # what autochord was trained on than the full mix. Falls back to the
+        # full mix when no listed stem exists.
+        recognition_input = local_input
+        existing_stem_paths = [
+            p for p in request.accompaniment_stem_paths if _storage.file_exists(p)
+        ]
+        if existing_stem_paths:
+            accompaniment_path = os.path.join(job_dir, "accompaniment.wav")
+            mix_audio_files(
+                [_storage.resolve_input(p) for p in existing_stem_paths], accompaniment_path,
+            )
+            recognition_input = accompaniment_path
+            logger.info(
+                "Recognizing chords on accompaniment mix (%d stems)",
+                len(existing_stem_paths),
+                extra={"job_id": job_id, "event_type": "recognition_accompaniment_mix"},
+            )
+
         # Run chord recognition
         logger.info("Starting chord recognition", extra={"job_id": job_id, "input_path": request.input_path, "event_type": "recognition_start"})
-        results = recognize_chords(local_input, output_dir)
+        results = recognize_chords(recognition_input, output_dir)
 
         # Store outputs alongside the input file (same song directory)
         output_path = _storage.store_outputs(output_dir, request.input_path)

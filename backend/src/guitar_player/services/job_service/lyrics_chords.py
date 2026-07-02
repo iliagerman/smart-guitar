@@ -305,7 +305,11 @@ async def fetch_gemini_chords(song_id: uuid.UUID) -> None:
     tmp_audio: str | None = None
     try:
         from guitar_player.services.gemini_chord_service import detect_chords
-        from guitar_player.services.chord_merger import build_chord_meta, clean_chords
+        from guitar_player.services.chord_merger import (
+            build_chord_meta,
+            clean_chords,
+            merge_chord_meta,
+        )
 
         resolved = storage.resolve_service_path(audio_key)
         if os.path.isfile(resolved):
@@ -345,7 +349,11 @@ async def fetch_gemini_chords(song_id: uuid.UUID) -> None:
             time_signature=gemini_result.time_signature,
             notes=gemini_result.notes,
         )
-        storage.write_json(f"{song_name}/chord_meta.json", meta.model_dump(exclude_none=True))
+        meta_key = f"{song_name}/chord_meta.json"
+        existing_meta = storage.read_json(meta_key) if storage.file_exists(meta_key) else {}
+        if not isinstance(existing_meta, dict):
+            existing_meta = {}
+        storage.write_json(meta_key, merge_chord_meta(existing_meta, meta))
 
         async with safe_session() as session:
             song_dao = SongDAO(session)

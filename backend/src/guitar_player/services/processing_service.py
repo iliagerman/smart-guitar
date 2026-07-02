@@ -167,10 +167,21 @@ class ProcessingService:
             output_path=data.get("output_path", ""),
         )
 
-    async def recognize_chords(self, input_path: str) -> ChordRecognitionResult:
-        """POST to chords /recognize endpoint."""
+    async def recognize_chords(
+        self, input_path: str, accompaniment_stem_paths: list[str] | None = None,
+    ) -> ChordRecognitionResult:
+        """POST to chords /recognize endpoint.
+
+        When ``accompaniment_stem_paths`` is given (already-separated bass/
+        guitar/piano/other stems), the chords service mixes them and
+        recognizes chords on that accompaniment mix instead of the full mix,
+        falling back to the full mix when none of the listed stems exist.
+        """
         url = f"{self._chords_host}/recognize"
-        data = await self._request(url, {"input_path": input_path})
+        payload: dict = {"input_path": input_path}
+        if accompaniment_stem_paths:
+            payload["accompaniment_stem_paths"] = accompaniment_stem_paths
+        data = await self._request(url, payload)
 
         chords = [ChordInfo(**c) for c in data.get("chords", [])]
         return ChordRecognitionResult(

@@ -704,6 +704,16 @@ def _all_core_stems_present(existing_stems: dict[str, str]) -> bool:
     )
 
 
+# Non-vocal, non-drum stems mixed into the "accompaniment" chord recognition
+# input -- closer to what autochord was trained on than the full mix.
+_ACCOMPANIMENT_STEM_NAMES = ("bass", "guitar", "piano", "other")
+
+
+def _accompaniment_stem_keys(existing_stems: dict[str, str]) -> list[str]:
+    """Storage keys for the stems to mix for accompaniment chord recognition."""
+    return [existing_stems[name] for name in _ACCOMPANIMENT_STEM_NAMES if name in existing_stems]
+
+
 async def _run_separation_and_chords(
     processing: ProcessingService,
     storage,
@@ -745,6 +755,17 @@ async def _run_separation_and_chords(
             extra={"event_type": "job_skip", "job_id": str(job_id), "reason": "chords_cached"},
         )
         chords_task = asyncio.create_task(_cached_chords(song_name))
+    elif stems_already_ok:
+        # Stems are already cached (sep_task above resolves near-instantly via
+        # _cached_separation), so recognizing on the accompaniment mix here is
+        # free. A fresh separation runs concurrently with chord recognition
+        # below and can't provide stems in time without adding real
+        # wall-clock latency to every job, so that path still uses the full mix.
+        chords_task = asyncio.create_task(
+            processing.recognize_chords(
+                audio_path, accompaniment_stem_paths=_accompaniment_stem_keys(existing_stems),
+            )
+        )
     else:
         chords_task = asyncio.create_task(processing.recognize_chords(audio_path))
 

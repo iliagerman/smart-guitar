@@ -225,6 +225,20 @@ def clean_chords(
     return split
 
 
+def merge_chord_meta(existing: dict, meta: ChordMeta) -> dict:
+    """Merge Gemini-detected metadata into any existing chord_meta.json.
+
+    The autochord pipeline (``chords_generator``) writes fields such as
+    ``bar_starts`` into chord_meta.json for the bars view / strum grid.
+    Gemini enrichment must overlay its own fields (capo, key, ...) without
+    clobbering fields it has no opinion on, so a plain dict overwrite is not
+    safe here.
+    """
+    merged = dict(existing)
+    merged.update(meta.model_dump(exclude_none=True))
+    return merged
+
+
 def build_chord_meta(
     capo: int = 0,
     key: str = "",
