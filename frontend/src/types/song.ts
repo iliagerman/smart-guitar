@@ -10,6 +10,8 @@ export interface Song {
   thumbnail_key: string | null
   thumbnail_url: string | null
   audio_key: string | null
+  play_count: number
+  created_at: string | null
 }
 
 export interface SongStems {

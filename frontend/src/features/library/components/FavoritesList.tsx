@@ -1,10 +1,12 @@
 import { useState, useMemo, useRef } from 'react'
 import { useFavorites } from '../hooks/use-favorites'
+import { sortFavorites } from '../lib/sort-favorites'
 import { SongCard } from './SongCard'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Pagination } from '@/components/shared/Pagination'
 import { getScrollableParent } from '@/lib/scroll'
+import { useFavoritesSortStore } from '@/stores/favorites-sort.store'
 import { Heart, Search } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -21,6 +23,15 @@ function FavoritesListInner({ query }: FavoritesListProps) {
   const [offset, setOffset] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
   const { data: favorites, isLoading } = useFavorites()
+  const sortMode = useFavoritesSortStore((s) => s.sortMode)
+
+  // Reset to page 1 whenever the sort mode changes, mirroring how a query
+  // change remounts this component (see the `key` in FavoritesList above).
+  const [prevSortMode, setPrevSortMode] = useState(sortMode)
+  if (sortMode !== prevSortMode) {
+    setPrevSortMode(sortMode)
+    setOffset(0)
+  }
 
   const handlePageChange = (newOffset: number) => {
     setOffset(newOffset)
@@ -31,14 +42,16 @@ function FavoritesListInner({ query }: FavoritesListProps) {
 
   const filtered = useMemo(() => {
     if (!favorites) return []
-    if (!query) return favorites
-    const q = query.toLowerCase()
-    return favorites.filter(
-      (fav) =>
-        fav.song?.title.toLowerCase().includes(q) ||
-        fav.song?.artist?.toLowerCase().includes(q),
-    )
-  }, [favorites, query])
+    const q = query?.toLowerCase()
+    const matched = q
+      ? favorites.filter(
+          (fav) =>
+            fav.song?.title.toLowerCase().includes(q) ||
+            fav.song?.artist?.toLowerCase().includes(q),
+        )
+      : favorites
+    return sortFavorites(matched, sortMode)
+  }, [favorites, query, sortMode])
 
   const page = filtered.slice(offset, offset + PAGE_SIZE)
   const total = filtered.length
