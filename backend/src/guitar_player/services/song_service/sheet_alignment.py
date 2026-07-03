@@ -40,13 +40,30 @@ TIMED_LINE_TYPES = ("lyric", "instrumental")
 
 
 @dataclass
-class _TimedWord:
+class TimedWord:
+    """A single normalized token from the whisper transcript with its window."""
+
     token: str
     start: float
     end: float
 
 
-def _tokenize(text: str) -> list[str]:
+@dataclass
+class LineAlignment:
+    """Real timing window for one sheet line.
+
+    ``words`` holds the matched whisper tokens underlying this line's window
+    (in order) when the line was directly matched against the transcript.
+    It is ``None`` for lines whose window was interpolated between matched
+    neighbors — there's no real per-word data to hand back for those.
+    """
+
+    start: float
+    end: float
+    words: list[TimedWord] | None = None
+
+
+def tokenize(text: str) -> list[str]:
     return _NON_WORD_RE.sub(" ", text.lower()).split()
 
 
@@ -59,29 +76,29 @@ def _is_noise_line(text: str) -> bool:
     lowered = text.lower()
     if "http://" in lowered or "https://" in lowered or "www." in lowered:
         return True
-    tokens = _tokenize(text)
+    tokens = tokenize(text)
     if not tokens:
         return True
     noisy = sum(1 for t in tokens if any(ch.isdigit() for ch in t) or len(t) == 1)
     return noisy / len(tokens) > 0.5
 
 
-def _flatten_words(segments: list[LyricsSegment]) -> list[_TimedWord]:
-    words: list[_TimedWord] = []
+def _flatten_words(segments: list[LyricsSegment]) -> list[TimedWord]:
+    words: list[TimedWord] = []
     for seg in segments:
         for w in seg.words:
-            tokens = _tokenize(w.word)
+            tokens = tokenize(w.word)
             if not tokens:
                 continue
             # A whisper "word" is occasionally multiple tokens; share its window.
             for t in tokens:
-                words.append(_TimedWord(token=t, start=float(w.start), end=float(w.end)))
+                words.append(TimedWord(token=t, start=float(w.start), end=float(w.end)))
     return words
 
 
 def _match_line(
     tokens: list[str],
-    words: list[_TimedWord],
+    words: list[TimedWord],
     min_start: int,
 ) -> tuple[int, int, float] | None:
     """Best (start_idx, end_idx_exclusive, score) word window for a line."""
@@ -126,6 +143,37 @@ def align_sheet_lines_to_segments(
     lines. Returns None entirely when alignment isn't trustworthy — the
     caller should fall back to even distribution.
     """
+    aligned = _align_lines(raw_lines, segments, duration=duration)
+    if aligned is None:
+        return None
+    return [None if a is None else (a.start, a.end) for a in aligned]
+
+
+def align_sheet_lines_with_words(
+    raw_lines: list[dict],
+    segments: list[LyricsSegment],
+    *,
+    duration: float,
+) -> list[LineAlignment | None] | None:
+    """Like :func:`align_sheet_lines_to_segments`, but also exposes the matched
+    whisper words underlying each directly-matched line.
+
+    Returns a list parallel to *raw_lines*: a `LineAlignment` for timed line
+    types, ``None`` for section headers and empty lines. Within a
+    `LineAlignment`, ``words`` is the matched whisper token list for lines
+    that were directly matched, and ``None`` for lines whose window was only
+    interpolated between matched neighbors. Returns ``None`` entirely when
+    alignment isn't trustworthy — same gate as the plain window function.
+    """
+    return _align_lines(raw_lines, segments, duration=duration)
+
+
+def _align_lines(
+    raw_lines: list[dict],
+    segments: list[LyricsSegment],
+    *,
+    duration: float,
+) -> list[LineAlignment | None] | None:
     if not segments:
         return None
     words = _flatten_words(segments)
@@ -148,16 +196,16 @@ def align_sheet_lines_to_segments(
         return None
 
     # Match each lyric line to a word window, advancing monotonically.
-    anchors: dict[int, tuple[float, float]] = {}
+    anchors: dict[int, tuple[float, float, list[TimedWord]]] = {}
     cursor = 0
     matched = 0
     for pos in lyric_positions:
-        tokens = _tokenize(raw_lines[timed_indices[pos]].get("text", ""))
+        tokens = tokenize(raw_lines[timed_indices[pos]].get("text", ""))
         found = _match_line(tokens, words, cursor)
         if found is None:
             continue
         s, e, _score = found
-        anchors[pos] = (round(words[s].start, 3), round(words[e - 1].end, 3))
+        anchors[pos] = (round(words[s].start, 3), round(words[e - 1].end, 3), words[s:e])
         cursor = e
         matched += 1
 
@@ -166,10 +214,11 @@ def align_sheet_lines_to_segments(
 
     # Interpolate the unmatched timed positions between anchored neighbors.
     total_timed = len(timed_indices)
-    windows: list[tuple[float, float]] = [(0.0, 0.0)] * total_timed
+    windows: list[LineAlignment] = [LineAlignment(0.0, 0.0)] * total_timed
     anchor_positions = sorted(anchors)
     for pos in anchor_positions:
-        windows[pos] = anchors[pos]
+        start, end, matched_words = anchors[pos]
+        windows[pos] = LineAlignment(start, end, words=matched_words)
 
     def _fill_gap(start_pos: int, end_pos: int, t0: float, t1: float) -> None:
         """Evenly distribute positions in (start_pos, end_pos) over [t0, t1]."""
@@ -181,7 +230,7 @@ def align_sheet_lines_to_segments(
         for k in range(1, count + 1):
             a = t0 + (k - 1) * step
             b = t0 + k * step
-            windows[start_pos + k] = (round(a, 3), round(b, 3))
+            windows[start_pos + k] = LineAlignment(round(a, 3), round(b, 3))
 
     first_anchor = anchor_positions[0]
     last_anchor = anchor_positions[-1]
@@ -191,7 +240,7 @@ def align_sheet_lines_to_segments(
     _fill_gap(last_anchor, total_timed, anchors[last_anchor][1], max(duration, anchors[last_anchor][1]))
 
     # Build the result parallel to raw_lines.
-    result: list[tuple[float, float] | None] = [None] * len(raw_lines)
+    result: list[LineAlignment | None] = [None] * len(raw_lines)
     for pos, idx in enumerate(timed_indices):
         result[idx] = windows[pos]
     return result

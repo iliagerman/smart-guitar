@@ -1,8 +1,11 @@
 """Song detail assembly -- builds the full SongDetailResponse."""
 
 import logging
+import re
 import time
 import uuid
+from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 
 from guitar_player.dao.chord_vote_dao import ChordVoteDAO
@@ -25,6 +28,7 @@ from guitar_player.schemas.song import (
 )
 from guitar_player.storage import StorageBackend
 
+from .chord_time_snap import build_anchor_times, snap_chord_times
 from .helpers import (
     CHORD_VARIANT_PREFIX,
     CHORD_VARIANT_SUFFIX,
@@ -32,7 +36,7 @@ from .helpers import (
     STEM_NAMES,
     parse_lyrics_payload,
 )
-from .sheet_alignment import align_sheet_lines_to_segments
+from .sheet_alignment import TimedWord, align_sheet_lines_with_words, tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,7 @@ async def build_song_detail(
     duration = float(song.duration_seconds or 240)
     community_options, community_tabs = _load_community_chord_options(
         storage, song, duration, lyrics_data,
+        autochord_chords, chord_data.get("bar_starts", []),
     )
     t7 = time.perf_counter()
 
@@ -420,30 +425,283 @@ def _parse_enriched_songsterr(raw: dict[str, Any], result: dict[str, Any]) -> No
         result["tutorial_links"] = raw["tutorial_links"]
 
 
-def _static_lines_to_chord_option(
+# A matched whisper word is untrusted input (mishearings, dropped/extra
+# words, wrong occurrence of a repeated line): only accept it as a real
+# anchor when it lands within this margin of its line's window.
+_WORD_ANCHOR_MARGIN = 0.5
+# A line whose accepted-anchor fraction falls below this is too unreliable
+# to trust at all — its words/chords fall back to plain interpolation,
+# exactly as if no whisper words had been supplied for it.
+_LINE_WORD_QUALITY_THRESHOLD = 0.4
+
+_WORD_SPAN_RE = re.compile(r"\S+")
+
+
+@dataclass
+class _WordMapping:
+    """Per-display-word whisper times, plus the accepted anchors behind them."""
+
+    times: list[tuple[float, float] | None]
+    accepted_starts: list[float]
+    accepted_end_max: float | None
+    accepted_count: int
+
+
+@dataclass
+class _LineDraft:
+    """One timed sheet line's chord/lyric timing, before final assembly.
+
+    ``anchor_span`` is the (first, last) accepted whisper anchor time behind
+    this line's word mapping, or None when the line used plain
+    interpolation. It's consumed (and can zero out a line) by the
+    cross-line monotonicity sweep.
+    """
+
+    text: str
+    raw_chords: list[dict]
+    seg_start: float
+    seg_end: float
+    chord_starts: list[float]
+    lyric_words: list[LyricsWord]
+    anchor_span: tuple[float, float] | None
+
+
+def _word_spans(text: str) -> list[tuple[int, int]]:
+    """Character (start, end) span of each whitespace-delimited display word."""
+    return [(m.start(), m.end()) for m in _WORD_SPAN_RE.finditer(text)]
+
+
+def _match_words_to_whisper(
+    display_words: list[str],
+    whisper_words: list[TimedWord],
+    line_start: float,
+    line_end: float,
+) -> _WordMapping:
+    """Align display words to whisper words, rejecting untrustworthy pairings.
+
+    A candidate pairing (from a `SequenceMatcher` "equal" opcode — identical
+    normalized tokens) is only accepted if its time falls near the line's
+    window and doesn't move backwards relative to the last accepted anchor
+    in this line. A bad transcript pairing is thus quarantined to a single
+    rejected word rather than corrupting the whole line.
+    """
+    display_tokens: list[str] = []
+    owner: list[int] = []
+    for idx, w in enumerate(display_words):
+        for t in tokenize(w):
+            display_tokens.append(t)
+            owner.append(idx)
+    whisper_tokens = [w.token for w in whisper_words]
+
+    lo, hi = line_start - _WORD_ANCHOR_MARGIN, line_end + _WORD_ANCHOR_MARGIN
+    matched: dict[int, tuple[float, float]] = {}
+    last_accepted = float("-inf")
+    for tag, i1, i2, j1, j2 in SequenceMatcher(None, display_tokens, whisper_tokens).get_opcodes():
+        if tag != "equal":
+            continue
+        for offset in range(i2 - i1):
+            w = whisper_words[j1 + offset]
+            if not (lo <= w.start <= hi) or w.start < last_accepted:
+                continue
+            widx = owner[i1 + offset]
+            prev = matched.get(widx)
+            matched[widx] = (w.start, w.end) if prev is None else (min(prev[0], w.start), max(prev[1], w.end))
+            last_accepted = max(last_accepted, w.end)
+
+    times: list[tuple[float, float] | None] = [matched.get(i) for i in range(len(display_words))]
+    accepted_starts = [matched[i][0] for i in sorted(matched)]
+    accepted_end_max = max((e for _, e in matched.values()), default=None)
+    return _WordMapping(times, accepted_starts, accepted_end_max, len(matched))
+
+
+def _fallback_lyric_word_times(n: int, start: float, end: float) -> list[tuple[float, float]]:
+    if n == 0:
+        return []
+    dur = (end - start) / n
+    return [(round(start + i * dur, 3), round(start + (i + 1) * dur, 3)) for i in range(n)]
+
+
+def _interpolate_word_times(
+    times: list[tuple[float, float] | None], line_start: float, line_end: float,
+) -> list[tuple[float, float]]:
+    """Fill unmatched slots by even distribution between accepted neighbors."""
+    n = len(times)
+    matched_idx = [i for i, t in enumerate(times) if t is not None]
+    if not matched_idx:
+        return _fallback_lyric_word_times(n, line_start, line_end)
+
+    result: list[tuple[float, float] | None] = list(times)
+
+    def _fill(lo: int, hi: int, t0: float, t1: float) -> None:
+        count = hi - lo - 1
+        if count <= 0:
+            return
+        span = max(t1 - t0, 0.0)
+        step = span / count
+        for k in range(1, count + 1):
+            result[lo + k] = (t0 + (k - 1) * step, t0 + k * step)
+
+    first, last = matched_idx[0], matched_idx[-1]
+    _fill(-1, first, line_start, result[first][0])
+    for a, b in zip(matched_idx, matched_idx[1:]):
+        _fill(a, b, result[a][1], result[b][0])
+    _fill(last, n, result[last][1], max(line_end, result[last][1]))
+    return [(round(s, 3), round(e, 3)) for s, e in result]
+
+
+def _map_words_to_whisper_times(
+    display_words: list[str],
+    whisper_words: list[TimedWord],
+    line_start: float,
+    line_end: float,
+) -> list[tuple[float, float]]:
+    """Map each display word to a (start, end) time using validated whisper anchors.
+
+    Words with no accepted anchor (rejected as untrustworthy, or simply
+    absent from the transcript) interpolate between their nearest accepted
+    neighbors, or the line window edges.
+    """
+    mapping = _match_words_to_whisper(display_words, whisper_words, line_start, line_end)
+    return _interpolate_word_times(mapping.times, line_start, line_end)
+
+
+def _word_index_for_position(spans: list[tuple[int, int]], position: int) -> int:
+    """Index of the display word a character position falls on (or the next
+    word starting at/after it; clamped to the last word past the line end)."""
+    for idx, (start, end) in enumerate(spans):
+        if (start <= position < end) or position < start:
+            return idx
+    return len(spans) - 1
+
+
+def _chord_starts_from_words(
+    raw_chords: list[dict],
+    spans: list[tuple[int, int]],
+    word_times: list[tuple[float, float]],
+) -> list[float]:
+    """Chord start times from the real word time each chord's position lands on.
+
+    Multiple chords landing on the same word are distributed evenly across
+    that word's span so their starts stay strictly increasing.
+    """
+    if not spans:
+        return []
+    indices = [_word_index_for_position(spans, c.get("position", 0)) for c in raw_chords]
+    starts: list[float] = []
+    i, n = 0, len(indices)
+    while i < n:
+        j = i
+        while j < n and indices[j] == indices[i]:
+            j += 1
+        word_start, word_end = word_times[indices[i]]
+        span = word_end - word_start
+        # A zero-span word (whisper start == end) would collapse all its
+        # chords onto one start; keep them strictly increasing instead.
+        step = span / (j - i) if span > 0 else 0.01
+        starts.extend(word_start + k * step for k in range(j - i))
+        i = j
+    return starts
+
+
+def _fallback_chord_starts(
+    raw_chords: list[dict], text: str, seg_start: float, seg_span: float,
+) -> list[float]:
+    chord_count = len(raw_chords)
+    text_len = len(text)
+    starts: list[float] = []
+    for ci, c in enumerate(raw_chords):
+        if text_len > 0:
+            fraction = min(max(c.get("position", 0), 0), text_len) / text_len
+        else:
+            fraction = ci / max(chord_count, 1)
+        starts.append(seg_start + fraction * seg_span)
+    return starts
+
+
+def _fallback_lyric_words(text: str, seg_start: float, seg_span: float) -> list[LyricsWord]:
+    words_raw = text.split()
+    word_dur = seg_span / max(len(words_raw), 1)
+    return [
+        LyricsWord(
+            word=w,
+            start=round(seg_start + j * word_dur, 3),
+            end=round(seg_start + (j + 1) * word_dur, 3),
+        )
+        for j, w in enumerate(words_raw)
+    ]
+
+
+def _build_fallback_draft(
+    raw_chords: list[dict], text: str, seg_start: float, seg_end: float,
+) -> _LineDraft:
+    seg_span = max(seg_end - seg_start, 0.0)
+    return _LineDraft(
+        text, raw_chords, seg_start, seg_end,
+        chord_starts=_fallback_chord_starts(raw_chords, text, seg_start, seg_span),
+        lyric_words=_fallback_lyric_words(text, seg_start, seg_span),
+        anchor_span=None,
+    )
+
+
+def _build_word_mapped_draft(
+    raw_chords: list[dict],
+    text: str,
+    seg_start: float,
+    seg_end: float,
+    words_for_line: list[TimedWord],
+) -> _LineDraft | None:
+    """Word-anchored draft for a line, or None if too few anchors survived
+    validation to trust this line's word mapping at all."""
+    spans = _word_spans(text)
+    display_words = [text[s:e] for s, e in spans]
+    mapping = _match_words_to_whisper(display_words, words_for_line, seg_start, seg_end)
+    if mapping.accepted_count / max(len(display_words), 1) < _LINE_WORD_QUALITY_THRESHOLD:
+        return None
+
+    word_times = _interpolate_word_times(mapping.times, seg_start, seg_end)
+    lyric_words = [LyricsWord(word=dw, start=s, end=e) for dw, (s, e) in zip(display_words, word_times)]
+    anchor_span = (
+        (mapping.accepted_starts[0], mapping.accepted_end_max) if mapping.accepted_starts else None
+    )
+    return _LineDraft(
+        text, raw_chords, seg_start, seg_end,
+        chord_starts=_chord_starts_from_words(raw_chords, spans, word_times),
+        lyric_words=lyric_words,
+        anchor_span=anchor_span,
+    )
+
+
+def _enforce_global_monotonicity(drafts: list[_LineDraft]) -> None:
+    """Demote any line whose accepted anchors run backwards relative to an
+    earlier line (e.g. a repeated chorus matched to the wrong occurrence),
+    so real time never regresses across a line boundary."""
+    running_max = float("-inf")
+    for draft in drafts:
+        if draft.anchor_span is None:
+            continue
+        first, last = draft.anchor_span
+        if first < running_max:
+            fallback = _build_fallback_draft(draft.raw_chords, draft.text, draft.seg_start, draft.seg_end)
+            draft.chord_starts = fallback.chord_starts
+            draft.lyric_words = fallback.lyric_words
+            draft.anchor_span = None
+        else:
+            running_max = max(running_max, last)
+
+
+def _line_drafts(
     raw_lines: list[dict],
     duration: float,
-    name: str,
-    capo: int = 0,
-    key: str = "",
-    line_windows: list[tuple[float, float] | None] | None = None,
-) -> ChordOption:
-    """Convert static chord lines (position-based) to a ChordOption (time-based).
-
-    When *line_windows* (from whisper alignment) is provided, each line gets
-    its real audio time window so the sheet auto-scrolls in sync. Otherwise
-    timing falls back to even distribution across the song duration.
-    """
+    line_windows: list[tuple[float, float] | None] | None,
+    line_words: list[list[TimedWord] | None] | None,
+) -> list[_LineDraft]:
     lyric_lines = [
         line for line in raw_lines
         if isinstance(line, dict) and line.get("type") in ("lyric", "instrumental")
     ]
-    total = max(len(lyric_lines), 1)
-    line_duration = duration / total
+    line_duration = duration / max(len(lyric_lines), 1)
 
-    chords: list[ChordEntry] = []
-    lyrics: list[LyricsSegment] = []
-
+    drafts: list[_LineDraft] = []
     line_idx = 0
     for raw_idx, line in enumerate(raw_lines):
         if not isinstance(line, dict):
@@ -453,57 +711,61 @@ def _static_lines_to_chord_option(
             continue
 
         window = line_windows[raw_idx] if line_windows else None
-        if window:
-            seg_start, seg_end = window
-        else:
-            seg_start = line_idx * line_duration
-            seg_end = seg_start + line_duration
-        seg_span = max(seg_end - seg_start, 0.0)
+        seg_start, seg_end = window or (line_idx * line_duration, (line_idx + 1) * line_duration)
         text = line.get("text", "")
         raw_chords = line.get("chords", [])
 
-        # Build ChordEntry objects from position-based chords. The sheet gives
-        # each chord an exact character position in the line — time it
-        # proportionally to that position so it lands over the right word.
-        # Lines without text (instrumental) fall back to even spacing.
-        chord_count = len(raw_chords)
-        text_len = len(text)
-        starts: list[float] = []
-        for ci, c in enumerate(raw_chords):
-            if text_len > 0:
-                fraction = min(max(c.get("position", 0), 0), text_len) / text_len
-            else:
-                fraction = ci / max(chord_count, 1)
-            starts.append(seg_start + fraction * seg_span)
-        for ci, c in enumerate(raw_chords):
-            chord_start = starts[ci]
-            chord_end = starts[ci + 1] if ci + 1 < chord_count else seg_end
+        words_for_line = line_words[raw_idx] if line_words else None
+        draft = None
+        if words_for_line and line_type == "lyric" and text:
+            draft = _build_word_mapped_draft(raw_chords, text, seg_start, seg_end, words_for_line)
+        drafts.append(draft or _build_fallback_draft(raw_chords, text, seg_start, seg_end))
+        line_idx += 1
+
+    _enforce_global_monotonicity(drafts)
+    return drafts
+
+
+def _static_lines_to_chord_option(
+    raw_lines: list[dict],
+    duration: float,
+    name: str,
+    capo: int = 0,
+    key: str = "",
+    line_windows: list[tuple[float, float] | None] | None = None,
+    line_words: list[list[TimedWord] | None] | None = None,
+) -> ChordOption:
+    """Convert static chord lines (position-based) to a ChordOption (time-based).
+
+    When *line_windows* (from whisper alignment) is provided, each line gets
+    its real audio time window so the sheet auto-scrolls in sync. When
+    *line_words* is also given for a line, its words/chords are placed on
+    the real matched whisper timestamps rather than an even split — but only
+    using anchors that survive validation (see `_match_words_to_whisper` and
+    `_enforce_global_monotonicity`); everything else falls back to the
+    original char-position/even-split interpolation, never worse than it.
+    """
+    drafts = _line_drafts(raw_lines, duration, line_windows, line_words)
+
+    chords: list[ChordEntry] = []
+    lyrics: list[LyricsSegment] = []
+    for draft in drafts:
+        chord_count = len(draft.raw_chords)
+        for ci, c in enumerate(draft.raw_chords):
+            chord_start = draft.chord_starts[ci]
+            chord_end = draft.chord_starts[ci + 1] if ci + 1 < chord_count else draft.seg_end
             chords.append(ChordEntry(
                 start_time=round(chord_start, 3),
                 end_time=round(max(chord_end, chord_start), 3),
                 chord=c.get("chord", ""),
             ))
-
-        # Build LyricsSegment from lyric text
-        if text:
-            words_raw = text.split()
-            word_dur = seg_span / max(len(words_raw), 1)
-            words = [
-                LyricsWord(
-                    word=w,
-                    start=round(seg_start + j * word_dur, 3),
-                    end=round(seg_start + (j + 1) * word_dur, 3),
-                )
-                for j, w in enumerate(words_raw)
-            ]
+        if draft.text:
             lyrics.append(LyricsSegment(
-                start=round(seg_start, 3),
-                end=round(seg_end, 3),
-                text=text,
-                words=words,
+                start=round(draft.seg_start, 3),
+                end=round(draft.seg_end, 3),
+                text=draft.text,
+                words=draft.lyric_words,
             ))
-
-        line_idx += 1
 
     description = "Community chord sheet"
     if key:
@@ -527,11 +789,16 @@ def _load_community_chord_options(
     song: SongRecord,
     duration: float,
     lyrics_data: dict[str, Any],
+    autochord_chords: list[ChordEntry],
+    bar_starts: list[float],
 ) -> tuple[list[ChordOption], list[TabNote] | None]:
     """Load community chord versions and tab from static_chords.json.
 
     Returns (chord_options, tab_notes). Each chord version becomes a
     ChordOption with estimated timing so it works with capo/easy/transpose.
+    Synced sheets additionally get their chord starts snapped onto detected
+    beat anchors (autochord chord changes and/or the bar grid) when one is
+    close by, so strums land on the beat.
     """
     key = song.static_chords_key
     if not key and song.song_name:
@@ -549,15 +816,19 @@ def _load_community_chord_options(
 
         # Whisper lyrics (ver2) give real line timing when the sheet matches.
         whisper_segments: list[LyricsSegment] = lyrics_data.get("lyrics") or []
+        anchor_times = build_anchor_times(autochord_chords, bar_starts)
 
         def _build_option(raw_lines: list[dict], name: str, capo: int, song_key: str) -> ChordOption:
-            line_windows = align_sheet_lines_to_segments(
-                raw_lines, whisper_segments, duration=duration,
-            )
-            return _static_lines_to_chord_option(
+            aligned = align_sheet_lines_with_words(raw_lines, whisper_segments, duration=duration)
+            line_windows = [None if a is None else (a.start, a.end) for a in aligned] if aligned else None
+            line_words = [None if a is None else a.words for a in aligned] if aligned else None
+            option = _static_lines_to_chord_option(
                 raw_lines, duration, name=name, capo=capo, key=song_key,
-                line_windows=line_windows,
+                line_windows=line_windows, line_words=line_words,
             )
+            if option.lyrics_synced and anchor_times:
+                option.chords = snap_chord_times(option.chords, anchor_times)
+            return option
 
         options: list[ChordOption] = []
 
