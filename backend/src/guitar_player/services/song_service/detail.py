@@ -39,6 +39,7 @@ from .helpers import (
 from .sheet_alignment import (
     TimedWord,
     align_sheet_lines_with_words,
+    sanitize_sheet_lines,
     tokenize,
     trim_sheet_preamble,
 )
@@ -825,6 +826,7 @@ def _load_community_chord_options(
 
         def _build_option(raw_lines: list[dict], name: str, capo: int, song_key: str) -> ChordOption:
             raw_lines = trim_sheet_preamble(raw_lines)
+            raw_lines = sanitize_sheet_lines(raw_lines, whisper_segments)
             content_start = anchor_times[0] if anchor_times else None
             aligned = align_sheet_lines_with_words(
                 raw_lines, whisper_segments, duration=duration, content_start=content_start,

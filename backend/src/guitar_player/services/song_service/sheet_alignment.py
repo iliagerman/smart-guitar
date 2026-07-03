@@ -38,6 +38,19 @@ _NON_WORD_RE = re.compile(r"[^\w\s]", re.UNICODE)
 # Sheet line types that occupy playback time.
 TIMED_LINE_TYPES = ("lyric", "instrumental")
 
+# A chordless "lyric" line with fewer tokens than this is a short ad-lib
+# ("oh yeah") that's never checked against the transcript, since a match on
+# so few tokens is meaningless either way.
+_COMMENTARY_MIN_TOKENS = 3
+# Below this best-effort fuzzy match against the transcript, a chordless
+# line is assumed to be tabber commentary rather than sung content.
+_COMMENTARY_MATCH_THRESHOLD = 0.45
+
+# ASCII guitar-tab lines are dominated by dashes, fret digits, and tab
+# markup (h=hammer-on, p=pull-off, b=bend, r=release, x=mute, /,\=slides,
+# ~=vibrato, |=bar line, (),.=grace notes/legend punctuation).
+_TAB_SYMBOL_RE = re.compile(r"[\-0-9hHpPbBrRxX/\\~|().]")
+
 
 @dataclass
 class TimedWord:
@@ -130,7 +143,104 @@ def _match_line(
     return best
 
 
-def trim_sheet_preamble(raw_lines: list[dict]) -> list[dict]:
+def _is_tab_ascii_line(text: str) -> bool:
+    """True for an ASCII guitar-tab notation line (e.g. "e|--3--5--|").
+
+    Requires a run of 3+ dashes (a fretted/open-string span) AND more than
+    60% of the line's non-space characters drawn from tab notation symbols.
+    The dash-run requirement is what keeps real lyrics (no dash runs) and
+    chord-voicing lines like "G  3-x-0-0-0-3" (single dashes between
+    digits, no run of 3+) out — those aren't this detector's job.
+
+    Genuine tab notation never contains real words — only single-letter
+    string names (e/B/G/D/A/E) and technique markers (h/p/b/r/x). Sheets
+    also draw sustained sung syllables as dash runs ("...Fly--------!"),
+    so any line with a 3+ letter word is a lyric, not tab.
+    """
+    if "---" not in text:
+        return False
+    if re.search(r"[A-Za-z]{3,}", text):
+        return False
+    non_space = [c for c in text if not c.isspace()]
+    if not non_space:
+        return False
+    symbol_count = sum(1 for c in non_space if _TAB_SYMBOL_RE.fullmatch(c))
+    return symbol_count / len(non_space) > 0.6
+
+
+def _drop_or_convert_tab_lines(raw_lines: list[dict]) -> list[dict]:
+    """Drop chordless ASCII tab lines; convert chord-bearing ones to a
+    chordless-text `instrumental` line so their chords survive."""
+    result: list[dict] = []
+    for line in raw_lines:
+        if not isinstance(line, dict) or not _is_tab_ascii_line(line.get("text", "")):
+            result.append(line)
+            continue
+        chords = line.get("chords") or []
+        if chords:
+            result.append({"type": "instrumental", "text": "", "chords": chords})
+    return result
+
+
+def _best_transcript_similarity(tokens: list[str], transcript: list[TimedWord]) -> float:
+    """Best fuzzy match ratio of *tokens* against any similarly-sized window
+    of the transcript.
+
+    Candidate windows are anchored on ANY shared token (not just the
+    first), so a single mistranscribed word near the start of a real lyric
+    line doesn't hide it from matching. Anchor occurrences are capped at
+    `_MAX_CANDIDATES` to bound the work, same idiom as `_match_line`.
+    """
+    if not tokens or not transcript:
+        return 0.0
+    anchors = set(tokens)
+    best = 0.0
+    candidates = 0
+    for idx, w in enumerate(transcript):
+        if w.token not in anchors:
+            continue
+        candidates += 1
+        if candidates > _MAX_CANDIDATES:
+            break
+        for width in range(max(1, len(tokens) - _WIDTH_SLACK), len(tokens) + _WIDTH_SLACK + 1):
+            start = max(0, idx - width + 1)
+            end = min(len(transcript), start + width)
+            window = [tw.token for tw in transcript[start:end]]
+            score = SequenceMatcher(None, tokens, window).ratio()
+            best = max(best, score)
+        if best > 0.999:
+            return best
+    return best
+
+
+def _is_commentary_line(line: dict, transcript: list[TimedWord]) -> bool:
+    """True for a chordless `lyric` line that never appears in the transcript."""
+    if not isinstance(line, dict) or line.get("type") != "lyric" or line.get("chords"):
+        return False
+    tokens = tokenize(line.get("text", ""))
+    if len(tokens) < _COMMENTARY_MIN_TOKENS:
+        return False
+    return _best_transcript_similarity(tokens, transcript) < _COMMENTARY_MATCH_THRESHOLD
+
+
+def sanitize_sheet_lines(raw_lines: list[dict], segments: list[LyricsSegment]) -> list[dict]:
+    """Drop mid-sheet junk that's shown as lyrics: ASCII tab blocks and
+    tabber commentary prose that's never actually sung.
+
+    Meant to run once, right after `trim_sheet_preamble`, on the whole
+    (already-trimmed) sheet — junk can sit between two real chord lines,
+    not just at the top. The tab-line filter always runs; the commentary
+    filter only runs when a transcript (*segments*) is available, since
+    without one there's nothing to check "never sung" against.
+    """
+    without_tabs = _drop_or_convert_tab_lines(raw_lines)
+    transcript = _flatten_words(segments)
+    if not transcript:
+        return without_tabs
+    return [line for line in without_tabs if not _is_commentary_line(line, transcript)]
+
+
+def trim_sheet_preamble(raw_lines: list[dict]) ->list[dict]:
     """Drop UG sheet preamble (metadata, playing notes) before the first chord.
 
     Ultimate Guitar sheets often open with prose that isn't song content —
