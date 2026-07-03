@@ -124,6 +124,9 @@ export function SongDetailPage() {
     console.error('Playback error:', message)
     toast.error('Playback failed — try reloading the page or switching track version.')
   }, [])
+  const showInstrumentalSkipToast = useCallback(() => {
+    toast.info('Skipped instrumental')
+  }, [])
   const {
     clear,
     loadStems,
@@ -135,7 +138,11 @@ export function SongDetailPage() {
     isLoading: isLoadingStemAudio,
     prepareForPlaybackGesture,
     primeForDelayedStart,
-  } = useAudioPlayer({ onPlaybackError: showPlaybackErrorPopup })
+    setInstrumentalGapSegments,
+  } = useAudioPlayer({
+    onPlaybackError: showPlaybackErrorPopup,
+    onInstrumentalSkip: showInstrumentalSkipToast,
+  })
   const countInEnabled = usePlayerPrefsStore((s) => s.countInEnabled)
   const { count: countInValue, isCounting, start: startCountIn, cancel: cancelCountIn } = useCountIn()
   const hasRecordedPlayRef = useRef(false)
@@ -571,6 +578,19 @@ export function SongDetailPage() {
   )
   const activeLyricsSource = activeLyricsOption?.source ?? null
 
+  // Unsynced community sheets only have estimated word timing, so treating
+  // gaps between them as real instrumental sections would be unreliable —
+  // keep skip-instrumentals inert there, same signal used for lyricsMode.
+  const hasSyncedLyrics = lyricsModeForActiveVersion(activeVersion) === 'highlight'
+  const instrumentalGapSegments = useMemo(
+    () => (hasSyncedLyrics ? activeLyrics : []),
+    [hasSyncedLyrics, activeLyrics],
+  )
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect
+  useEffect(() => {
+    setInstrumentalGapSegments(instrumentalGapSegments)
+  }, [instrumentalGapSegments, setInstrumentalGapSegments])
+
   const markThumbnailFailed = useSongMediaCacheStore((s) => s.markThumbnailFailed)
   const setThumbnailIfMissing = useSongMediaCacheStore((s) => s.setThumbnailIfMissing)
 
@@ -720,6 +740,7 @@ export function SongDetailPage() {
             sectionStrumPatterns={sectionStrumPatterns}
             userEmail={userEmail}
             chordsUpgrading={chordsUpgrading}
+            hasSyncedLyrics={hasSyncedLyrics}
             onTogglePlay={handleTogglePlay}
             onSeek={handleSeek}
             onToggleFavorite={handleToggleFavorite}

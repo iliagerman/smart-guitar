@@ -19,6 +19,7 @@ import { HighlightToggle } from '../../components/HighlightToggle'
 import { PlaybackSpeedSelector } from '../../components/PlaybackSpeedSelector'
 import { ScrollModeControl } from '../../components/ScrollModeControl'
 import { SheetSelector } from '../../components/SheetSelector'
+import { SkipInstrumentalsToggle } from '../../components/SkipInstrumentalsToggle'
 import { TrackSelector } from '../../components/TrackSelector'
 import { TransportControls } from '../../components/TransportControls'
 import type { LyricsSourceOption } from '../../lib/lyrics-sources'
@@ -52,6 +53,7 @@ interface PlayerControlsProps {
   sectionStrumPatterns: SectionStrumPattern[]
   userEmail: string | null
   chordsUpgrading: boolean
+  hasSyncedLyrics: boolean
   onTogglePlay: () => void
   onSeek: (time: number) => void
   onToggleFavorite: () => void
@@ -117,6 +119,7 @@ export function PlayerControls({
   sectionStrumPatterns,
   userEmail,
   chordsUpgrading,
+  hasSyncedLyrics,
   onTogglePlay,
   onSeek,
   onToggleFavorite,
@@ -186,6 +189,7 @@ export function PlayerControls({
             <ScrollModeControl />
             <CountInToggle />
             <ABLoopControl />
+            <SkipInstrumentalsToggle disabled={!hasSyncedLyrics} />
           </>
         }
       />

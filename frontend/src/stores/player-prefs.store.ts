@@ -72,6 +72,10 @@ export interface PlayerPrefsState {
   /** Play a 3-2-1 count-in (with audible ticks) before playback starts, giving
    *  the player time to get ready. */
   countInEnabled: boolean
+  /** Automatically seek past instrumental sections (solos, intros, interludes)
+   *  longer than 7 seconds during playback, so practice isn't interrupted by
+   *  sections with nothing to sing or strum along to. */
+  skipInstrumentals: boolean
   /** Per-song setting overrides. Key is songId. */
   songOverrides: Record<string, SongOverrides>
   setSongOverride: <K extends keyof SongOverrides>(songId: string, key: K, value: SongOverrides[K]) => void
@@ -99,6 +103,8 @@ export interface PlayerPrefsState {
   setRecordingBackingGain: (gain: number) => void
   setCountInEnabled: (enabled: boolean) => void
   toggleCountInEnabled: () => void
+  setSkipInstrumentals: (enabled: boolean) => void
+  toggleSkipInstrumentals: () => void
 }
 
 export const usePlayerPrefsStore = create<PlayerPrefsState>()(
@@ -120,6 +126,7 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       recordingGuitarGain: 3.0,
       recordingBackingGain: 0.5,
       countInEnabled: true,
+      skipInstrumentals: false,
       songOverrides: {},
       setSongOverride: (songId, key, value) =>
         set((state) => ({
@@ -179,6 +186,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       setRecordingBackingGain: (gain) => set({ recordingBackingGain: Math.max(0, Math.min(1, gain)) }),
       setCountInEnabled: (enabled) => set({ countInEnabled: !!enabled }),
       toggleCountInEnabled: () => set({ countInEnabled: !get().countInEnabled }),
+      setSkipInstrumentals: (enabled) => set({ skipInstrumentals: !!enabled }),
+      toggleSkipInstrumentals: () => set({ skipInstrumentals: !get().skipInstrumentals }),
     }),
     {
       name: 'player-prefs',
@@ -296,9 +305,14 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.showBassNotes = true
         }
 
+        // v17 → v18: skip-instrumentals toggle (default off).
+        if (state && state.skipInstrumentals === undefined) {
+          state.skipInstrumentals = false
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 17,
+      version: 18,
     }
   )
 )
