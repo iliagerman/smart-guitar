@@ -130,6 +130,40 @@ def _match_line(
     return best
 
 
+def trim_sheet_preamble(raw_lines: list[dict]) -> list[dict]:
+    """Drop UG sheet preamble (metadata, playing notes) before the first chord.
+
+    Ultimate Guitar sheets often open with prose that isn't song content —
+    "Song: ...", "Tabbed by: ...", YouTube links, "capo: 3rd fret" — as
+    chord-less lyric/empty lines before the first real chord line. Those
+    lines pollute both the displayed sheet and the whisper alignment gate.
+
+    A leading section header (e.g. "Intro") that directly labels the first
+    chord-bearing line (modulo blank lines between them) is kept, since it's
+    real song structure, not preamble. Returns *raw_lines* unchanged if no
+    line has a chord at all, so a sheet is never blanked out.
+    """
+    first_chord_idx = next(
+        (i for i, line in enumerate(raw_lines) if isinstance(line, dict) and line.get("chords")),
+        None,
+    )
+    if first_chord_idx is None:
+        return raw_lines
+
+    def _type(idx: int) -> str | None:
+        line = raw_lines[idx]
+        return line.get("type") if isinstance(line, dict) else None
+
+    start = first_chord_idx
+    i = first_chord_idx - 1
+    while i >= 0 and _type(i) == "empty":
+        i -= 1
+    if i >= 0 and _type(i) == "section":
+        start = i
+
+    return raw_lines[start:]
+
+
 def align_sheet_lines_to_segments(
     raw_lines: list[dict],
     segments: list[LyricsSegment],
@@ -154,6 +188,7 @@ def align_sheet_lines_with_words(
     segments: list[LyricsSegment],
     *,
     duration: float,
+    content_start: float | None = None,
 ) -> list[LineAlignment | None] | None:
     """Like :func:`align_sheet_lines_to_segments`, but also exposes the matched
     whisper words underlying each directly-matched line.
@@ -164,8 +199,12 @@ def align_sheet_lines_with_words(
     that were directly matched, and ``None`` for lines whose window was only
     interpolated between matched neighbors. Returns ``None`` entirely when
     alignment isn't trustworthy — same gate as the plain window function.
+
+    *content_start*, when given, anchors the leading instrumental-intro gap
+    (lines before the first matched anchor) to the song's actual detected
+    start instead of always assuming 0.0.
     """
-    return _align_lines(raw_lines, segments, duration=duration)
+    return _align_lines(raw_lines, segments, duration=duration, content_start=content_start)
 
 
 def _align_lines(
@@ -173,6 +212,7 @@ def _align_lines(
     segments: list[LyricsSegment],
     *,
     duration: float,
+    content_start: float | None = None,
 ) -> list[LineAlignment | None] | None:
     if not segments:
         return None
@@ -234,7 +274,9 @@ def _align_lines(
 
     first_anchor = anchor_positions[0]
     last_anchor = anchor_positions[-1]
-    _fill_gap(-1, first_anchor, 0.0, anchors[first_anchor][0])
+    first_anchor_start = anchors[first_anchor][0]
+    leading_start = 0.0 if content_start is None else min(content_start, first_anchor_start)
+    _fill_gap(-1, first_anchor, leading_start, first_anchor_start)
     for a_pos, b_pos in zip(anchor_positions, anchor_positions[1:]):
         _fill_gap(a_pos, b_pos, anchors[a_pos][1], anchors[b_pos][0])
     _fill_gap(last_anchor, total_timed, anchors[last_anchor][1], max(duration, anchors[last_anchor][1]))

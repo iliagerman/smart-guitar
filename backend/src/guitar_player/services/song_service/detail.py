@@ -36,7 +36,12 @@ from .helpers import (
     STEM_NAMES,
     parse_lyrics_payload,
 )
-from .sheet_alignment import TimedWord, align_sheet_lines_with_words, tokenize
+from .sheet_alignment import (
+    TimedWord,
+    align_sheet_lines_with_words,
+    tokenize,
+    trim_sheet_preamble,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -819,7 +824,11 @@ def _load_community_chord_options(
         anchor_times = build_anchor_times(autochord_chords, bar_starts)
 
         def _build_option(raw_lines: list[dict], name: str, capo: int, song_key: str) -> ChordOption:
-            aligned = align_sheet_lines_with_words(raw_lines, whisper_segments, duration=duration)
+            raw_lines = trim_sheet_preamble(raw_lines)
+            content_start = anchor_times[0] if anchor_times else None
+            aligned = align_sheet_lines_with_words(
+                raw_lines, whisper_segments, duration=duration, content_start=content_start,
+            )
             line_windows = [None if a is None else (a.start, a.end) for a in aligned] if aligned else None
             line_words = [None if a is None else a.words for a in aligned] if aligned else None
             option = _static_lines_to_chord_option(

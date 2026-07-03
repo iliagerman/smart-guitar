@@ -8,6 +8,8 @@ split across the line window.
 
 from __future__ import annotations
 
+import pytest
+
 from guitar_player.schemas.song import LyricsSegment, LyricsWord
 from guitar_player.services.song_service.sheet_alignment import (
     align_sheet_lines_to_segments,
@@ -111,3 +113,46 @@ def test_words_and_plain_windows_agree_on_matched_lines() -> None:
         else:
             assert line_alignment is not None
             assert (line_alignment.start, line_alignment.end) == window
+
+
+def test_leading_instrumental_gap_starts_at_content_start() -> None:
+    """A leading instrumental intro line is distributed starting at
+    `content_start` instead of always assuming the song begins at 0.0."""
+    lines = [
+        _lyric("some intro strum"),  # unmatched -> interpolated leading gap
+        _lyric("When I find myself in times of trouble"),
+    ]
+    aligned = align_sheet_lines_with_words(lines, SEGMENTS, duration=240.0, content_start=6.0)
+    assert aligned is not None
+    intro = aligned[0]
+    assert intro is not None
+    assert intro.start == pytest.approx(6.0)
+    assert intro.end <= 10.0
+
+
+def test_content_start_none_reproduces_old_zero_behavior() -> None:
+    """Omitting `content_start` keeps the previous 0.0-anchored behavior."""
+    lines = [
+        _lyric("some intro strum"),
+        _lyric("When I find myself in times of trouble"),
+    ]
+    aligned = align_sheet_lines_with_words(lines, SEGMENTS, duration=240.0)
+    assert aligned is not None
+    intro = aligned[0]
+    assert intro is not None
+    assert intro.start == pytest.approx(0.0)
+
+
+def test_content_start_past_first_anchor_clamps_instead_of_going_backwards() -> None:
+    """A `content_start` later than the first matched anchor must not produce
+    a negative or backwards span — it clamps to the first anchor's start."""
+    lines = [
+        _lyric("some intro strum"),
+        _lyric("When I find myself in times of trouble"),
+    ]
+    aligned = align_sheet_lines_with_words(lines, SEGMENTS, duration=240.0, content_start=50.0)
+    assert aligned is not None
+    intro = aligned[0]
+    assert intro is not None
+    assert intro.start <= 10.0
+    assert intro.start <= intro.end
