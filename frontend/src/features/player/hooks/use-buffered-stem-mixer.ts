@@ -45,7 +45,12 @@ interface WebkitAudioWindow extends Window {
   webkitAudioContext?: typeof AudioContext
 }
 
-const MIN_TIME_DELTA = 0.016
+// Minimum song-time advance before pushing a new currentTime to the store.
+// At 1x this reports ~20Hz instead of every rAF frame (~60Hz), cutting the
+// per-tick work of every playback subscriber to a third. Chord/word highlighting
+// and the progress bar are imperceptibly affected at 50ms resolution, but a
+// phone runs much cooler.
+const MIN_TIME_DELTA = 0.05
 
 function formatMixerError(error: unknown): string {
   if (error instanceof Error) return error.message

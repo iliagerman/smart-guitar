@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Mp3Encoder } from '@breezystack/lamejs'
 import { downloadBlob } from '../lib/download-blob'
+import { getRecordingAudioConstraints } from '../lib/recording-format'
 
 /** Pre-resolved backing track tap from the stem mixer. */
 interface BackingTrackTap {
@@ -130,11 +131,7 @@ export function useRecorder(options: RecorderOptions = {}): RecorderState {
   const startRecording = useCallback(async (filename: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
+        audio: getRecordingAudioConstraints(isDigitalMix),
       })
 
       streamRef.current = stream

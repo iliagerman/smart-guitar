@@ -28,9 +28,114 @@ export function TransportControls({
   showButtonsOnMobile = false,
 }: TransportControlsProps) {
   const [showSecondary, setShowSecondary] = useState(false)
-  // Individual selectors: subscribing to the whole store would re-render this
-  // component on unrelated store changes (sheet mode, stem selection, ...).
+  // Only isPlaying drives this component (the play/pause icon). The seek bar and
+  // clock — the only parts that change on every playback tick — live in
+  // <PlaybackProgress>, so the transport buttons don't reconcile ~20x/sec during
+  // playback. Skip handlers read the latest time/duration imperatively at click.
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
+
+  return (
+    <div className="flex flex-col gap-2" data-testid="transport-controls">
+      <PlaybackProgress onSeek={onSeek} isPlaybackDisabled={isPlaybackDisabled} />
+      {/* Primary controls row */}
+      {primaryControls && (
+        <div className="grid w-full auto-cols-fr grid-flow-col gap-2 px-0.5 pb-2 pt-1">
+          {primaryControls}
+        </div>
+      )}
+
+      {/* Pinned controls row — always visible (mobile + desktop) */}
+      {pinnedControls && (
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          {pinnedControls}
+        </div>
+      )}
+
+      {/* Secondary controls row */}
+      {secondaryControls && (
+        <>
+          <button
+            type="button"
+            className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-smoke-400 transition-colors hover:bg-white/10 hover:text-smoke-200 sm:hidden"
+            onClick={() => setShowSecondary(!showSecondary)}
+            aria-label="Toggle secondary controls"
+            data-testid="transport-toggle-secondary"
+          >
+            <Settings2 size={20} />
+            <ChevronDown size={16} className={cn('transition-transform', showSecondary && 'rotate-180')} />
+          </button>
+          <div
+            className={cn(
+              'mt-1 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-2',
+              'opacity-80 transition-opacity hover:opacity-100',
+              showSecondary ? 'flex' : 'hidden sm:flex',
+            )}
+            data-tour="secondary-controls"
+          >
+            {secondaryControls}
+          </div>
+        </>
+      )}
+
+      <div className={showButtonsOnMobile ? 'flex items-center justify-center gap-6' : 'hidden sm:flex items-center justify-center gap-6'}>
+        <button
+          type="button"
+          onClick={() => onSeek(Math.max(0, usePlaybackStore.getState().currentTime - 10))}
+          className={cn(
+            'text-smoke-400 transition-colors',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
+          )}
+          aria-label="Back 10 seconds"
+          data-testid="player-skip-back"
+          disabled={isPlaybackDisabled}
+        >
+          <SkipBack size={24} />
+        </button>
+        <button
+          type="button"
+          onClick={onTogglePlay}
+          className={cn(
+            'flex h-14 w-14 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 shadow-[0_12px_32px_rgba(250,204,21,0.28)] transition-colors',
+            isPlaying && 'animate-flame-pulse',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-flame-500',
+          )}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          data-testid="player-play-button"
+          disabled={isPlaybackDisabled}
+        >
+          {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const { currentTime, duration } = usePlaybackStore.getState()
+            onSeek(Math.min(duration, currentTime + 10))
+          }}
+          className={cn(
+            'text-smoke-400 transition-colors',
+            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
+          )}
+          aria-label="Forward 10 seconds"
+          data-testid="player-skip-forward"
+          disabled={isPlaybackDisabled}
+        >
+          <SkipForward size={24} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface PlaybackProgressProps {
+  onSeek: (time: number) => void
+  isPlaybackDisabled: boolean
+}
+
+/**
+ * Seek bar + clock, isolated so the high-frequency currentTime subscription only
+ * re-renders this leaf on each playback tick — not the whole transport bar.
+ */
+function PlaybackProgress({ onSeek, isPlaybackDisabled }: PlaybackProgressProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const duration = usePlaybackStore((s) => s.duration)
   const loopStart = usePlaybackStore((s) => s.loopStart)
@@ -38,7 +143,7 @@ export function TransportControls({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="flex flex-col gap-2" data-testid="transport-controls">
+    <>
       {/* Custom styled seek bar (gradient fill + hover thumb); a native <input type="range">
           can't reproduce this, so role="slider" with keyboard handling is intentional. */}
       {/* oxlint-disable-next-line react-doctor/prefer-tag-over-role */}
@@ -112,88 +217,6 @@ export function TransportControls({
         <span>{formatDuration(currentTime)}<span className="text-smoke-600">.{String(Math.floor((currentTime % 1) * 1000)).padStart(3, '0')}</span></span>
         <span data-testid="transport-duration">{formatDuration(duration)}</span>
       </div>
-      {/* Primary controls row */}
-      {primaryControls && (
-        <div className="grid w-full auto-cols-fr grid-flow-col gap-2 px-0.5 pb-2 pt-1">
-          {primaryControls}
-        </div>
-      )}
-
-      {/* Pinned controls row — always visible (mobile + desktop) */}
-      {pinnedControls && (
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-          {pinnedControls}
-        </div>
-      )}
-
-      {/* Secondary controls row */}
-      {secondaryControls && (
-        <>
-          <button
-            type="button"
-            className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-smoke-400 transition-colors hover:bg-white/10 hover:text-smoke-200 sm:hidden"
-            onClick={() => setShowSecondary(!showSecondary)}
-            aria-label="Toggle secondary controls"
-            data-testid="transport-toggle-secondary"
-          >
-            <Settings2 size={20} />
-            <ChevronDown size={16} className={cn('transition-transform', showSecondary && 'rotate-180')} />
-          </button>
-          <div
-            className={cn(
-              'mt-1 flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-2',
-              'opacity-80 transition-opacity hover:opacity-100',
-              showSecondary ? 'flex' : 'hidden sm:flex',
-            )}
-            data-tour="secondary-controls"
-          >
-            {secondaryControls}
-          </div>
-        </>
-      )}
-
-      <div className={showButtonsOnMobile ? 'flex items-center justify-center gap-6' : 'hidden sm:flex items-center justify-center gap-6'}>
-        <button
-          type="button"
-          onClick={() => onSeek(Math.max(0, currentTime - 10))}
-          className={cn(
-            'text-smoke-400 transition-colors',
-            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
-          )}
-          aria-label="Back 10 seconds"
-          data-testid="player-skip-back"
-          disabled={isPlaybackDisabled}
-        >
-          <SkipBack size={24} />
-        </button>
-        <button
-          type="button"
-          onClick={onTogglePlay}
-          className={cn(
-            'flex h-14 w-14 items-center justify-center rounded-full bg-flame-400 text-charcoal-950 shadow-[0_12px_32px_rgba(250,204,21,0.28)] transition-colors',
-            isPlaying && 'animate-flame-pulse',
-            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-flame-500',
-          )}
-          aria-label={isPlaying ? 'Pause' : 'Play'}
-          data-testid="player-play-button"
-          disabled={isPlaybackDisabled}
-        >
-          {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => onSeek(Math.min(duration, currentTime + 10))}
-          className={cn(
-            'text-smoke-400 transition-colors',
-            isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
-          )}
-          aria-label="Forward 10 seconds"
-          data-testid="player-skip-forward"
-          disabled={isPlaybackDisabled}
-        >
-          <SkipForward size={24} />
-        </button>
-      </div>
-    </div>
+    </>
   )
 }

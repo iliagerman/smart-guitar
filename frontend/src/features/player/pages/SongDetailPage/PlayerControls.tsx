@@ -25,8 +25,8 @@ import { TransportControls } from '../../components/TransportControls'
 import type { LyricsSourceOption } from '../../lib/lyrics-sources'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
 
-// Recording pulls in ffmpeg + mp3-encoder bundles; load them only when the
-// controls actually mount instead of shipping them in the core player chunk.
+// Recording pulls in the mp3-encoder bundle; load it only when the controls
+// actually mount instead of shipping it in the core player chunk.
 const RecordButton = lazy(() =>
   import('../../components/RecordButton').then((m) => ({ default: m.RecordButton })),
 )

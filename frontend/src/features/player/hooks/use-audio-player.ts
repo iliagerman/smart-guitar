@@ -70,7 +70,8 @@ async function playAudio(
   }
 }
 
-const MIN_TIME_DELTA = 0.016
+// Throttle currentTime updates to ~20Hz (see use-buffered-stem-mixer for rationale).
+const MIN_TIME_DELTA = 0.05
 
 function setAudioCurrentTime(audio: HTMLAudioElement, time: number): number {
   audio.currentTime = clampTime(time, audio.duration || 0)
@@ -369,6 +370,10 @@ export function useAudioPlayer({
   // takes precedence — a user looping a solo on purpose must not have it
   // skipped out from under them.
   useEffect(() => {
+    // Both A/B-loop wrap and instrumental skip only act during playback, so the
+    // 60fps loop is pure waste (and a phone heater) while paused. Restart it
+    // when playback resumes.
+    if (!isPlaying) return
     let frameId: number
     const tick = () => {
       const playback = usePlaybackStore.getState()
@@ -420,7 +425,7 @@ export function useAudioPlayer({
     }
     frameId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frameId)
-  }, [performSeek, skipInstrumentals, instrumentalGaps, onInstrumentalSkip])
+  }, [isPlaying, performSeek, skipInstrumentals, instrumentalGaps, onInstrumentalSkip])
 
   const pauseCurrent = useCallback(() => {
     if (modeRef.current === 'multi') {

@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { toBlobURL, fetchFile } from '@ffmpeg/util'
 import { downloadBlob } from '../lib/download-blob'
+import { getRecordingAudioConstraints, fileExtensionForMimeType } from '../lib/recording-format'
 
 interface VideoRecorderState {
   isRecording: boolean
@@ -27,31 +26,6 @@ function pickMimeType(): string {
     if (MediaRecorder.isTypeSupported(mime)) return mime
   }
   return ''
-}
-
-let ffmpegInstance: FFmpeg | null = null
-
-async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpegInstance && ffmpegInstance.loaded) return ffmpegInstance
-  const ffmpeg = new FFmpeg()
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  })
-  ffmpegInstance = ffmpeg
-  return ffmpeg
-}
-
-async function convertToMp4(webmBlob: Blob): Promise<Blob> {
-  const [ffmpeg, inputData] = await Promise.all([getFFmpeg(), fetchFile(webmBlob)])
-  await ffmpeg.writeFile('input.webm', inputData)
-  await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', 'output.mp4'])
-  const outputData = await ffmpeg.readFile('output.mp4')
-  await ffmpeg.deleteFile('input.webm')
-  await ffmpeg.deleteFile('output.mp4')
-  const buffer = (outputData as Uint8Array).buffer as ArrayBuffer
-  return new Blob([buffer], { type: 'video/mp4' })
 }
 
 export function useVideoRecorder(): VideoRecorderState {
@@ -104,11 +78,9 @@ export function useVideoRecorder(): VideoRecorderState {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
+        // Video is always speaker mode (no headphone digital mix), so cancel
+        // the speaker leak and lift the quiet guitar.
+        audio: getRecordingAudioConstraints(false),
       })
 
       streamRef.current = stream
@@ -159,33 +131,25 @@ export function useVideoRecorder(): VideoRecorderState {
       return
     }
 
-    // MediaRecorder.stop() is async — the final data arrives in onstop
-    recorder.onstop = async () => {
+    // MediaRecorder.stop() is async — the final data arrives in onstop.
+    recorder.onstop = () => {
       const chunks = [...chunksRef.current]
       chunksRef.current = []
 
       if (chunks.length === 0) return
 
+      // Keep the browser's native container (mp4 on iOS Safari, webm on
+      // Android Chrome). On-device transcoding to mp4 via ffmpeg.wasm pinned a
+      // CPU core with single-threaded x264 and cooked the phone, so we ship
+      // whatever MediaRecorder produced.
       const type = mime || 'video/webm'
-      const rawBlob = new Blob(chunks, { type })
+      const blob = new Blob(chunks, { type })
+      const extension = fileExtensionForMimeType(type)
 
-      // Convert to MP4 if the recording is WebM
-      let finalBlob: Blob
-      if (type.startsWith('video/mp4')) {
-        finalBlob = rawBlob
-      } else {
-        try {
-          finalBlob = await convertToMp4(rawBlob)
-        } catch {
-          // Fallback to raw blob if conversion fails
-          finalBlob = rawBlob
-        }
-      }
-
-      setRecordedBlob(finalBlob)
+      setRecordedBlob(blob)
 
       if (autoDownload) {
-        setTimeout(() => downloadBlob(finalBlob, `${filename}.mp4`), 0)
+        setTimeout(() => downloadBlob(blob, `${filename}.${extension}`), 0)
       }
     }
 
@@ -195,7 +159,8 @@ export function useVideoRecorder(): VideoRecorderState {
 
   const downloadRecording = useCallback(() => {
     if (!recordedBlob) return
-    downloadBlob(recordedBlob, `${filenameRef.current}.mp4`)
+    const extension = fileExtensionForMimeType(recordedBlob.type)
+    downloadBlob(recordedBlob, `${filenameRef.current}.${extension}`)
     setRecordedBlob(null)
   }, [recordedBlob])
 

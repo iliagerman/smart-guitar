@@ -4,6 +4,7 @@ import { Circle, Mic, Square, Video } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRecorder } from '../hooks/use-recorder'
 import { useVideoRecorder } from '../hooks/use-video-recorder'
+import { fileExtensionForMimeType } from '../lib/recording-format'
 import { CameraPreview } from './CameraPreview'
 import { ShareDialog } from './ShareDialog'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
@@ -163,7 +164,8 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
     }
   }
 
-  const filename = buildFilename(artist, songTitle) + (useVideo ? '.mp4' : '.mp3')
+  const videoExtension = recordedBlob ? fileExtensionForMimeType(recordedBlob.type) : 'mp4'
+  const filename = buildFilename(artist, songTitle) + (useVideo ? `.${videoExtension}` : '.mp3')
 
   return (
     <div data-tour="record" className="min-w-0">
