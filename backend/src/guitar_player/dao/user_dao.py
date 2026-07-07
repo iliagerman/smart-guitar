@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
@@ -26,8 +27,20 @@ class UserDAO(BaseDAO[User, UserRecord]):
         user = await self.get_by_cognito_sub(sub)
         if user:
             return user
+
         trial_ends = datetime.now(timezone.utc) + timedelta(days=TRIAL_DURATION_DAYS)
-        return await self.create(cognito_sub=sub, email=email, trial_ends_at=trial_ends)
+        try:
+            async with self._session.begin_nested():
+                obj = User(cognito_sub=sub, email=email, trial_ends_at=trial_ends)
+                self._session.add(obj)
+                await self._session.flush()
+                await self._session.refresh(obj)
+                return self._to_record(obj)
+        except IntegrityError:
+            user = await self.get_by_cognito_sub(sub)
+            if user:
+                return user
+            raise
 
     async def get_by_email(self, email: str) -> UserRecord | None:
         stmt = select(User).where(User.email == email)
