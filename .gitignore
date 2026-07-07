@@ -23,3 +23,5 @@ local_bucket copy
 *.db
 video-project-**
 *.docx
+# Resumable progress state for `just refresh-prod-songbase` (transient)
+regen_refresh.jsonl

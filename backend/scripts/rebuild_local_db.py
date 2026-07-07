@@ -150,24 +150,28 @@ async def rebuild(yes: bool) -> None:
                 logger.info(progress)
         await session.commit()
 
-    # Durations via ffprobe (concurrent, bounded).
+    # Durations via ffprobe (concurrent, bounded), then one batched DB write —
+    # per-task sessions exhaust the connection pool at this song count.
     sem = asyncio.Semaphore(8)
 
-    async def fill_duration(song_id, song_name: str) -> None:
+    async def probe(song_id, song_name: str) -> tuple[int, float] | None:
         audio = base_path / song_name / "audio.mp3"
         if not audio.is_file():
-            return
+            return None
         async with sem:
             duration = await asyncio.to_thread(probe_duration, audio)
-        if duration:
-            async with factory() as s:
-                await SongDAO(s).update_by_id(song_id, duration_seconds=duration)
-                await s.commit()
+        return (song_id, duration) if duration else None
 
     async with factory() as session:
         songs = await SongDAO(session).get_all_songs()
-    await asyncio.gather(*(fill_duration(s.id, s.song_name) for s in songs if s.song_name))
-    logger.info("Durations filled for %d songs", len(songs))
+    results = await asyncio.gather(*(probe(s.id, s.song_name) for s in songs if s.song_name))
+    durations = [r for r in results if r]
+    async with factory() as session:
+        dao = SongDAO(session)
+        for song_id, duration in durations:
+            await dao.update_by_id(song_id, duration_seconds=duration)
+        await session.commit()
+    logger.info("Durations filled for %d/%d songs", len(durations), len(songs))
 
     await close_db()
     logger.info("Rebuild complete: %d songs cataloged", created)

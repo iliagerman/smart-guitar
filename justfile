@@ -532,6 +532,24 @@ test-auth:
 backfill-genres:
     cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/backfill_genres.py
 
+# Download the prod song base (audio, stems, JSON artifacts) from
+# s3://smart-guitar-audio-prod into local_bucket. Incremental — only new or
+# changed objects are downloaded. Pass mirror=true to also delete local songs
+# that no longer exist in prod (exact mirror; removes local-only extras).
+#
+#   just fetch-prod-songbase          # additive download
+#   just fetch-prod-songbase true     # exact mirror (deletes local extras)
+fetch-prod-songbase mirror="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_dir}}"
+    export AWS_PROFILE="${AWS_PROFILE:-smart-guitar}"
+    BUCKET="smart-guitar-audio-prod"
+    DELETE=""
+    if [[ "{{mirror}}" == "true" ]]; then DELETE="--delete"; fi
+    echo "── Fetching s3://${BUCKET} → local_bucket ${DELETE:+(mirror: deleting local extras)}"
+    aws s3 sync "s3://${BUCKET}" local_bucket ${DELETE}
+
 # Wipe the local DB and rebuild the song catalog from local_bucket
 # (discovers both storage layouts, resolves metadata, fills artifact keys
 # and durations). Pass "--yes" to skip the confirmation prompt.
@@ -589,7 +607,7 @@ sync-artifacts-to-prod apply="false":
 
     echo "── Deleting legacy lyrics_corrected.json objects from prod"
     aws s3api list-objects-v2 --bucket "${BUCKET}" --query "Contents[?ends_with(Key, 'lyrics_corrected.json')].Key" --output text \
-        | tr '\t' '\n' | grep -v '^None$' | while read -r key; do
+        | tr '\t' '\n' | { grep -v '^None$' || true; } | while read -r key; do
         [[ -z "$key" ]] && continue
         if [[ "{{apply}}" == "true" ]]; then
             aws s3 rm "s3://${BUCKET}/${key}"
@@ -604,6 +622,58 @@ sync-artifacts-to-prod apply="false":
             --query 'Invalidation.{id:Id,status:Status}' --output table
     else
         echo "(dryrun) would invalidate CloudFront ${MEDIA_CF_DISTRIBUTION} paths /*"
+    fi
+
+# Full prod song-base refresh cycle:
+#   1. fetch-prod-songbase    — download new/changed songs from prod
+#   2. rebuild-local-db       — rebuild the local catalog from local_bucket
+#   3. bulk-regenerate        — reprocess lyrics + chords for every song
+#   4. validate-artifacts     — structural gate
+#   5. sync-artifacts-to-prod — replace prod JSON artifacts + invalidate CDN
+#
+# Requires the chords (:8001, `just run-chords`) and lyrics (:8003,
+# `just run-lyrics`) services to be running — checked up front.
+#
+# Resumable: progress lives in regen_refresh.jsonl (keyed on DB song ids). If
+# that file exists, fetch + DB rebuild are SKIPPED and regeneration resumes —
+# rebuilding mid-cycle would reassign ids and corrupt the state. Delete
+# regen_refresh.jsonl to start a fresh cycle.
+#
+#   just refresh-prod-songbase           # full cycle, ends with a DRY-RUN prod sync
+#   just refresh-prod-songbase true      # full cycle + actually replace prod artifacts
+#   just refresh-prod-songbase false "--limit 5"   # smoke test on 5 songs
+refresh-prod-songbase apply="false" regen_args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_dir}}"
+    STATE_FILE="regen_refresh.jsonl"
+
+    for svc in "chords:8001" "lyrics:8003"; do
+        name="${svc%%:*}"; port="${svc##*:}"
+        if ! curl -sf "http://localhost:${port}/health" >/dev/null; then
+            echo "✗ ${name} service not responding on :${port} — start it with 'just run-${name}'" >&2
+            exit 1
+        fi
+    done
+
+    if [[ -s "${STATE_FILE}" ]]; then
+        echo "── ${STATE_FILE} exists — resuming regeneration (skipping fetch + DB rebuild)"
+        echo "   (delete ${STATE_FILE} to start a fresh cycle)"
+    else
+        just fetch-prod-songbase
+        just rebuild-local-db --yes
+    fi
+
+    # --concurrency 3 pipelines chords (CPU) against lyrics (MLX GPU); benched
+    # 2026-07-04 on M1 Max: c1=0.65, c2=0.88, c3=1.06, c4=1.19 songs/min.
+    # Override by passing --concurrency N in regen_args (last flag wins).
+    just bulk-regenerate "--state-file ../${STATE_FILE} --concurrency 3 {{regen_args}}"
+    just sync-artifacts-to-prod {{apply}}
+
+    if [[ "{{apply}}" != "true" ]]; then
+        echo ""
+        echo "Dry run — prod is untouched. To replace the prod artifacts run:"
+        echo "  just sync-artifacts-to-prod true"
     fi
 
 # Cleanup local_bucket/ by removing original-audio files whose filenames suggest
