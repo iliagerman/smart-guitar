@@ -20,9 +20,13 @@ export function useAutoScroll(
   const lastFrameRef = useRef(0)
   const pauseUntilRef = useRef(0)
   const programmaticRef = useRef(false)
+  const isPlaying = usePlaybackStore((s) => s.isPlaying)
 
   useEffect(() => {
-    if (!enabled) return
+    // Gate the rAF loop on playback: auto-scroll only advances while playing,
+    // so keeping a 60fps loop alive while paused just spins the CPU (and heats
+    // the phone) for nothing. The effect re-runs when playback flips.
+    if (!enabled || !isPlaying) return
 
     const el = scrollRef.current
     if (!el) return
@@ -43,12 +47,11 @@ export function useAutoScroll(
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('scroll', onScroll, { passive: true })
 
-    // --- animation loop ---
+    // --- animation loop (only alive while playing; see gate above) ---
     const tick = (now: number) => {
-      const { isPlaying } = usePlaybackStore.getState()
       const { autoScrollSpeed } = usePlayerPrefsStore.getState()
 
-      if (isPlaying && now > pauseUntilRef.current) {
+      if (now > pauseUntilRef.current) {
         const dt =
           lastFrameRef.current > 0
             ? (now - lastFrameRef.current) / 1_000
@@ -73,5 +76,5 @@ export function useAutoScroll(
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [enabled, scrollRef])
+  }, [enabled, isPlaying, scrollRef])
 }
