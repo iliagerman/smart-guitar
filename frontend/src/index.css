@@ -193,6 +193,26 @@ body {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+
+  /* A full-viewport filter: blur() over a high-DPR artwork layer is one of the
+     most GPU-expensive effects there is, and the song page renders TWO of them
+     (blur-3xl + blur-2xl, scale-125) the entire time it is open — playing or
+     not. Every filter-blur in the app (these two plus the shared page
+     backdrops) is a purely decorative blurred cover image sitting under a dark
+     gradient overlay that already hides almost all of it, so on touch devices
+     we drop the blur; the faint image tint stays, the GPU stops grinding. This
+     is the dominant idle heat source. (backdrop-blur is excluded — handled
+     above.) */
+  [class*="blur-"]:not([class*="backdrop-blur"]) {
+    filter: none !important;
+  }
+
+  /* The per-beat screen glow paints a full-viewport blurred box-shadow layer
+     ~twice a second for the length of every song. Purely decorative — removed
+     on touch devices so nothing full-screen repaints during playback. */
+  .animate-beat-screen-glow {
+    display: none !important;
+  }
 }
 
 .chord-sheet-line-active {
