@@ -78,9 +78,9 @@ export function useVideoRecorder(): VideoRecorderState {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
-        // Video is always speaker mode (no headphone digital mix), so cancel
-        // the speaker leak and lift the quiet guitar.
-        audio: getRecordingAudioConstraints(false),
+        // Raw mic so the backing track playing on the speaker is captured with
+        // the guitar — echo cancellation would erase it and force voice mode.
+        audio: getRecordingAudioConstraints(),
       })
 
       streamRef.current = stream

@@ -131,7 +131,7 @@ export function useRecorder(options: RecorderOptions = {}): RecorderState {
   const startRecording = useCallback(async (filename: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: getRecordingAudioConstraints(isDigitalMix),
+        audio: getRecordingAudioConstraints(),
       })
 
       streamRef.current = stream

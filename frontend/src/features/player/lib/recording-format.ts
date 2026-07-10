@@ -1,18 +1,20 @@
 /**
- * Microphone capture constraints, chosen by whether the backing track is mixed
- * in digitally (headphones) or played out the speaker (mic-only).
+ * Microphone capture constraints for recording — always raw, all browser
+ * processing off.
  *
- * In speaker mode the backing track leaks into the mic and drowns the guitar.
- * Echo cancellation subtracts the speaker output and auto gain lifts the quiet
- * acoustic guitar, so the recording captures the player rather than the backing
- * track. In digital-mix mode there is no leak, so everything stays raw for the
- * cleanest tone.
+ * Echo cancellation and auto gain force mobile mics (iOS Safari especially)
+ * into voice-call mode: thin mono downsampling, and they actively cancel the
+ * backing track out of the mic. In speaker/mic-only and video modes the mic is
+ * the only path the backing track reaches the recording, so cancelling it
+ * erased the backing entirely. Raw capture is the working behavior for every
+ * mode — the mic hears the full performance, and headphone/digital-mix mode
+ * gets a clean guitar tone with no speaker leak to begin with.
  */
-export function getRecordingAudioConstraints(isDigitalMix: boolean): MediaTrackConstraints {
+export function getRecordingAudioConstraints(): MediaTrackConstraints {
   return {
-    echoCancellation: !isDigitalMix,
+    echoCancellation: false,
     noiseSuppression: false,
-    autoGainControl: !isDigitalMix,
+    autoGainControl: false,
   }
 }
 

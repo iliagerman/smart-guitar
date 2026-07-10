@@ -2,25 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { getRecordingAudioConstraints, fileExtensionForMimeType } from './recording-format'
 
 describe('getRecordingAudioConstraints', () => {
-  it('captures raw, unprocessed audio in digital-mix (headphones) mode', () => {
-    // With headphones there is no speaker leak to cancel and no quiet-guitar
-    // problem to compensate for, so all browser processing stays off for the
-    // cleanest guitar tone.
-    expect(getRecordingAudioConstraints(true)).toEqual({
+  it('captures raw, unprocessed mic audio for every recording mode', () => {
+    // Echo cancellation / auto gain force mobile mics into voice-call mode:
+    // thin mono downsampling, and — critically — they cancel the backing track
+    // out of the mic. In speaker/mic-only and video modes the mic is the ONLY
+    // path the backing track reaches the recording, so cancelling it erased the
+    // backing entirely and the result sounded thin and guitar-only. Raw capture
+    // is the working behavior for all modes; the mic hears the full performance.
+    expect(getRecordingAudioConstraints()).toEqual({
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
-    })
-  })
-
-  it('enables echo cancellation and auto gain in speaker (mic-only) mode', () => {
-    // Without headphones the backing track plays out the speaker and leaks into
-    // the mic. Echo cancellation subtracts that leak; auto gain lifts the quiet
-    // acoustic guitar. Noise suppression stays off — it mangles sustained notes.
-    expect(getRecordingAudioConstraints(false)).toEqual({
-      echoCancellation: true,
-      noiseSuppression: false,
-      autoGainControl: true,
     })
   })
 })
