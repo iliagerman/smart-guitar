@@ -18,7 +18,28 @@
 </head>
 
 <body class="bg-charcoal-950 text-smoke-100 font-sans antialiased">
-  <div id="root"></div>
+  <div id="root">
+    <!-- Boot splash: painted before the JS bundle and CSS load, then replaced
+         when React mounts into #root. Inline styles because Tailwind hasn't
+         loaded yet. The build stamp (__BUILD_STAMP__) is injected at build time so
+         you can confirm which deployment is actually running — a stale PWA cache
+         shows an old stamp. -->
+    <div id="boot-splash"
+      style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0a0a0a;color:#e5e5e5;font-family:system-ui,-apple-system,sans-serif">
+      <div style="font-size:20px;font-weight:700;letter-spacing:0.02em">Smart Guitar</div>
+      <div
+        style="width:22px;height:22px;border:2px solid #3f3f46;border-top-color:#facc15;border-radius:9999px;animation:boot-spin 0.8s linear infinite">
+      </div>
+      <div style="font-size:11px;color:#71717a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">__BUILD_STAMP__</div>
+    </div>
+  </div>
+  <style>
+    @keyframes boot-spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+  </style>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

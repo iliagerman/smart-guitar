@@ -3,12 +3,40 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
 import path from 'path'
+import { formatBuildStamp } from './src/lib/build-stamp'
+
+/**
+ * Build the version stamp injected into the boot splash. The version number is
+ * the monorepo commit count, so it auto-increments on every commit to any
+ * component (not just the UI); the build time changes on every build even when
+ * the commit is unchanged. git is an external command, so fall back cleanly if
+ * it is unavailable rather than breaking the build.
+ */
+function readBuildStamp(): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const now = new Date()
+  const buildTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+  try {
+    const build = Number(execSync('git rev-list --count HEAD').toString().trim())
+    const commit = execSync('git rev-parse --short HEAD').toString().trim()
+    return formatBuildStamp(build, commit, buildTime)
+  } catch {
+    return formatBuildStamp(0, 'dev', buildTime)
+  }
+}
 
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'inject-build-stamp',
+      transformIndexHtml(html) {
+        return html.replaceAll('__BUILD_STAMP__', readBuildStamp())
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon-32.png', 'apple-touch-icon.png'],
