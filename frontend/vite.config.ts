@@ -27,14 +27,22 @@ function readBuildStamp(): string {
   }
 }
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  // Compute once so the splash (injected into HTML) and the in-app badge
+  // (compiled into JS via define) always show the exact same stamp.
+  const buildStamp = readBuildStamp()
+
+  return {
+  define: {
+    __APP_VERSION__: JSON.stringify(buildStamp),
+  },
   plugins: [
     react(),
     tailwindcss(),
     {
       name: 'inject-build-stamp',
       transformIndexHtml(html) {
-        return html.replaceAll('__BUILD_STAMP__', readBuildStamp())
+        return html.replaceAll('__BUILD_STAMP__', buildStamp)
       },
     },
     VitePWA({
@@ -122,4 +130,5 @@ export default defineConfig(({ mode }) => ({
     environment: 'node',
     include: ['src/**/*.test.ts'],
   },
-}))
+  }
+})
