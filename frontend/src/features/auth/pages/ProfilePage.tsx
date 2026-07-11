@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/router/routes'
 import { LogOut, User } from 'lucide-react'
 import { SubscriptionSection } from '@/features/subscription/components/SubscriptionSection'
+import { VersionBadge } from '@/components/shared/VersionBadge'
 import { RecordingSettingsSection } from '../components/RecordingSettingsSection'
 
 export function ProfilePage() {
@@ -51,6 +52,8 @@ export function ProfilePage() {
         <LogOut size={18} />
         Sign out
       </button>
+
+      <VersionBadge />
     </div>
   )
 }

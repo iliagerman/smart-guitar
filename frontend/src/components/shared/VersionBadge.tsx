@@ -1,20 +1,19 @@
 /**
- * Tiny, always-visible build stamp so you can confirm at a glance which
- * deployment is running — without waiting for the boot splash to flash by. The
- * value is injected at build time (see vite.config.ts) and matches the splash
- * stamp exactly. Non-interactive and low-contrast so it stays out of the way.
+ * Inline build stamp for the Settings screen so you can confirm which
+ * deployment is running without waiting for the boot splash. The value is
+ * injected at build time (see vite.config.ts) and matches the splash stamp
+ * exactly.
  *
  * @example
  * <VersionBadge />
  */
 export function VersionBadge() {
   return (
-    <div
-      className="pointer-events-none fixed bottom-1 left-1 z-[100] select-none font-mono text-[10px] leading-none text-smoke-100/30"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    <p
+      className="mt-6 text-center font-mono text-[11px] text-smoke-500"
       data-testid="app-version-badge"
     >
       {__APP_VERSION__}
-    </div>
+    </p>
   )
 }

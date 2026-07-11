@@ -8,7 +8,6 @@ import { InstallPrompt } from './components/shared/InstallPrompt'
 import { JobWatcher } from './components/shared/JobWatcher'
 import { MobileViewportLock } from './components/layout/MobileViewportLock'
 import { VisualViewportVars } from './components/layout/VisualViewportVars'
-import { VersionBadge } from './components/shared/VersionBadge'
 
 export function App() {
   return (
@@ -26,7 +25,6 @@ export function App() {
           }}
         />
         <RouterProvider router={router} />
-        <VersionBadge />
       </QueryClientProvider>
     </ErrorBoundary>
   )
