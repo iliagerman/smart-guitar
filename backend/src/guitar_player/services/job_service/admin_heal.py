@@ -161,8 +161,8 @@ async def _processing_services_healthy(
 ) -> tuple[bool, str | None]:
     """Best-effort connectivity check for the processing microservices."""
     urls = {
-        "demucs": f"http://{settings.services.inference_demucs}/health",
-        "chords": f"http://{settings.services.chords_generator}/health",
+        "demucs": f"{settings.services.inference_demucs.rstrip('/')}/health",
+        "chords": f"{settings.services.chords_generator.rstrip('/')}/health",
     }
 
     try:
@@ -216,7 +216,7 @@ async def _startup_admin_heal(user_sub: str, user_email: str) -> None:
         )
 
     tabs_service_ok, tabs_service_reason = await _service_healthy(
-        f"http://{settings.services.tabs_generator}/health"
+        f"{settings.services.tabs_generator.rstrip('/')}/health"
     )
     if not tabs_service_ok:
         logger.warning(

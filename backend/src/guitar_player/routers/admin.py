@@ -325,9 +325,9 @@ async def admin_sanity_check(
 
     # 3-5. Service health checks
     health_targets = {
-        "health_demucs": f"http://{settings.services.inference_demucs}/health",
-        "health_chords": f"http://{settings.services.chords_generator}/health",
-        "health_lyrics": f"http://{settings.services.lyrics_generator}/health",
+        "health_demucs": f"{settings.services.inference_demucs.rstrip('/')}/health",
+        "health_chords": f"{settings.services.chords_generator.rstrip('/')}/health",
+        "health_lyrics": f"{settings.services.lyrics_generator.rstrip('/')}/health",
     }
     health_ok: dict[str, bool] = {}
 
