@@ -19,6 +19,7 @@ caller falls back to even distribution across the song duration.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -82,7 +83,9 @@ class LineAlignment:
 
 
 def tokenize(text: str) -> list[str]:
-    return _NON_WORD_RE.sub(" ", text.lower()).split()
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    without_marks = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return _NON_WORD_RE.sub(" ", without_marks).split()
 
 
 def _is_noise_line(text: str) -> bool:

@@ -124,9 +124,8 @@ def test_repeated_chorus_line_matched_out_of_order_is_demoted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recovered_times_are_still_snapped_to_beat_anchors(settings, storage):
-    """Recovery (interpolation) happens first; beat snapping is the last
-    step and still applies to whatever time recovery produced."""
+async def test_recovered_times_stay_on_paired_lyric_timeline(settings, storage):
+    """Recovery keeps its paired word timing instead of moving to a nearby beat."""
     song_name = f"test_recovery_snap_{uuid.uuid4().hex[:8]}/test_song"
     static_chords_key = f"{song_name}/static_chords.json"
 
@@ -168,9 +167,8 @@ async def test_recovered_times_are_still_snapped_to_beat_anchors(settings, stora
     try:
         storage.write_json(static_chords_key, static_chords)
 
-        # A beat anchor sits right next to where the recovered (interpolated)
-        # chord time naturally lands (10.6) — it should snap there, and must
-        # not be anywhere near the rejected 999.0 outlier.
+        # A detected anchor sits beside the recovered 10.6 word onset. It must
+        # not move the community chord away from its paired lyric timeline.
         options, _tabs = _load_community_chord_options(
             storage, song, duration=240.0, lyrics_data=lyrics_data,
             autochord_chords=[
@@ -180,7 +178,7 @@ async def test_recovered_times_are_still_snapped_to_beat_anchors(settings, stora
         )
         assert options
         chord = options[0].chords[0]
-        assert chord.start_time == 10.5
+        assert chord.start_time == 10.6
     finally:
         base = Path(settings.storage.base_path or "../local_bucket_test").resolve()
         shutil.rmtree(base / song_name.split("/")[0], ignore_errors=True)

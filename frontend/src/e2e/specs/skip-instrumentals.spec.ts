@@ -51,6 +51,22 @@ const UNSYNCED_COMMUNITY_OPTION = buildChordOption({
   lyrics_source: 'community', lyrics_synced: false,
 })
 
+const COMMUNITY_LYRICS = [{
+  start: 2,
+  end: 4,
+  text: 'community paired lyric',
+  words: [
+    { word: 'community', start: 2, end: 2.7 },
+    { word: 'paired', start: 2.7, end: 3.3 },
+    { word: 'lyric', start: 3.3, end: 4 },
+  ],
+}]
+
+const SYNCED_SHORT_COMMUNITY_OPTION = buildChordOption({
+  name: 'Sheet 1', description: 'Community chord sheet · synced to audio', version_key: 'community:sheet1',
+  lyrics_source: 'community', lyrics_synced: true,
+}, COMMUNITY_LYRICS)
+
 function buildSongDetail(chordOptions: unknown[], lyrics: LyricLine[] = LYRICS) {
   return {
     song: {
@@ -185,6 +201,16 @@ test.describe('Skip instrumentals', () => {
     await page.reload()
     await waitForDuration(page)
     await expect(page.getByTestId('player-skip-instrumentals-toggle')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('community sheet keeps its paired lyrics even when shorter than generated lyrics', async ({ authenticatedPage: page }) => {
+    await mockSongDetail(page, [buildChordOption(), SYNCED_SHORT_COMMUNITY_OPTION])
+    await page.goto(`/songs/${SONG_ID}`)
+
+    await page.getByTestId('sheet-selector-trigger').click()
+    await page.getByTestId('sheet-selector-source-1').click()
+
+    await expect(page.getByText('community')).toBeVisible()
   })
 
   test('toggle is disabled when the active sheet has unsynced lyrics', async ({ authenticatedPage: page }) => {

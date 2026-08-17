@@ -493,11 +493,16 @@ async def get_song_detail(
     song_service: SongService = Depends(get_song_service),
     job_service: JobService = Depends(get_job_service),
 ) -> SongDetailResponse:
-    """Get full song detail without triggering repair work on every load."""
+    """Get song detail after validating optional community chord data."""
     try:
         await song_service.clear_download_if_audio_ready(song_id)
     except Exception as e:
         logger.warning("clear_download check failed for %s: %s", song_id, e)
+
+    try:
+        await job_service.trigger_static_chords_if_missing(song_id)
+    except Exception:
+        logger.exception("Static chord validation failed for %s", song_id)
 
     detail = await song_service.get_song_detail(song_id)
 

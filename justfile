@@ -1264,6 +1264,11 @@ test-integration:
 test-e2e:
     just test-client
 
+# Verify community chord discovery and chord/lyrics playback sync.
+test-sync:
+    cd {{project_dir}}/backend && APP_ENV=test uv run pytest tests/test_static_chords.py tests/test_chord_timing_recovery.py -v
+    cd {{project_dir}}/frontend && npx playwright test src/e2e/specs/skip-instrumentals.spec.ts --workers=1
+
 # Run everything (integration + e2e)
 test:
     just test-integration

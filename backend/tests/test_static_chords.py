@@ -17,6 +17,7 @@ import pytest
 from guitar_player.app_state import set_storage
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import close_db, init_db
+from guitar_player.routers.songs import get_song_detail
 from guitar_player.schemas.records import SongRecord
 from guitar_player.services.job_service import JobService
 from guitar_player.services.song_service import SongService
@@ -80,7 +81,7 @@ SAMPLE_STATIC_CHORDS_MULTI = {
 }
 
 
-def _write_static_chords_to_storage(settings, key: str, data: dict) -> Path:
+def _write_static_chords_to_storage(settings, key: str, data: object) -> Path:
     """Write a static_chords.json file directly to the local storage path."""
     base = Path(settings.storage.base_path or "../local_bucket_test").resolve()
     path = base / key
@@ -88,6 +89,28 @@ def _write_static_chords_to_storage(settings, key: str, data: dict) -> Path:
     with open(path, "w") as f:
         json.dump(data, f)
     return path
+
+
+def _test_song_dir(settings, song_name: str) -> Path:
+    base = Path(settings.storage.base_path or "../local_bucket_test").resolve()
+    return base / song_name.split("/", 1)[0]
+
+
+async def _create_test_song(factory, **fields: object) -> uuid.UUID:
+    async with factory() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.create(**fields)
+        await song_dao.commit()
+        return song.id
+
+
+async def _delete_test_song(factory, song_name: str) -> None:
+    async with factory() as session:
+        song_dao = SongDAO(session)
+        song = await song_dao.get_by_song_name(song_name)
+        if song:
+            await song_dao.delete_by_id(song.id)
+            await session.commit()
 
 
 class TestSongRecordHasStaticChordsFields:
@@ -209,6 +232,58 @@ async def test_song_detail_converts_community_chords_to_options(settings, storag
                 await session.commit()
         for d in created_dirs:
             shutil.rmtree(d, ignore_errors=True)
+        await close_db()
+
+
+@pytest.mark.asyncio
+async def test_synced_community_chords_keep_paired_word_timing(settings, storage):
+    """Audio anchors must not move community chords away from paired lyric words."""
+    factory = init_db(settings)
+    set_storage(storage)
+    song_name = f"test_community_sync_{uuid.uuid4().hex[:8]}/test_song"
+    static_key = f"{song_name}/static_chords.json"
+    lyrics_key = f"{song_name}/lyrics.json"
+    chords_key = f"{song_name}/chords.json"
+    static_payload = _static_chords_payload("Test Artist", "Aligned Song")
+    static_payload["versions"][0]["lines"] = [{
+        "type": "lyric",
+        "text": "hello there world",
+        "chords": [{"chord": "C", "position": 0}],
+    }]
+    lyrics_payload = {"source": "whisper", "segments": [{
+        "start": 10.0, "end": 12.0, "text": "hello there world",
+        "words": [
+            {"word": "hello", "start": 10.0, "end": 10.5},
+            {"word": "there", "start": 10.5, "end": 11.0},
+            {"word": "world", "start": 11.0, "end": 12.0},
+        ],
+    }]}
+    detected_chords = [{"start_time": 10.4, "end_time": 12.0, "chord": "C"}]
+    cleanup_dir = _test_song_dir(settings, song_name)
+    try:
+        _write_static_chords_to_storage(settings, static_key, static_payload)
+        _write_static_chords_to_storage(settings, lyrics_key, lyrics_payload)
+        _write_static_chords_to_storage(settings, chords_key, detected_chords)
+        song_id = await _create_test_song(
+            factory, title="Aligned Song", artist="Test Artist", song_name=song_name,
+            duration_seconds=20, static_chords_key=static_key,
+            lyrics_key=lyrics_key, chords_key=chords_key,
+        )
+
+        async with factory() as session:
+            detail = await _make_song_service(session, storage).get_song_detail(song_id)
+
+        community = next(
+            option for option in detail.chord_options
+            if option.lyrics_source == "community"
+        )
+        assert community.lyrics_synced is True
+        assert community.lyrics is not None
+        assert community.chords[0].start_time == community.lyrics[0].words[0].start == 10.0
+
+    finally:
+        await _delete_test_song(factory, song_name)
+        shutil.rmtree(cleanup_dir, ignore_errors=True)
         await close_db()
 
 
@@ -593,6 +668,53 @@ def _static_chords_payload(
 
 
 @pytest.mark.asyncio
+async def test_song_detail_invalidates_legacy_community_sheet_before_display(
+    settings, storage, monkeypatch,
+):
+    """Opening a song must remove an unverified legacy sheet before returning detail."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_open_legacy_{uuid.uuid4().hex[:8]}/test_song"
+    static_key = f"{song_name}/static_chords.json"
+    created_dirs: list[Path] = []
+    enqueued: list[uuid.UUID] = []
+
+    monkeypatch.setattr(
+        "guitar_player.services.job_service._enqueue_static_chords_fetch",
+        lambda song_id: enqueued.append(song_id),
+    )
+
+    try:
+        payload = _static_chords_payload(matched_artist=None, matched_title=None)
+        static_path = _write_static_chords_to_storage(settings, static_key, payload)
+        created_dirs.append(static_path.parent.parent)
+
+        song_id = await _create_test_song(
+            factory, title="Expected Song", artist="Expected Artist",
+            song_name=song_name, duration_seconds=240, static_chords_key=static_key,
+        )
+
+        async with factory() as session:
+            detail = await get_song_detail(
+                song_id=song_id,
+                _user=MagicMock(),
+                song_service=_make_song_service(session, storage),
+                job_service=JobService(session, storage),
+            )
+
+        assert enqueued == [song_id]
+        assert not storage.file_exists(static_key)
+        assert all(option.lyrics_source != "community" for option in detail.chord_options)
+
+    finally:
+        await _delete_test_song(factory, song_name)
+        for directory in created_dirs:
+            shutil.rmtree(directory, ignore_errors=True)
+        await close_db()
+
+
+@pytest.mark.asyncio
 async def test_trigger_static_chords_invalidates_mismatched_existing(
     settings, storage, monkeypatch,
 ):
@@ -719,6 +841,49 @@ async def test_trigger_static_chords_invalidates_legacy_file_without_metadata(
                 await session.commit()
         for d in created_dirs:
             shutil.rmtree(d, ignore_errors=True)
+        await close_db()
+
+
+@pytest.mark.asyncio
+async def test_trigger_static_chords_keeps_matching_unicode_file(
+    settings, storage, monkeypatch,
+):
+    """Native-script artist and title metadata must pass stored-sheet validation."""
+    factory = init_db(settings)
+    set_storage(storage)
+
+    song_name = f"test_keep_unicode_{uuid.uuid4().hex[:8]}/test_song"
+    static_key = f"{song_name}/static_chords.json"
+    created_dirs: list[Path] = []
+    enqueued: list[uuid.UUID] = []
+
+    monkeypatch.setattr(
+        "guitar_player.services.job_service._enqueue_static_chords_fetch",
+        lambda song_id: enqueued.append(song_id),
+    )
+
+    try:
+        payload = _static_chords_payload("שלמה ארצי", "אבסורד")
+        chords_path = _write_static_chords_to_storage(settings, static_key, payload)
+        created_dirs.append(chords_path.parent.parent)
+
+        song_id = await _create_test_song(
+            factory, title="אבסורד", artist="שלמה ארצי",
+            song_name=song_name, duration_seconds=240, static_chords_key=static_key,
+        )
+
+        async with factory() as session:
+            job_service = JobService(session, storage)
+            triggered = await job_service.trigger_static_chords_if_missing(song_id)
+
+        assert triggered is False
+        assert enqueued == []
+        assert storage.file_exists(static_key)
+
+    finally:
+        await _delete_test_song(factory, song_name)
+        for directory in created_dirs:
+            shutil.rmtree(directory, ignore_errors=True)
         await close_db()
 
 

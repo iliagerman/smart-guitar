@@ -28,7 +28,7 @@ from guitar_player.schemas.song import (
 )
 from guitar_player.storage import StorageBackend
 
-from .chord_time_snap import build_anchor_times, snap_chord_times
+from .chord_time_snap import build_anchor_times
 from .helpers import (
     CHORD_VARIANT_PREFIX,
     CHORD_VARIANT_SUFFIX,
@@ -807,9 +807,8 @@ def _load_community_chord_options(
 
     Returns (chord_options, tab_notes). Each chord version becomes a
     ChordOption with estimated timing so it works with capo/easy/transpose.
-    Synced sheets additionally get their chord starts snapped onto detected
-    beat anchors (autochord chord changes and/or the bar grid) when one is
-    close by, so strums land on the beat.
+    Synced chord starts stay on their paired lyric-word timeline. Detected
+    anchors only bound an interpolated instrumental intro.
     """
     key = song.static_chords_key
     if not key and song.song_name:
@@ -838,13 +837,10 @@ def _load_community_chord_options(
             )
             line_windows = [None if a is None else (a.start, a.end) for a in aligned] if aligned else None
             line_words = [None if a is None else a.words for a in aligned] if aligned else None
-            option = _static_lines_to_chord_option(
+            return _static_lines_to_chord_option(
                 raw_lines, duration, name=name, capo=capo, key=song_key,
                 line_windows=line_windows, line_words=line_words,
             )
-            if option.lyrics_synced and anchor_times:
-                option.chords = snap_chord_times(option.chords, anchor_times)
-            return option
 
         options: list[ChordOption] = []
 

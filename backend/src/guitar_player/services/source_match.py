@@ -14,6 +14,7 @@ sheets against the song's current artist/title.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # Per-component thresholds. Both artist and title must clear MIN_*_SCORE for
 # a result to be accepted. The component_score tiers map roughly to:
@@ -27,14 +28,14 @@ MIN_TITLE_SCORE = 0.7
 
 
 def normalize(text: str) -> str:
-    """Lower-case, strip parentheticals/feat-suffixes/punctuation."""
-    text = (text or "").lower().strip()
+    """Case-fold and retain letters/numbers from every writing system."""
+    text = unicodedata.normalize("NFKC", (text or "").casefold()).strip()
     text = re.sub(r"\s*\(.*?\)\s*", " ", text)
     text = re.sub(r"\s*\[.*?\]\s*", " ", text)
     text = re.sub(r"\b(feat\.?|ft\.?|featuring)\b.*", "", text)
-    text = re.sub(r"[^a-z0-9\s]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    decomposed = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in decomposed if char.isalnum() or char.isspace())
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def component_score(query: str, result: str) -> float:
