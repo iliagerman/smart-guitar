@@ -7,6 +7,10 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/../.." && pwd)"
 
+# Lambda rejects BuildKit's default provenance attestation manifest. Every
+# Lambda bootstrap/build script sources this library before invoking Docker.
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+
 outputs_file="${project_dir}/infra-outputs.json"
 default_secrets_file="${project_dir}/secrets.yml"
 prod_secrets_file="${project_dir}/prod.secrets.yml"

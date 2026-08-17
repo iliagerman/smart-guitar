@@ -460,7 +460,7 @@ async def _persist_results(
     chords_result: ChordRecognitionResult,
     song_name: str,
     storage,
-) -> None:
+) -> bool:
     """Persist song stem keys + chords key and mark job completed."""
     async with safe_session() as session:
         job_dao = JobDAO(session)
@@ -468,14 +468,14 @@ async def _persist_results(
 
         job = await job_dao.get_by_id(job_id)
         if not job:
-            return
+            return False
         song = await song_dao.get_by_id(job.song_id)
         if not song:
             await job_dao.update_status(
                 job.id, "FAILED", error_message="Song not found"
             )
             await job_dao.commit()
-            return
+            return False
 
         song_changes: dict = {}
 
@@ -522,6 +522,7 @@ async def _persist_results(
 
         await job_dao.update_status(job.id, "COMPLETED", results=job_results)
         await job_dao.commit()
+        return True
 
 
 async def process_job(job_id: uuid.UUID) -> None:
@@ -664,7 +665,12 @@ async def process_job(job_id: uuid.UUID) -> None:
     )
     await set_progress(job_id, 90, "saving_results")
 
-    await _persist_results(job_id, sep_result, chords_result, song_name, storage)
+    persisted = await _persist_results(
+        job_id, sep_result, chords_result, song_name, storage,
+    )
+    if not persisted:
+        return
+    await set_progress(job_id, 100, "completed")
 
     logger.info(
         "Job completed",

@@ -70,11 +70,14 @@ function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up') {
  * Hook that plays a strumming pattern using Web Audio API.
  * Returns playback state, current beat index (for highlighting), and toggle function.
  */
-export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
+type StrumPlaybackStep = 'down' | 'up' | 'miss' | 'chuck'
+
+export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1)
   const ctxRef = useRef<AudioContext | null>(null)
   const rafRef = useRef<number>(0)
+  const schedulerRef = useRef<number>(0)
   const startTimeRef = useRef(0)
   const patternRef = useRef(pattern)
   const bpmRef = useRef(bpm)
@@ -91,10 +94,12 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
     setIsPlaying(false)
     setCurrentBeatIndex(-1)
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    if (schedulerRef.current) window.clearInterval(schedulerRef.current)
+    schedulerRef.current = 0
   }, [])
 
   const play = useCallback(() => {
-    if (pattern.length === 0) return
+    if (pattern.length === 0 || schedulerRef.current) return
 
     // Create or resume AudioContext
     if (!ctxRef.current || ctxRef.current.state === 'closed') {
@@ -103,34 +108,46 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
     const ctx = ctxRef.current
     if (ctx.state === 'suspended') ctx.resume()
 
-    const interval = strumInterval(pattern.length, bpm)
     const now = ctx.currentTime + 0.05 // slight lookahead
     startTimeRef.current = now
 
-    // Schedule 2 loops of the pattern
-    const totalBeats = pattern.length * 2
-    for (let i = 0; i < totalBeats; i++) {
-      const beatTime = now + i * interval
-      const dir = pattern[i % pattern.length]
-      playStrum(ctx, beatTime, dir)
+    let nextStepIndex = 0
+    let nextStepTime = now
+
+    const scheduleLoop = () => {
+      const currentPattern = patternRef.current
+      const currentInterval = strumInterval(currentPattern.length, bpmRef.current)
+      if (nextStepTime < ctx.currentTime) {
+        const skippedSteps = Math.ceil((ctx.currentTime - nextStepTime) / currentInterval)
+        nextStepIndex = (nextStepIndex + skippedSteps) % currentPattern.length
+        nextStepTime += skippedSteps * currentInterval
+      }
+      const lookaheadSeconds = document.hidden ? 1.25 : 0.25
+      const lookaheadEnd = ctx.currentTime + lookaheadSeconds
+      while (nextStepTime < lookaheadEnd) {
+        const dir = currentPattern[nextStepIndex]
+        if (dir === 'down' || dir === 'up') playStrum(ctx, nextStepTime, dir)
+        if (dir === 'chuck') playStrum(ctx, nextStepTime, 'down')
+        nextStepIndex = (nextStepIndex + 1) % currentPattern.length
+        nextStepTime += currentInterval
+      }
     }
 
+    scheduleLoop()
+    schedulerRef.current = window.setInterval(scheduleLoop, 100)
     setIsPlaying(true)
 
-    // Track current beat for visual highlighting
-    const totalDuration = totalBeats * interval
+    // Track current beat for visual highlighting.
     const tick = () => {
+      const currentPattern = patternRef.current
+      const currentInterval = strumInterval(currentPattern.length, bpmRef.current)
       const elapsed = ctx.currentTime - startTimeRef.current
-      if (elapsed >= totalDuration) {
-        stop()
-        return
-      }
-      const beatIndex = Math.floor(elapsed / interval) % patternRef.current.length
+      const beatIndex = Math.floor(elapsed / currentInterval) % currentPattern.length
       setCurrentBeatIndex(beatIndex)
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
-  }, [pattern, bpm, stop])
+  }, [pattern])
 
   const toggle = useCallback(() => {
     if (isPlaying) {
@@ -146,12 +163,13 @@ export function useStrumPlayback(pattern: ('down' | 'up')[], bpm: number) {
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (schedulerRef.current) window.clearInterval(schedulerRef.current)
       ctxRef.current?.close()
     }
   }, [])
 
   // Stop playback when pattern or bpm changes so the user hears the updated values.
-  // stop() is a side-effectful teardown (cancels rAF, closes AudioContext) that reacts to
+  // stop() is a side-effectful teardown (cancels rAF) that reacts to
   // prop changes and cannot run during render, so an effect is the right tool; isPlaying/stop
   // are intentionally excluded from deps to avoid stopping on unrelated re-renders.
   useEffect(() => {

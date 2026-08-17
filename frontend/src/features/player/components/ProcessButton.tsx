@@ -9,6 +9,7 @@ import { requestNotificationPermission } from '@/lib/notify'
 import { cn } from '@/lib/cn'
 import { StatusIcon, type StepStatus } from './StatusIcon'
 import { ProgressRing, SpinnerRing } from './ProgressRing'
+import { JobStatus } from '@/types/job'
 
 interface ProcessButtonProps {
   songId: string
@@ -46,16 +47,20 @@ export function ProcessButton({
   downloadPending,
 }: ProcessButtonProps) {
   const [jobId, setJobId] = useState<string | null>(activeJobId ?? null)
+  const [dismissed, setDismissed] = useState(false)
   const createJob = useCreateJob()
   const { data: job } = useJobPolling(jobId)
   const { data: statusUrl } = useJobStatusUrl(jobId)
   const started = useRef(false)
   const watchJob = useJobWatcherStore((s) => s.watchJob)
 
-  const isFailed = job?.status === 'FAILED'
-  const jobDone = job?.status === 'COMPLETED'
+  const jobFailed = job?.status === JobStatus.FAILED
+  const jobDone = job?.status === JobStatus.COMPLETED
   const coreReady = hasStemsProcessed && hasChords
-  const shouldDismiss = coreReady || jobDone
+  const manifestPollingEnabled = !!jobId && !dismissed && !coreReady && !jobFailed && !jobDone
+  const { data: manifest } = useJobStatusManifest(statusUrl?.url ?? null, manifestPollingEnabled)
+  const isFailed = jobFailed || manifest?.status === JobStatus.FAILED
+  const shouldDismiss = coreReady || jobDone || manifest?.status === JobStatus.COMPLETED
 
   // jobId is local state seeded from the activeJobId prop but then driven independently
   // by job creation and retry, so it cannot be computed during render. This effect
@@ -102,11 +107,6 @@ export function ProcessButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // oxlint-disable-line react-doctor/exhaustive-deps
 
-  const [dismissed, setDismissed] = useState(false)
-
-  const manifestPollingEnabled = !!jobId && !dismissed && !shouldDismiss && !isFailed
-  const { data: manifest } = useJobStatusManifest(statusUrl?.url ?? null, manifestPollingEnabled)
-
   useEffect(() => {
     if (shouldDismiss && jobId && !dismissed) {
       const timer = setTimeout(() => setDismissed(true), 2000)
@@ -127,7 +127,7 @@ export function ProcessButton({
     )
   }
 
-  const isProcessing = job?.status === 'PENDING' || job?.status === 'PROCESSING' || createJob.isPending
+  const isProcessing = job?.status === JobStatus.PENDING || job?.status === JobStatus.PROCESSING || createJob.isPending
   const rawProgress = typeof job?.progress === 'number' ? job.progress : 0
   const manifestProgress = typeof manifest?.progress === 'number' ? manifest.progress : null
   const isCompleted = shouldDismiss
@@ -177,7 +177,7 @@ export function ProcessButton({
       {isFailed && (
         <div className="flex flex-col items-center gap-3">
           <p className="text-red-400 text-sm text-center">
-            {job.error_message || 'Processing failed'}
+            {job?.error_message || 'Processing failed'}
           </p>
           <button
             type="button"

@@ -1,6 +1,6 @@
 import { api } from '../config/api'
 import type { MessageResponse, PaginatedResponse } from '../types/api'
-import type { ChordEntry, LyricsSegment, Song, SongDetail, SongSection, SearchResult } from '../types/song'
+import type { ActiveJobInfo, ChordEntry, LyricsSegment, Song, SongDetail, SongSection, SearchResult } from '../types/song'
 
 interface SaveUserChordsPayload {
   name: string
@@ -19,6 +19,11 @@ export interface SaveUserChordsResponse {
 interface ChordVersionVoteResponse {
   version_key: string
   vote_score: number
+}
+
+interface SelfHealResponse {
+  message: string
+  active_job: ActiveJobInfo | null
 }
 
 interface RegenerateResponse {
@@ -74,6 +79,9 @@ export const songsApi = {
 
   generateAiStrumPatterns: (songId: string) =>
     api.post<SongSection[]>(`/api/v1/songs/${songId}/strum-patterns/ai`).then((r) => r.data),
+
+  selfHeal: (songId: string) =>
+    api.post<SelfHealResponse>(`/api/v1/songs/${songId}/self-heal`).then((r) => r.data),
 
   regenerate: (songId: string, targets: string[]) =>
     api

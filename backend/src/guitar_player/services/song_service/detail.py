@@ -161,6 +161,11 @@ async def build_song_detail(
         web_chords_failed=False,
         web_chords_pending=False,
         download_pending=song.download_requested_at is not None,
+        needs_self_heal=(
+            audio_url is None
+            or len(stem_types) < len(STEM_DEFINITIONS)
+            or not autochord_chords
+        ),
     )
 
 

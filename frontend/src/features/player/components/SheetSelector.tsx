@@ -121,7 +121,7 @@ export function SheetSelector({
           sideOffset={8}
           align="start"
           className={cn(
-            'w-72 rounded-xl border border-charcoal-600 bg-charcoal-800 shadow-xl z-50',
+            'w-72 max-h-[70dvh] overflow-y-scroll overscroll-contain touch-pan-y rounded-xl border border-charcoal-600 bg-charcoal-800 shadow-xl z-50',
             'animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           )}
         >

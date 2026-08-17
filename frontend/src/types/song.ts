@@ -139,6 +139,7 @@ export interface SongDetail {
   web_chords_failed?: boolean
   active_job: ActiveJobInfo | null
   download_pending: boolean
+  needs_self_heal: boolean
 }
 
 export interface SearchResult {

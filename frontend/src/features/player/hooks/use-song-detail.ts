@@ -43,6 +43,7 @@ function contentFingerprint(d: SongDetail): string {
     d.active_job?.stage ?? '',
     d.active_job?.progress ?? 0,
     d.download_pending,
+    d.needs_self_heal,
     getVer1Source(d),
     getVer2Source(d),
   ].join('|')
@@ -62,6 +63,9 @@ export function songDetailRefetchInterval(
 
   // Audio is being downloaded — keep polling until it completes.
   if (detail.download_pending) return 6000
+
+  // A requested repair may still be starting in the background.
+  if (detail.needs_self_heal) return 6000
 
   // If there's an active job, keep polling until it finishes.
   if (detail.active_job) return 6000

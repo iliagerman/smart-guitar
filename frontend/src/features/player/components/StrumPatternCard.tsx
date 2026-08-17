@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -112,14 +112,9 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
   // play/stop transitions via onPlayingChange so the parent can disable other sections'
   // play buttons. Lifting playback into a shared provider would add indirection for a
   // single, local coordination concern, so this pattern is intentional.
+  const rawPattern = useMemo(() => section.pattern.map((s) => s.direction), [section.pattern])
   // oxlint-disable-next-line react-doctor/no-event-handler
-  const rawPattern = section.pattern.map((s) => s.direction)
-  // Filter out 'miss' entries for audio playback; chucks play as muted downstrokes.
-  const playablePattern = rawPattern
-    .filter((d) => d !== 'miss')
-    .map((d) => d === 'chuck' ? 'down' : d)
-  // oxlint-disable-next-line react-doctor/no-event-handler
-  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(playablePattern, bpm)
+  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(rawPattern, bpm)
   const labels = beatLabels(rawPattern.length)
 
   // Notify parent when playing state changes
@@ -164,9 +159,7 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
           const isMiss = step.direction === 'miss'
           const isChuck = step.direction === 'chuck'
           const isDown = step.direction === 'down' || isChuck
-          // Map display index to playable index for highlight sync
-          const playableIndex = rawPattern.slice(0, index + 1).filter(d => d !== 'miss').length - 1
-          const isActive = isPlaying && !isMiss && currentBeatIndex === playableIndex
+          const isActive = isPlaying && currentBeatIndex === index
           const label = labels[index] ?? ''
           const isBeat = /^\d$/.test(label)
 

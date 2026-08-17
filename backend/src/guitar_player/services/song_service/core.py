@@ -116,7 +116,11 @@ class SongService:
     ) -> SongResponse:
         """Download a song from YouTube, upload to storage, create DB record."""
         existing = await self._song_dao.get_by_youtube_id(youtube_id)
-        if existing and existing.audio_key and self._storage.file_exists(existing.audio_key):
+        if existing and existing.audio_key:
+            if self._storage.file_exists(existing.audio_key):
+                return SongResponse.model_validate(existing)
+            existing = await self._song_dao.update_by_id(existing.id, audio_key=None)
+        if existing and existing.download_requested_at is not None:
             return SongResponse.model_validate(existing)
 
         t0_total = _time.monotonic()
@@ -129,33 +133,50 @@ class SongService:
                 f"Refusing to download probable live performance: {title_for_policy}"
             )
 
-        parsed = await self._parse_song_metadata(title_for_policy, youtube_id)
-        song_name = f"{parsed['artist_folder']}/{parsed['song_folder']}/{youtube_id}"
+        user = await self._user_dao.get_or_create(user_sub, user_email)
+        song, claimed_download = await self._claim_song_download(
+            existing, youtube_id, title_for_policy, user.id,
+        )
+        if not claimed_download:
+            return SongResponse.model_validate(song)
+        return await self._complete_claimed_download(
+            song, youtube_id, title_for_policy, t0_total,
+        )
 
+    async def _complete_claimed_download(
+        self, song: Any, youtube_id: str, title: str, started_at: float,
+    ) -> SongResponse:
+        parsed = await self._parse_song_metadata(title, youtube_id)
+        song_name = f"{parsed['artist_folder']}/{parsed['song_folder']}/{youtube_id}"
+        song = await self._song_dao.update_by_id(
+            song.id,
+            song_name=song_name,
+            title=parsed["title_display"] or youtube_id,
+            artist=parsed["artist_display"],
+            genre=parsed["genre"],
+        )
         tmp_dir = tempfile.mkdtemp(prefix="song_dl_")
         try:
             thumb_path, thumbnail_filename = await self._fetch_thumbnail(
                 parsed["artist_folder"], parsed["song_folder"], youtube_id, tmp_dir,
             )
-
-            canonical_audio_key = f"{song_name}/audio.mp3"
-            thumbnail_key = f"{song_name}/{thumbnail_filename}"
-            user = await self._user_dao.get_or_create(user_sub, user_email)
-
-            song = await self._create_or_update_song_record(
-                existing, youtube_id, parsed, song_name, user.id,
-            )
-
             song = await self._upload_and_finalize(
-                song, youtube_id, song_name, canonical_audio_key,
-                thumbnail_key, thumb_path, tmp_dir,
+                song,
+                youtube_id,
+                song_name,
+                f"{song_name}/audio.mp3",
+                f"{song_name}/{thumbnail_filename}",
+                thumb_path,
+                tmp_dir,
             )
-
             logger.info(
                 "TIMING download_song total %.1fs [yt=%s]",
-                _time.monotonic() - t0_total, youtube_id,
+                _time.monotonic() - started_at, youtube_id,
             )
             return SongResponse.model_validate(song)
+        except Exception:
+            await self._song_dao.update_by_id(song.id, download_requested_at=None)
+            raise
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -209,29 +230,29 @@ class SongService:
         thumb_path = await self._youtube.download_thumbnail(youtube_id, tmp_dir)
         return thumb_path, f"{youtube_id}.jpg"
 
-    async def _create_or_update_song_record(
-        self, existing: Any, youtube_id: str,
-        parsed: dict[str, str | None], song_name: str,
-        user_id: uuid.UUID,
-    ) -> Any:
-        """Create or update the song DB record."""
+    async def _claim_song_download(
+        self, existing: Any, youtube_id: str, title: str, user_id: uuid.UUID,
+    ) -> tuple[Any, bool]:
+        """Claim one caller to perform metadata, artwork, and audio work."""
+        requested_at = datetime.now(timezone.utc)
         if existing:
-            return await self._song_dao.update_by_id(
-                existing.id,
-                song_name=song_name,
-                title=parsed["title_display"] or youtube_id,
-                artist=parsed["artist_display"],
-                genre=parsed["genre"],
-                downloaded_by=user_id,
+            claimed = await self._song_dao.claim_download(existing.id, requested_at)
+            if not claimed:
+                current = await self._song_dao.get_by_id(existing.id)
+                return current, False
+            song = await self._song_dao.update_by_id(
+                existing.id, downloaded_by=user_id,
             )
-        return await self._song_dao.create(
-            youtube_id=youtube_id,
-            title=parsed["title_display"] or youtube_id,
-            artist=parsed["artist_display"],
-            genre=parsed["genre"],
+            return song, True
+        return await self._song_dao.create_or_get_by_youtube_id(
+            youtube_id,
+            title=title,
+            artist=None,
+            genre=None,
             duration_seconds=None,
-            song_name=song_name,
+            song_name=f"pending/{youtube_id}",
             downloaded_by=user_id,
+            download_requested_at=requested_at,
         )
 
     async def _upload_and_finalize(
@@ -304,7 +325,10 @@ class SongService:
 
         self._storage.upload_file(thumb_path, thumbnail_key)
         return await self._song_dao.update_by_id(
-            song.id, audio_key=audio_key_to_use, thumbnail_key=thumbnail_key,
+            song.id,
+            audio_key=audio_key_to_use,
+            thumbnail_key=thumbnail_key,
+            download_requested_at=None,
         )
 
     async def _publish_download_request(

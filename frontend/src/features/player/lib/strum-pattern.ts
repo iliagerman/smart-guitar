@@ -257,16 +257,8 @@ function getEffectivePattern(section: SongSection): StrumDirection[] | null {
   return section.llm_pattern ?? section.strum_pattern ?? null
 }
 
-function normalizedGridDirection(direction: StrumDirection, index: number, length: number): StrumDirection {
-  if (direction === 'miss' || direction === 'chuck') return direction
-  if (length <= 4) return 'down'
-  return index % 2 === 0 ? 'down' : 'up'
-}
-
 function patternToGridSymbols(pattern: StrumDirection[]): StrumSymbol[] {
-  return pattern.map((direction, index) =>
-    directionToSymbol(normalizedGridDirection(direction, index, pattern.length))
-  )
+  return pattern.map(directionToSymbol)
 }
 
 /**

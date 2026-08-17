@@ -5,6 +5,7 @@ from datetime import datetime
 from collections.abc import Sequence
 
 from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
@@ -35,6 +36,35 @@ class SongDAO(BaseDAO[Song, SongRecord]):
         result = await self._session.execute(stmt)
         obj = result.scalar_one_or_none()
         return self._to_record(obj) if obj else None
+
+    async def create_or_get_by_youtube_id(
+        self, youtube_id: str, **kwargs: object,
+    ) -> tuple[SongRecord, bool]:
+        """Create a song, or return the row won by a concurrent request."""
+        try:
+            async with self._session.begin_nested():
+                song = await self.create(youtube_id=youtube_id, **kwargs)
+            return song, True
+        except IntegrityError:
+            song = await self.get_by_youtube_id(youtube_id)
+            if song is None:
+                raise
+            return song, False
+
+    async def claim_download(self, song_id: uuid.UUID, requested_at: datetime) -> bool:
+        """Atomically claim an incomplete song download."""
+        stmt = (
+            update(Song)
+            .where(
+                Song.id == song_id,
+                Song.download_requested_at.is_(None),
+                Song.audio_key.is_(None),
+            )
+            .values(download_requested_at=requested_at)
+            .returning(Song.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none() is not None
 
     async def list_recent_by_user(self, user_id: uuid.UUID, limit: int = 10) -> list[SongRecord]:
         stmt = (

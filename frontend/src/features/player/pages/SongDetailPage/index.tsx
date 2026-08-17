@@ -1,3 +1,4 @@
+import { useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
@@ -147,6 +148,7 @@ export function SongDetailPage() {
   const { count: countInValue, isCounting, start: startCountIn, cancel: cancelCountIn } = useCountIn()
   const hasRecordedPlayRef = useRef(false)
   const activeStems = usePlaybackStore((s) => s.activeStems)
+  const currentSongId = usePlaybackStore((s) => s.currentSongId)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
   const setActiveStems = usePlaybackStore((s) => s.setActiveStems)
   const selectFullSong = usePlaybackStore((s) => s.selectFullSong)
@@ -216,10 +218,50 @@ export function SongDetailPage() {
 
   const hasStemsProcessed = detail?.stem_types.some(({ name }) => !!detail.stems[name]) ?? false
   const missingSelectedStems = useMemo(
-    () => (!detail || isFullSong ? [] : activeStems.filter((stem) => !detail.stems[stem])),
-    [detail, isFullSong, activeStems],
+    () => (
+      !detail || currentSongId !== songId || isFullSong
+        ? []
+        : activeStems.filter((stem) => !detail.stems[stem])
+    ),
+    [detail, currentSongId, songId, isFullSong, activeStems],
   )
   const isWaitingForSelectedStems = missingSelectedStems.length > 0
+  const selfHealKey = songId && detail?.needs_self_heal ? songId : null
+  const selfHealStartedKeyRef = useRef<string | null>(null)
+  const { mutate: startSelfHealing, isError: selfHealingFailed } = useMutation({
+    mutationFn: (id: string) => songsApi.selfHeal(id),
+    onSuccess: (result, healedSongId) => {
+      toast.info(result.message)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.songs.detail(healedSongId) })
+      if (result.active_job) void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(result.active_job.id) })
+    },
+    onError: () => {
+      toast.error('Could not start self-healing. Reload the song to retry.')
+    },
+  })
+  const selfHealingAttempted = !!selfHealKey && selfHealStartedKeyRef.current === selfHealKey
+  const selfHealingStarted = selfHealingAttempted && !selfHealingFailed
+
+  useEffect(() => {
+    if (
+      !songId
+      || !selfHealKey
+      || currentSongId !== songId
+      || detail?.download_pending
+      || detail?.active_job
+      || selfHealingAttempted
+    ) return
+    selfHealStartedKeyRef.current = selfHealKey
+    startSelfHealing(songId)
+  }, [
+    songId,
+    selfHealKey,
+    currentSongId,
+    detail?.download_pending,
+    detail?.active_job,
+    selfHealingAttempted,
+    startSelfHealing,
+  ])
 
   useEffect(() => {
     if (!songId) return
@@ -675,7 +717,9 @@ export function SongDetailPage() {
     : isWaitingForSelectedStems
       ? detail.active_job
         ? `Preparing ${formatStemList(missingSelectedStems)}… ${detail.active_job.progress}%`
-        : `Selected stems are not ready yet: ${formatStemList(missingSelectedStems)}`
+        : selfHealingStarted
+          ? `We found an issue with ${formatStemList(missingSelectedStems)}. Self-healing started; this may take longer.`
+          : `Selected stems are not ready yet: ${formatStemList(missingSelectedStems)}`
       : undefined
 
   const headerTitle = displaySongTitle(detail.song)
@@ -759,10 +803,11 @@ export function SongDetailPage() {
             getRecordingTap={getRecordingTap}
             onSetStemVolume={(stemName: string, volume: number) => {
               setStemVolume(stemName, volume)
-              setSongOverride(songId!, 'stemVolumes', {
-                ...songOverrides?.stemVolumes,
-                [stemName]: volume,
-              })
+              // Read the latest volumes from the store, not the render closure:
+              // "Mute all" fires this once per stem in a single tick, and a stale
+              // closure would make each call clobber the previous stem's volume.
+              const current = usePlayerPrefsStore.getState().songOverrides[songId!]?.stemVolumes
+              setSongOverride(songId!, 'stemVolumes', { ...current, [stemName]: volume })
             }}
             stemVolumes={songOverrides?.stemVolumes}
           />

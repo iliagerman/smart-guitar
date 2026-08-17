@@ -191,6 +191,7 @@ class SongDetailResponse(BaseModel):
     web_chords_pending: bool = False
     active_job: ActiveJobInfo | None = None
     download_pending: bool = False
+    needs_self_heal: bool = False
 
 
 class PlaybackSourceResponse(BaseModel):

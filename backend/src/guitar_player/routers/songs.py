@@ -489,17 +489,11 @@ async def get_recommendations(
 @router.get("/{song_id}", response_model=SongDetailResponse)
 async def get_song_detail(
     song_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(require_active_subscription),
+    _user: CurrentUser = Depends(require_active_subscription),
     song_service: SongService = Depends(get_song_service),
     job_service: JobService = Depends(get_job_service),
-    processing: ProcessingService = Depends(get_processing_service),
 ) -> SongDetailResponse:
-    """Get full song detail, with best-effort background healing."""
-    background_tasks.add_task(
-        _run_background_healing, song_id, user, song_service, job_service, processing
-    )
-
+    """Get full song detail without triggering repair work on every load."""
     try:
         await song_service.clear_download_if_audio_ready(song_id)
     except Exception as e:
@@ -522,14 +516,14 @@ async def get_song_detail(
     return detail
 
 
-async def _run_background_healing(
+async def _run_self_healing(
     song_id: uuid.UUID,
     user: CurrentUser,
     song_service: SongService,
     job_service: JobService,
     processing: ProcessingService,
 ) -> None:
-    """Best-effort healing tasks that run on song detail access."""
+    """Repair core playback files, then retry missing supporting artifacts."""
     healing_tasks = [
         ("audio/thumbnail", lambda: song_service.admin_heal_audio_and_thumbnail(
             song_id, user.sub, user.email,
@@ -545,11 +539,58 @@ async def _run_background_healing(
         ("web chords", lambda: job_service.trigger_web_chords_if_missing(song_id)),
         ("static chords", lambda: job_service.trigger_static_chords_if_missing(song_id)),
     ]
-    for label, task_fn in healing_tasks:
+    for label, task in healing_tasks:
         try:
-            await task_fn()
-        except Exception as e:
-            logger.warning("Admin %s check failed for %s: %s", label, song_id, e)
+            await task()
+        except Exception:
+            logger.exception("Self-heal %s failed for %s", label, song_id)
+
+
+class SelfHealResponse(BaseModel):
+    message: str
+    active_job: ActiveJobInfo | None = None
+
+
+@router.post(
+    "/{song_id}/self-heal",
+    response_model=SelfHealResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def self_heal_song(
+    song_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(require_active_subscription),
+    song_service: SongService = Depends(get_song_service),
+    job_service: JobService = Depends(get_job_service),
+    processing: ProcessingService = Depends(get_processing_service),
+) -> SelfHealResponse:
+    """Start repair after the client detects missing playback assets."""
+    await song_service.get_song_record(song_id)
+    active = await job_service.get_active_job_for_song(song_id)
+    if not active:
+        await job_service.trigger_reprocess(
+            user_sub=user.sub,
+            user_email=user.email,
+            song_id=song_id,
+            processing=processing,
+        )
+        active = await job_service.get_active_job_for_song(song_id)
+    if active:
+        return SelfHealResponse(
+            message="Self-healing is in progress.",
+            active_job=ActiveJobInfo(
+                id=active.id,
+                status=active.status,
+                progress=active.progress or 0,
+                stage=active.stage,
+            ),
+        )
+    background_tasks.add_task(
+        _run_self_healing, song_id, user, song_service, job_service, processing,
+    )
+    return SelfHealResponse(
+        message="We found an issue with this song. Self-healing started; this may take longer.",
+    )
 
 
 class RegenerateRequest(BaseModel):

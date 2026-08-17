@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { jobsApi } from '@/api/jobs.api'
 import { queryKeys } from '@/api/query-keys'
@@ -13,6 +13,7 @@ import { router } from '@/router'
  * and browser notifications when jobs complete while the user is away.
  */
 export function JobWatcher() {
+  const queryClient = useQueryClient()
   const watchedJobs = useJobWatcherStore((s) => s.watchedJobs)
   const viewingSongIds = useJobWatcherStore((s) => s.viewingSongIds)
   const unwatchJob = useJobWatcherStore((s) => s.unwatchJob)
@@ -41,6 +42,10 @@ export function JobWatcher() {
       if (notifiedRef.current.has(entry.jobId)) return
 
       notifiedRef.current.add(entry.jobId)
+
+      if (status === 'COMPLETED') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.songs.all })
+      }
 
       const isViewing = viewingSongIds.has(entry.songId)
       const label = entry.songArtist
@@ -82,7 +87,7 @@ export function JobWatcher() {
 
       unwatchJob(entry.jobId)
     })
-  }, [queries, jobEntries, viewingSongIds, unwatchJob])
+  }, [queries, jobEntries, viewingSongIds, queryClient, unwatchJob])
 
   return null
 }

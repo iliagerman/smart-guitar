@@ -8,6 +8,7 @@ sidecar to mitigate YouTube bot-check / PO-token enforcement.
 import asyncio
 import logging
 import os
+import re
 import socket
 import tempfile
 import time
@@ -95,15 +96,7 @@ def _sanitize_song_name(title: str) -> str:
 
 
 def _looks_like_youtube_id(value: str) -> bool:
-    s = (value or "").strip()
-    if not s:
-        return False
-    if " " in s or "\t" in s or "\n" in s:
-        return False
-    if s.startswith("http://") or s.startswith("https://"):
-        return False
-    # Common YouTube video IDs are 11 chars, but don't hard-fail on that.
-    return 8 <= len(s) <= 32
+    return re.fullmatch(r"[A-Za-z0-9_-]{11}", value.strip()) is not None
 
 
 def _redact_proxy(proxy: str) -> str:

@@ -52,7 +52,18 @@ function isLikelyNonLatin(detail: SongDetail): boolean {
 }
 
 function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefined): LyricsSourceOption | null {
-  if (usesCustomLyrics(activeVersion)) {
+  const pairedLyrics = activeVersion?.lyrics ?? []
+  const longestGeneratedLyrics = Math.max(
+    getVer1Lyrics(detail).length,
+    getVer2Lyrics(detail).length,
+    detail.ver4_lyrics?.length ?? 0,
+  )
+  const hasCompletePairedLyrics =
+    activeVersion?.lyrics_source !== 'community'
+    || longestGeneratedLyrics === 0
+    || pairedLyrics.length >= longestGeneratedLyrics / 2
+
+  if (usesCustomLyrics(activeVersion) && hasCompletePairedLyrics) {
     const isCommunity = activeVersion?.lyrics_source === 'community'
     return {
       key: 'auto',

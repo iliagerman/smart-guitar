@@ -158,47 +158,22 @@ describe('getStrumPattern', () => {
   })
 })
 
-describe('getSectionStrumPatterns — direction locked to beat grid', () => {
+describe('getSectionStrumPatterns', () => {
   function makeSection(name: string, pattern: ('down' | 'up' | 'miss')[]): SongSection {
     return { name, start_time: 0, end_time: 10, strum_pattern: pattern, llm_pattern: pattern }
   }
 
-  it('locks eighth-note directions to the grid: down on counts, up on offbeats', () => {
-    // Stored pattern is physically backwards (down on the &, up on beat 2).
-    const sections = [makeSection('Verse', ['down', 'down', 'up', 'up', 'down', 'up', 'miss', 'down'])]
+  it('preserves stored directions so the display matches the text description', () => {
+    const sections = [makeSection('Verse', ['down', 'miss', 'down', 'up', 'miss', 'up', 'down', 'up'])]
     const [sp] = getSectionStrumPatterns(sections)
     expect(sp.pattern.map(s => s.direction)).toEqual(
-      ['down', 'up', 'down', 'up', 'down', 'up', 'miss', 'up'],
+      ['down', 'miss', 'down', 'up', 'miss', 'up', 'down', 'up'],
     )
   })
 
-  it('preserves miss positions while normalizing struck directions', () => {
-    // Struck directions are backwards; misses sit on a count (idx 0) and an offbeat (idx 3).
-    const sections = [makeSection('Chorus', ['miss', 'down', 'up', 'miss', 'up', 'down', 'up', 'down'])]
+  it('renders symbols directly from the stored rhythm', () => {
+    const sections = [makeSection('Verse', ['down', 'miss', 'down', 'up'])]
     const [sp] = getSectionStrumPatterns(sections)
-    expect(sp.pattern.map(s => s.direction)).toEqual(
-      ['miss', 'up', 'down', 'miss', 'down', 'up', 'down', 'up'],
-    )
-  })
-
-  it('renders quarter-note patterns (<=4 steps) as all downstrokes', () => {
-    const sections = [makeSection('Verse', ['down', 'up', 'down', 'up'])]
-    const [sp] = getSectionStrumPatterns(sections)
-    expect(sp.pattern.map(s => s.direction)).toEqual(['down', 'down', 'down', 'down'])
-  })
-
-  it('alternates down/up across a sixteenth-note (16-step) pattern', () => {
-    const sixteen = Array.from({ length: 16 }, () => 'down' as const)
-    const [sp] = getSectionStrumPatterns([makeSection('Verse', sixteen)])
-    const expected = Array.from({ length: 16 }, (_, i) => (i % 2 === 0 ? 'down' : 'up'))
-    expect(sp.pattern.map(s => s.direction)).toEqual(expected)
-  })
-
-  it('maps counts to ↓ and offbeats to ↑ in the rendered symbols', () => {
-    const allDown = ['down', 'down', 'down', 'down', 'down', 'down', 'down', 'down'] as const
-    const [sp] = getSectionStrumPatterns([makeSection('Verse', [...allDown])])
-    expect(sp.pattern.map(s => s.symbol)).toEqual(
-      ['↓', '↑', '↓', '↑', '↓', '↑', '↓', '↑'],
-    )
+    expect(sp.pattern.map(s => s.symbol)).toEqual(['↓', '·', '↓', '↑'])
   })
 })

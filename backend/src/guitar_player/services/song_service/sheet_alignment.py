@@ -50,6 +50,11 @@ _COMMENTARY_MATCH_THRESHOLD = 0.45
 # markup (h=hammer-on, p=pull-off, b=bend, r=release, x=mute, /,\=slides,
 # ~=vibrato, |=bar line, (),.=grace notes/legend punctuation).
 _TAB_SYMBOL_RE = re.compile(r"[\-0-9hHpPbBrRxX/\\~|().]")
+_PREAMBLE_TEXT_RE = re.compile(
+    r"^(?:(?:song|artist)\s*:|tabbed by\b|https?://|www\.)",
+    re.IGNORECASE,
+)
+_ARTIST_TITLE_RE = re.compile(r"^[^-]{2,}\s+-\s+[^-]{2,}$")
 
 
 @dataclass
@@ -240,7 +245,19 @@ def sanitize_sheet_lines(raw_lines: list[dict], segments: list[LyricsSegment]) -
     return [line for line in without_tabs if not _is_commentary_line(line, transcript)]
 
 
-def trim_sheet_preamble(raw_lines: list[dict]) ->list[dict]:
+def _is_preamble_line(line: dict, index: int, raw_lines: list[dict]) -> bool:
+    text = (line.get("text") or "").strip()
+    if _PREAMBLE_TEXT_RE.search(text):
+        return True
+    metadata_follows = any(
+        isinstance(candidate, dict)
+        and _PREAMBLE_TEXT_RE.search((candidate.get("text") or "").strip())
+        for candidate in raw_lines[index + 1:index + 4]
+    )
+    return bool(index == 0 and metadata_follows and _ARTIST_TITLE_RE.search(text))
+
+
+def trim_sheet_preamble(raw_lines: list[dict]) -> list[dict]:
     """Drop UG sheet preamble (metadata, playing notes) before the first chord.
 
     Ultimate Guitar sheets often open with prose that isn't song content —
@@ -254,7 +271,10 @@ def trim_sheet_preamble(raw_lines: list[dict]) ->list[dict]:
     line has a chord at all, so a sheet is never blanked out.
     """
     first_chord_idx = next(
-        (i for i, line in enumerate(raw_lines) if isinstance(line, dict) and line.get("chords")),
+        (
+            i for i, line in enumerate(raw_lines)
+            if isinstance(line, dict) and line.get("chords") and not _is_preamble_line(line, i, raw_lines)
+        ),
         None,
     )
     if first_chord_idx is None:

@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
+import { Volume2, VolumeX } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -15,8 +16,8 @@ interface TrackSelectorProps {
 }
 
 /**
- * Stem mixer dropdown — shows a per-stem volume slider. All stems are loaded
- * at full volume by default; users mute a stem by dragging its slider to 0.
+ * Stem mixer dropdown with per-stem mute controls and volume sliders. All
+ * available stems load at full volume by default.
  */
 export function TrackSelector({
   onSetStemVolume,
@@ -26,6 +27,8 @@ export function TrackSelector({
   isDisabled = false,
 }: TrackSelectorProps) {
   const showSilentModeWarning = useMemo(() => isAppleMobileSafariLike(), [])
+  const availableStemNames = stemTypes.flatMap(({ name }) => availableStems[name] ? [name] : [])
+  const hasAudibleStem = availableStemNames.some((name) => (stemVolumes?.[name] ?? 1) > 0)
 
   return (
     <Popover.Root>
@@ -62,6 +65,21 @@ export function TrackSelector({
           )}
         >
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={() => {
+                const nextVolume = hasAudibleStem ? 0 : 1
+                availableStemNames.forEach((name) => onSetStemVolume(name, nextVolume))
+              }}
+              disabled={availableStemNames.length === 0}
+              className="mx-1 mb-1 inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-medium text-smoke-100 transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/60 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={hasAudibleStem ? 'Mute all stems' : 'Unmute all stems'}
+              data-testid="track-selector-toggle-all"
+            >
+              {hasAudibleStem ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
+              {hasAudibleStem ? 'Mute all' : 'Unmute all'}
+            </button>
+
             {showSilentModeWarning && (
               <div
                 className="mx-1 mb-1 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs leading-relaxed text-amber-100"
@@ -88,7 +106,17 @@ export function TrackSelector({
                   <div className="flex items-center gap-2 text-sm text-smoke-200">
                     <StemIcon stem={name} size={20} />
                     <span className="font-medium">{label}</span>
-                    <span className="ml-auto w-9 text-right text-[11px] font-mono tabular-nums text-smoke-400">
+                    <button
+                      type="button"
+                      onClick={() => onSetStemVolume(name, volume > 0 ? 0 : 1)}
+                      disabled={!available}
+                      className="ml-auto grid size-9 place-items-center rounded-full border border-white/10 bg-white/10 text-smoke-200 transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={volume > 0 ? `Mute ${label}` : `Unmute ${label}`}
+                      data-testid={`track-selector-mute-${name}`}
+                    >
+                      {volume > 0 ? <VolumeX size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
+                    </button>
+                    <span className="w-9 text-right text-[11px] font-mono tabular-nums text-smoke-400">
                       {Math.round(volume * 100)}%
                     </span>
                   </div>
