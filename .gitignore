@@ -25,6 +25,7 @@ video-project-**
 *.docx
 # Resumable progress state for `just refresh-prod-songbase` (transient)
 regen_refresh.jsonl
+.stfolder/
 .pi-mobile-web-attachments/
 frontend/playwright-report/
 frontend/test-results/
