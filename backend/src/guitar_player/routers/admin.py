@@ -250,7 +250,7 @@ async def admin_drop_all_songs(
 # Sanity check
 # ---------------------------------------------------------------------------
 
-_HEALTH_TIMEOUT = 5.0
+_HEALTH_TIMEOUT = 30.0
 
 
 async def _run_check(
@@ -375,7 +375,7 @@ async def admin_sanity_check(
             raise FileNotFoundError(
                 f"audio_key '{song.audio_key}' not found in storage"
             )
-        audio_path = storage.get_url(song.audio_key)
+        audio_path = storage.resolve_service_path(song.audio_key)
 
     skip_audio = None
     if not storage_ok:
@@ -476,10 +476,10 @@ def _resolve_stem_path(
 
     existing_key = getattr(song, key_attr, None)
     if existing_key and storage.file_exists(existing_key):
-        return storage.get_url(existing_key)
+        return storage.resolve_service_path(existing_key)
 
     key = f"{song.song_name}/{filename}"
     if storage.file_exists(key):
-        return storage.get_url(key)
+        return storage.resolve_service_path(key)
 
     return None
