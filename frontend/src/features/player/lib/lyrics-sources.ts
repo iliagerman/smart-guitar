@@ -52,7 +52,16 @@ function isLikelyNonLatin(detail: SongDetail): boolean {
 }
 
 function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefined): LyricsSourceOption | null {
-  if (usesCustomLyrics(activeVersion)) {
+  const onlineLyrics = getVer1Lyrics(detail)
+  const timedLyrics = getVer2Lyrics(detail)
+  const altLyrics = detail.ver4_lyrics ?? []
+  const likelyNonLatin = isLikelyNonLatin(detail)
+  const preferOnlineLyrics =
+    activeVersion?.lyrics_source === 'community'
+    && likelyNonLatin
+    && onlineLyrics.length > 0
+
+  if (usesCustomLyrics(activeVersion) && !preferOnlineLyrics) {
     const isCommunity = activeVersion?.lyrics_source === 'community'
     return {
       key: 'auto',
@@ -62,11 +71,6 @@ function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefine
       source: activeVersion?.lyrics_source ?? null,
     }
   }
-
-  const onlineLyrics = getVer1Lyrics(detail)
-  const timedLyrics = getVer2Lyrics(detail)
-  const altLyrics = detail.ver4_lyrics ?? []
-  const likelyNonLatin = isLikelyNonLatin(detail)
 
   if (likelyNonLatin && onlineLyrics.length > 0) {
     return {

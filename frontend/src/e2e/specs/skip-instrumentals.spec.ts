@@ -62,12 +62,28 @@ const COMMUNITY_LYRICS = [{
   ],
 }]
 
+const HEBREW_LYRICS = [{
+  start: 2,
+  end: 4,
+  text: '\u05d6\u05d5 \u05e9\u05d5\u05e8\u05d4 \u05de\u05e1\u05d5\u05e0\u05db\u05e8\u05e0\u05ea \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea',
+  words: [
+    { word: '\u05d6\u05d5', start: 2, end: 2.4 },
+    { word: '\u05e9\u05d5\u05e8\u05d4', start: 2.4, end: 2.9 },
+    { word: '\u05de\u05e1\u05d5\u05e0\u05db\u05e8\u05e0\u05ea', start: 2.9, end: 3.5 },
+    { word: '\u05d1\u05e2\u05d1\u05e8\u05d9\u05ea', start: 3.5, end: 4 },
+  ],
+}]
+
 const SYNCED_SHORT_COMMUNITY_OPTION = buildChordOption({
   name: 'Sheet 1', description: 'Community chord sheet · synced to audio', version_key: 'community:sheet1',
   lyrics_source: 'community', lyrics_synced: true,
 }, COMMUNITY_LYRICS)
 
-function buildSongDetail(chordOptions: unknown[], lyrics: LyricLine[] = LYRICS) {
+function buildSongDetail(
+  chordOptions: unknown[],
+  lyrics: LyricLine[] = LYRICS,
+  quickLyrics: LyricLine[] = [],
+) {
   return {
     song: {
       id: SONG_ID, youtube_id: 'abc123', title: 'Knockin', artist: 'Dylan', duration_seconds: 180,
@@ -76,7 +92,8 @@ function buildSongDetail(chordOptions: unknown[], lyrics: LyricLine[] = LYRICS) 
     thumbnail_url: null, audio_url: null,
     stems: { guitar: 'processed' },
     stem_types: [{ name: 'guitar' }],
-    chords: [], lyrics, lyrics_source: 'detected', quick_lyrics: [], quick_lyrics_source: null,
+    chords: [], lyrics, lyrics_source: 'detected', quick_lyrics: quickLyrics,
+    quick_lyrics_source: quickLyrics.length > 0 ? 'lrclib_quick_synced' : null,
     corrected_lyrics: [], corrected_lyrics_source: null,
     chord_options: chordOptions,
     chord_source: 'autochord', recommended_capo: null, song_key: 'G',
@@ -84,13 +101,18 @@ function buildSongDetail(chordOptions: unknown[], lyrics: LyricLine[] = LYRICS) 
   }
 }
 
-async function mockSongDetail(page: Page, chordOptions: unknown[], lyrics: LyricLine[] = LYRICS) {
+async function mockSongDetail(
+  page: Page,
+  chordOptions: unknown[],
+  lyrics: LyricLine[] = LYRICS,
+  quickLyrics: LyricLine[] = [],
+) {
   await page.route(`**/api/v1/songs/${SONG_ID}`, (route) =>
     route.request().method() === 'GET'
       ? route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(buildSongDetail(chordOptions, lyrics)),
+          body: JSON.stringify(buildSongDetail(chordOptions, lyrics, quickLyrics)),
         })
       : route.continue(),
   )
@@ -211,6 +233,23 @@ test.describe('Skip instrumentals', () => {
     await page.getByTestId('sheet-selector-source-1').click()
 
     await expect(page.getByText('community')).toBeVisible()
+  })
+
+  test('Hebrew song keeps its online timed lyrics when a community sheet is selected', async ({ authenticatedPage: page }) => {
+    await mockSongDetail(
+      page,
+      [buildChordOption(), SYNCED_SHORT_COMMUNITY_OPTION],
+      LYRICS,
+      HEBREW_LYRICS,
+    )
+    await page.goto(`/songs/${SONG_ID}`)
+
+    await page.getByTestId('sheet-selector-trigger').click()
+    await page.getByTestId('sheet-selector-source-1').click()
+
+    await expect(
+      page.getByRole('button', { name: HEBREW_LYRICS[0].words[0].word, exact: true }),
+    ).toBeVisible()
   })
 
   test('toggle is disabled when the active sheet has unsynced lyrics', async ({ authenticatedPage: page }) => {
