@@ -3,6 +3,7 @@ import { Heart, Pause, Pencil, Play, Timer, X } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { MetronomePanel } from '@/features/metronome/components/MetronomePanel'
+import { resumeMetronomeAudio } from '@/features/metronome/lib/metronome-audio'
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
@@ -357,7 +358,10 @@ function PrimaryControls({
       <div className="relative">
         <button
           type="button"
-          onClick={() => setShowMetronome((value) => !value)}
+          onClick={() => {
+            if (!showMetronome) resumeMetronomeAudio()
+            setShowMetronome((value) => !value)
+          }}
           className={cn(
             'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
             'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
