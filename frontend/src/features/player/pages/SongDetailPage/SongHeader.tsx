@@ -1,4 +1,4 @@
-import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import { Pause, Play, RotateCcw, SkipBack, SkipForward } from 'lucide-react'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { SongFeedback } from '../../components/SongFeedback'
 import { AdminMenu } from './AdminMenu'
@@ -57,6 +57,21 @@ export function SongHeader({
 
       {/* Mobile-only: transport buttons live in the header row to save vertical space */}
       <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+        {isPlaying && (
+          <button
+            type="button"
+            onClick={() => onSeek(0)}
+            className={cn(
+              'grid size-9 place-items-center rounded-full text-smoke-400 transition-colors',
+              isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-white/10 hover:text-smoke-100',
+            )}
+            aria-label="Start over"
+            data-testid="mobile-player-restart"
+            disabled={isPlaybackDisabled}
+          >
+            <RotateCcw size={21} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSeek(Math.max(0, usePlaybackStore.getState().currentTime - 10))}

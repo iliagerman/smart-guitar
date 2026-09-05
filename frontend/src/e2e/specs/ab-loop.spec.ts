@@ -20,13 +20,21 @@ async function waitForDuration(page: Page) {
 
 const SONG_ID = '0b59abe8-4eac-4245-8cc1-2bceea4a3368'
 
-const CHORDS = [
-  { start_time: 0, end_time: 2, chord: 'G', bass: null },
-  { start_time: 2, end_time: 4, chord: 'C', bass: null },
-]
-const LYRICS = [
-  { start: 0, end: 4, text: 'la la', words: [{ word: 'la', start: 0, end: 2 }, { word: 'la', start: 2, end: 4 }] },
-]
+const CHORDS = Array.from({ length: 30 }, (_, index) => ({
+  start_time: index * 2,
+  end_time: index * 2 + 2,
+  chord: index % 2 === 0 ? 'G' : 'C',
+  bass: null,
+}))
+const LYRICS = Array.from({ length: 30 }, (_, index) => ({
+  start: index * 2,
+  end: index * 2 + 2,
+  text: `line ${index + 1}`,
+  words: [
+    { word: 'line', start: index * 2, end: index * 2 + 1 },
+    { word: String(index + 1), start: index * 2 + 1, end: index * 2 + 2 },
+  ],
+}))
 
 const SONG_DETAIL = {
   song: {
@@ -70,6 +78,29 @@ test.describe('A/B loop', () => {
     await page.route(`**/api/v1/songs/${SONG_ID}/stream*`, (route) =>
       route.fulfill({ path: FAKE_STEM_FILE, contentType: 'video/mp4', headers: { 'Accept-Ranges': 'bytes' } }),
     )
+  })
+
+  test('start over returns playback and the song sheet to the beginning', async ({ authenticatedPage: page }) => {
+    await page.goto(`/songs/${SONG_ID}`)
+    await waitForDuration(page)
+
+    await page.getByTestId('count-in-toggle').click()
+    await page.getByTestId('player-play-button').click()
+
+    const restartButton = page.getByTestId('player-restart')
+    const progressBar = page.getByTestId('transport-progress-bar')
+    await expect(restartButton).toBeVisible()
+    await progressBar.click({ position: { x: 100, y: 4 } })
+    await expect(progressBar).not.toHaveAttribute('aria-valuenow', '0')
+
+    const chordSheet = page.getByTestId('chord-sheet')
+    await chordSheet.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+    await expect.poll(() => chordSheet.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    await restartButton.click()
+    await expect(progressBar).toHaveAttribute('aria-valuenow', '0')
+    await expect.poll(() => chordSheet.evaluate((element) => element.scrollTop)).toBe(0)
+    await expect(page.getByTestId('player-play-button')).toHaveAttribute('aria-label', 'Pause')
   })
 
   test('tapping the loop button twice sets A and B markers on the progress bar', async ({ authenticatedPage: page }) => {

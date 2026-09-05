@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Settings2, ChevronDown } from 'lucide-react'
+import { Play, Pause, RotateCcw, SkipBack, SkipForward, Settings2, ChevronDown } from 'lucide-react'
 import { formatDuration } from '@/lib/format-duration'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { cn } from '@/lib/cn'
@@ -78,6 +78,21 @@ export function TransportControls({
       )}
 
       <div className={showButtonsOnMobile ? 'flex items-center justify-center gap-6' : 'hidden sm:flex items-center justify-center gap-6'}>
+        {isPlaying && (
+          <button
+            type="button"
+            onClick={() => onSeek(0)}
+            className={cn(
+              'text-smoke-400 transition-colors',
+              isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-smoke-100',
+            )}
+            aria-label="Start over"
+            data-testid="player-restart"
+            disabled={isPlaybackDisabled}
+          >
+            <RotateCcw size={24} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSeek(Math.max(0, usePlaybackStore.getState().currentTime - 10))}

@@ -410,6 +410,7 @@ export function TabsSheet({ tabs, lyrics, strums, rhythm, onSeek }: TabsSheetPro
       ref={scrollRef}
       className="flex-1 min-h-0 overflow-auto scrollbar-hide font-mono text-lg md:text-xl bg-charcoal-900/40 text-smoke-300 rounded-xl p-4"
       data-testid="tabs-sheet"
+      data-song-scroll-container
     >
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-smoke-200">Tabs</h2>

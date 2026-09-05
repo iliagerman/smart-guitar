@@ -522,6 +522,7 @@ export function ChordSheet({
           : 'bg-[linear-gradient(180deg,rgba(18,20,24,0.94),rgba(9,10,12,0.96))]'
       )}
       data-testid="chord-sheet"
+      data-song-scroll-container
     >
       {lines.map((line, li) => {
         // Narrow the broadcast active/look-ahead state to this line before it

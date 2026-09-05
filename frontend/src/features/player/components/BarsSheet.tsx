@@ -69,7 +69,7 @@ export function BarsSheet({ chords, barStarts, duration, bpm, onSeek }: BarsShee
       {bpm ? (
         <div className="pb-2 text-xs text-smoke-500">{Math.round(bpm)} BPM · 4/4</div>
       ) : null}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto pr-1">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto pr-1" data-song-scroll-container>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {bars.map((bar, i) => (
             <BarCell

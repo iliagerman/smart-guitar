@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2, Play, Pause, Minus, Plus, ChevronsDown } from 'lucide-react'
 
@@ -69,8 +69,17 @@ export function SongContent({
   onOpenTutorial,
 }: SongContentProps) {
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
+  const isAtSongStart = usePlaybackStore((s) => s.currentTime === 0)
+  const contentRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const toggleFullscreen = useCallback(() => setIsFullscreen((v) => !v), [])
+
+  useEffect(() => {
+    if (!isAtSongStart) return
+    contentRef.current
+      ?.querySelector<HTMLElement>('[data-song-scroll-container]')
+      ?.scrollTo({ top: 0 })
+  }, [isAtSongStart, sheetMode])
 
   const isEditMode = useChordEditStore((s) => s.isEditMode)
   const editingChords = useChordEditStore((s) => s.editingChords)
@@ -89,7 +98,7 @@ export function SongContent({
     hasStemsProcessed && hasChords && (!hasAnyLyrics || (sheetMode === 'tabs' && !hasTabs))
 
   return (
-    <div className="relative z-10 flex-1 min-h-0 flex flex-col" data-testid="song-content">
+    <div ref={contentRef} className="relative z-10 flex-1 min-h-0 flex flex-col" data-testid="song-content">
       <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-3 sm:p-4">
         <ProcessButton
           songId={songId}
