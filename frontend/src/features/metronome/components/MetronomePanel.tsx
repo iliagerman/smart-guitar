@@ -3,6 +3,7 @@ import { Minus, Music2, Plus, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useMetronome, type MetronomeMode } from '../hooks/use-metronome'
 import { resumeMetronomeAudio } from '../lib/metronome-audio'
+import { StrummingPractice } from './StrummingPractice'
 
 interface MetronomePanelProps {
   autoBpm?: number | null
@@ -34,6 +35,7 @@ interface PanelViewProps extends MetronomeSettingsProps {
   autoBpm?: number | null
   bpm: number
   beat: number
+  subdivision: number
   enabled: boolean
   sourceLabel: string
   onBpmChange: (value: number) => void
@@ -286,7 +288,7 @@ function SongTempoButton({ autoBpm, onUseSongTempo }: PanelViewProps) {
 function FullPanel(props: PanelViewProps) {
   return (
     <section
-      className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-start overflow-y-auto rounded-[2rem] sm:justify-center border border-white/10 bg-[#111215]/95 p-6 shadow-[0_0_60px_rgba(250,204,21,0.16),0_24px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl sm:p-8"
+      className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col justify-start overflow-y-auto rounded-[2rem] border border-white/10 bg-[#111215]/95 p-6 shadow-[0_0_60px_rgba(250,204,21,0.16),0_24px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl sm:p-8"
       data-testid="metronome-panel"
     >
       <PanelHeader {...props} />
@@ -302,6 +304,13 @@ function FullPanel(props: PanelViewProps) {
       <div className="mt-5"><TempoSlider {...props} /></div>
       <div className="mt-4"><MetronomeSettings {...props} /></div>
       <SongTempoButton {...props} />
+      <StrummingPractice
+        key={`${props.beatsPerBar}/${props.beatUnit}`}
+        beatsPerBar={props.beatsPerBar}
+        beatUnit={props.beatUnit}
+        enabled={props.enabled}
+        subdivision={props.subdivision}
+      />
     </section>
   )
 }
@@ -338,7 +347,7 @@ function usePanelState({ autoBpm, mode, playbackTime, playbackPlaying }: Metrono
   }
 
   return {
-    autoBpm, bpm, beat: metronome.beat, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
+    autoBpm, bpm, beat: metronome.beat, subdivision: metronome.subdivision, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
     sourceLabel: !autoBpm ? 'Manual tempo' : manualOverride ? 'Manual override' : 'Synced to song',
     onBpmChange: updateBpm, onEnabledToggle: toggleEnabled, onUseSongTempo: useSongTempo,
     onBeatsPerBarChange: setBeatsPerBar, onBeatUnitChange: setBeatUnit,

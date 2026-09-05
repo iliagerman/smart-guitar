@@ -18,8 +18,8 @@ interface MetronomeClockOptions {
   bpm: number
   enabled: boolean
   mode: MetronomeMode
-  lastBeatRef: RefObject<number | null>
-  emitBeat: (beatNumber: number) => void
+  lastSubdivisionRef: RefObject<number | null>
+  emitSubdivision: (subdivisionNumber: number) => void
 }
 
 interface PlaybackClockOptions extends MetronomeClockOptions {
@@ -29,6 +29,7 @@ interface PlaybackClockOptions extends MetronomeClockOptions {
 
 interface UseMetronomeResult {
   beat: number
+  subdivision: number
   triggerClick: () => void
 }
 
@@ -39,54 +40,54 @@ function safeBpm(bpm: number): number {
   return Math.max(40, Math.min(240, Math.round(bpm)))
 }
 
-function useStandaloneClock({ bpm, enabled, mode, lastBeatRef, emitBeat }: MetronomeClockOptions): void {
+function useStandaloneClock({ bpm, enabled, mode, lastSubdivisionRef, emitSubdivision }: MetronomeClockOptions): void {
   const startRef = useRef(0)
 
   useEffect(() => {
     if (!enabled || mode !== 'standalone') return
 
     startRef.current = performance.now()
-    lastBeatRef.current = null
+    lastSubdivisionRef.current = null
     const timer = window.setInterval(() => {
-      const intervalMs = 60_000 / safeBpm(bpm)
-      const beatNumber = Math.floor((performance.now() - startRef.current) / intervalMs)
-      if (beatNumber !== lastBeatRef.current) {
-        lastBeatRef.current = beatNumber
-        emitBeat(beatNumber)
+      const intervalMs = 30_000 / safeBpm(bpm)
+      const subdivisionNumber = Math.floor((performance.now() - startRef.current) / intervalMs)
+      if (subdivisionNumber !== lastSubdivisionRef.current) {
+        lastSubdivisionRef.current = subdivisionNumber
+        emitSubdivision(subdivisionNumber)
       }
     }, LOOKUP_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [bpm, enabled, mode, lastBeatRef, emitBeat])
+  }, [bpm, enabled, mode, lastSubdivisionRef, emitSubdivision])
 }
 
 function usePlaybackClock({
   bpm,
   enabled,
   mode,
-  lastBeatRef,
-  emitBeat,
+  lastSubdivisionRef,
+  emitSubdivision,
   playbackTime,
   playbackPlaying,
 }: PlaybackClockOptions): void {
   useEffect(() => {
     if (!enabled || mode !== 'playback' || !playbackPlaying) return
 
-    const intervalSeconds = 60 / safeBpm(bpm)
-    const beatNumber = Math.floor(playbackTime / intervalSeconds)
-    const secondsAfterBeat = playbackTime % intervalSeconds
-    if (lastBeatRef.current === null && secondsAfterBeat > LOOKUP_INTERVAL_MS / 1000) {
-      lastBeatRef.current = beatNumber
+    const intervalSeconds = 30 / safeBpm(bpm)
+    const subdivisionNumber = Math.floor(playbackTime / intervalSeconds)
+    const secondsAfterSubdivision = playbackTime % intervalSeconds
+    if (lastSubdivisionRef.current === null && secondsAfterSubdivision > LOOKUP_INTERVAL_MS / 1000) {
+      lastSubdivisionRef.current = subdivisionNumber
       return
     }
-    if (beatNumber !== lastBeatRef.current) {
-      lastBeatRef.current = beatNumber
-      emitBeat(beatNumber)
+    if (subdivisionNumber !== lastSubdivisionRef.current) {
+      lastSubdivisionRef.current = subdivisionNumber
+      emitSubdivision(subdivisionNumber)
     }
-  }, [bpm, enabled, mode, playbackPlaying, playbackTime, lastBeatRef, emitBeat])
+  }, [bpm, enabled, mode, playbackPlaying, playbackTime, lastSubdivisionRef, emitSubdivision])
 }
 
-/** Drives metronome visual beats and Web Audio clicks. */
+/** Drives metronome visual beats, strumming subdivisions, and Web Audio clicks. */
 export function useMetronome({
   bpm,
   beatsPerBar,
@@ -98,7 +99,8 @@ export function useMetronome({
   playbackPlaying = false,
 }: UseMetronomeOptions): UseMetronomeResult {
   const [beat, setBeat] = useState(0)
-  const lastBeatRef = useRef<number | null>(null)
+  const [subdivision, setSubdivision] = useState(0)
+  const lastSubdivisionRef = useRef<number | null>(null)
   const beatsPerBarRef = useRef(beatsPerBar)
   const soundRef = useRef(soundEnabled)
   const volumeRef = useRef(volume)
@@ -112,19 +114,27 @@ export function useMetronome({
     playMetronomeClick(beat === 0, volumeRef.current)
   }, [beat])
 
-  const emitBeat = useCallback((beatNumber: number) => {
-    const nextBeat = beatNumber % beatsPerBarRef.current
+  const emitSubdivision = useCallback((subdivisionNumber: number) => {
+    const nextSubdivision = subdivisionNumber % (beatsPerBarRef.current * 2)
+    setSubdivision(nextSubdivision)
+    if (nextSubdivision % 2 !== 0) return
+
+    const nextBeat = nextSubdivision / 2
     setBeat(nextBeat)
     if (soundRef.current) playMetronomeClick(nextBeat === 0, volumeRef.current)
   }, [])
 
-  const clockOptions = { bpm, enabled, mode, lastBeatRef, emitBeat }
+  const clockOptions = { bpm, enabled, mode, lastSubdivisionRef, emitSubdivision }
   useStandaloneClock(clockOptions)
   usePlaybackClock({ ...clockOptions, playbackTime, playbackPlaying })
 
   useEffect(() => {
-    if (!enabled) lastBeatRef.current = null
+    if (!enabled) lastSubdivisionRef.current = null
   }, [enabled])
 
-  return { beat: enabled ? beat % beatsPerBar : 0, triggerClick }
+  return {
+    beat: enabled ? beat % beatsPerBar : 0,
+    subdivision: enabled ? subdivision % (beatsPerBar * 2) : 0,
+    triggerClick,
+  }
 }
