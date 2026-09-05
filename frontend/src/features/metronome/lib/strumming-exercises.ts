@@ -7,6 +7,7 @@ export interface StrummingExercise {
   beatsPerBar: number
   beatUnit: number
   steps: StrumAction[]
+  bpm?: number
   custom?: boolean
 }
 
@@ -51,6 +52,62 @@ export const COMMON_STRUMMING_EXERCISES = Object.freeze([
     steps: ['accent', 'rest', 'play', 'play', 'accent', 'rest', 'play', 'play'],
   }),
   commonExercise({
+    id: 'reggae-offbeats',
+    name: 'Reggae offbeats',
+    description: 'Skip the downbeats and accent every upbeat.',
+    beatsPerBar: 4,
+    beatUnit: 4,
+    steps: ['rest', 'accent', 'rest', 'accent', 'rest', 'accent', 'rest', 'accent'],
+  }),
+  commonExercise({
+    id: 'driving-eighths',
+    name: 'Driving eighths',
+    description: 'Play every stroke and accent beats 1 and 3.',
+    beatsPerBar: 4,
+    beatUnit: 4,
+    steps: ['accent', 'play', 'play', 'play', 'accent', 'play', 'play', 'play'],
+  }),
+  commonExercise({
+    id: 'country-train',
+    name: 'Country train',
+    description: 'Accent beats 1 and 3; let the upstrokes drive the groove.',
+    beatsPerBar: 4,
+    beatUnit: 4,
+    steps: ['accent', 'play', 'rest', 'play', 'accent', 'play', 'rest', 'play'],
+  }),
+  commonExercise({
+    id: 'rock-backbeat',
+    name: 'Rock backbeat',
+    description: 'Lean into the upstrokes after beats 2 and 4.',
+    beatsPerBar: 4,
+    beatUnit: 4,
+    steps: ['play', 'rest', 'play', 'accent', 'play', 'rest', 'play', 'accent'],
+  }),
+  commonExercise({
+    id: 'accent-two-four',
+    name: 'Accent 2 and 4 drill',
+    description: 'Use steady downstrokes and emphasize beats 2 and 4.',
+    beatsPerBar: 4,
+    beatUnit: 4,
+    steps: ['play', 'rest', 'accent', 'rest', 'play', 'rest', 'accent', 'rest'],
+  }),
+  commonExercise({
+    id: 'two-beat-downstrokes',
+    name: 'Two-beat downstrokes',
+    description: 'Accent beat 1 and keep both downstrokes steady.',
+    beatsPerBar: 2,
+    beatUnit: 4,
+    steps: ['accent', 'rest', 'play', 'rest'],
+  }),
+  commonExercise({
+    id: 'two-beat-eighths',
+    name: 'Two-beat eighths',
+    description: 'Play all four strokes with a strong beat 1.',
+    beatsPerBar: 2,
+    beatUnit: 4,
+    steps: ['accent', 'play', 'play', 'play'],
+  }),
+  commonExercise({
     id: 'waltz-downstrokes',
     name: 'Waltz downstrokes',
     description: 'Accent beat 1, then emphasize the grounded downbeats.',
@@ -66,6 +123,38 @@ export const COMMON_STRUMMING_EXERCISES = Object.freeze([
     beatUnit: 4,
     steps: ['accent', 'play', 'play', 'play', 'play', 'play'],
   }),
+  commonExercise({
+    id: 'bass-brush-waltz',
+    name: 'Bass-and-brush waltz',
+    description: 'Ground beat 1, then use flowing brushes on beats 2 and 3.',
+    beatsPerBar: 3,
+    beatUnit: 4,
+    steps: ['accent', 'rest', 'play', 'play', 'play', 'play'],
+  }),
+  commonExercise({
+    id: 'six-eight-pulse',
+    name: '6/8 pulse',
+    description: 'Accent beats 1 and 4 to feel the two large pulses.',
+    beatsPerBar: 6,
+    beatUnit: 8,
+    steps: ['accent', 'rest', 'play', 'rest', 'play', 'rest', 'accent', 'rest', 'play', 'rest', 'play', 'rest'],
+  }),
+  commonExercise({
+    id: 'flowing-six-eight',
+    name: 'Flowing 6/8',
+    description: 'Play continuously and accent beats 1 and 4.',
+    beatsPerBar: 6,
+    beatUnit: 8,
+    steps: ['accent', 'play', 'play', 'play', 'play', 'play', 'accent', 'play', 'play', 'play', 'play', 'play'],
+  }),
+  commonExercise({
+    id: 'six-eight-ballad',
+    name: '6/8 ballad',
+    description: 'Accent beats 1 and 4 with a light lift before each pulse.',
+    beatsPerBar: 6,
+    beatUnit: 8,
+    steps: ['accent', 'rest', 'play', 'play', 'play', 'rest', 'accent', 'rest', 'play', 'play', 'play', 'rest'],
+  }),
 ] as StrummingExercise[])
 
 export function createPracticeSteps(beatsPerBar: number): StrumAction[] {
@@ -75,18 +164,11 @@ export function createPracticeSteps(beatsPerBar: number): StrumAction[] {
   })
 }
 
-export function createRandomExercise(beatsPerBar: number, beatUnit: number): StrummingExercise {
-  const steps = Array.from({ length: beatsPerBar * 2 }, (_, index) => {
+export function createRandomSteps(beatsPerBar: number): StrumAction[] {
+  return Array.from({ length: beatsPerBar * 2 }, (_, index) => {
     if (index === 0) return 'accent'
-    return Math.random() < 0.6 ? 'play' : 'rest'
+    const chance = Math.random()
+    if (chance < 0.15) return 'accent'
+    return chance < 0.65 ? 'play' : 'rest'
   })
-
-  return {
-    id: 'generated',
-    name: 'Fresh pattern',
-    description: 'A fresh groove with an accented beat-one downstroke.',
-    beatsPerBar,
-    beatUnit,
-    steps,
-  }
 }

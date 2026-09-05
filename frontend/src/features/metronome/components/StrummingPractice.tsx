@@ -4,17 +4,20 @@ import { cn } from '@/lib/cn'
 import {
   COMMON_STRUMMING_EXERCISES,
   createPracticeSteps,
-  createRandomExercise,
+  createRandomSteps,
   type StrumAction,
   type StrummingExercise,
 } from '../lib/strumming-exercises'
 import { useStrummingExercisesStore } from '@/stores/strumming-exercises.store'
+import { useScreenWakeLock, type ScreenWakeLockStatus } from '../hooks/use-screen-wake-lock'
 
 interface StrummingPracticeProps {
+  bpm: number
   beatsPerBar: number
   beatUnit: number
   enabled: boolean
   subdivision: number
+  onBpmChange: (value: number) => void
 }
 
 interface PatternGridProps {
@@ -33,17 +36,26 @@ interface ExerciseComposerProps {
   beatsPerBar: number
   beatUnit: number
   name: string
+  tempo: number
   steps: StrumAction[]
   onNameChange: (name: string) => void
-  onStepChange: (index: number) => void
+  onTempoChange: (tempo: number) => void
+  onPlayToggle: (index: number) => void
+  onAccentToggle: (index: number) => void
   onSave: (event: FormEvent<HTMLFormElement>) => void
   onClose: () => void
 }
 
-interface DraftStepButtonProps {
+interface DraftStepControlProps {
   index: number
   action: StrumAction
-  onStepChange: (index: number) => void
+  onPlayToggle: (index: number) => void
+  onAccentToggle: (index: number) => void
+}
+
+interface TempoControlProps {
+  tempo: number
+  onTempoChange: (tempo: number) => void
 }
 
 interface PracticeControlsProps {
@@ -64,7 +76,17 @@ interface SelectedExerciseProps {
   onDelete: (id: string) => void
 }
 
+interface ScreenAwakeStatusProps {
+  status: ScreenWakeLockStatus
+}
+
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/40'
+const wakeLockMessages: Record<ScreenWakeLockStatus, string> = {
+  idle: 'Screen wake lock starts with the metronome.',
+  requesting: 'Keeping the screen awake…',
+  active: 'Screen will stay awake while you practice.',
+  unavailable: 'Screen wake lock is unavailable. Check your device sleep settings.',
+}
 
 function slotLabel(index: number): string {
   return index % 2 === 0 ? String(index / 2 + 1) : '&'
@@ -76,12 +98,6 @@ function actionLabel(action: StrumAction): string {
   return 'Skip'
 }
 
-function nextAction(action: StrumAction): StrumAction {
-  if (action === 'rest') return 'play'
-  if (action === 'play') return 'accent'
-  return 'rest'
-}
-
 function PracticeStep({ index, action, active }: PracticeStepProps) {
   const downstroke = index % 2 === 0
   const direction = downstroke ? 'down' : 'up'
@@ -90,18 +106,19 @@ function PracticeStep({ index, action, active }: PracticeStepProps) {
     <div
       className={cn(
         'min-h-28 rounded-xl border p-3 text-center transition-colors motion-reduce:transition-none',
-        active ? 'border-flame-300 bg-flame-400/15 shadow-[0_0_20px_rgba(251,146,60,0.2)]' : 'border-white/10 bg-charcoal-900/50',
+        active ? 'border-flame-300 bg-flame-400/15 ring-2 ring-flame-300 ring-offset-2 ring-offset-charcoal-950' : 'border-white/10 bg-charcoal-900/50',
         action === 'rest' && !active && 'opacity-45',
-        action === 'accent' && 'border-flame-400/60 bg-flame-400/10',
+        action === 'accent' && 'border-sky-400/70 bg-sky-400/15',
       )}
       data-metronome-tick={downstroke ? 'true' : undefined}
+      data-strum-action={action}
       data-testid={`strum-step-${index}`}
     >
       <div className="text-xs font-semibold text-smoke-400">{slotLabel(index)}</div>
       <div className={cn('mt-1 text-3xl font-bold leading-none', downstroke ? 'text-emerald-400' : 'text-amber-300')}>
         {downstroke ? '↓' : '↑'}
       </div>
-      <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-smoke-200">{actionLabel(action)}</div>
+      <div className={cn('mt-2 text-xs font-semibold uppercase tracking-wide', action === 'accent' ? 'text-sky-200' : 'text-smoke-200')}>{actionLabel(action)}</div>
       <div className="mt-1 text-[10px] uppercase tracking-wide text-smoke-500">{direction}</div>
     </div>
   )
@@ -117,60 +134,72 @@ function PatternGrid({ steps, enabled, subdivision }: PatternGridProps) {
   )
 }
 
-function DraftStepButton({ index, action, onStepChange }: DraftStepButtonProps) {
+function DraftStepControl({ index, action, onPlayToggle, onAccentToggle }: DraftStepControlProps) {
   const downstroke = index % 2 === 0
+  const played = action !== 'rest'
+  const accented = action === 'accent'
   return (
-    <button
-      type="button"
-      onClick={() => onStepChange(index)}
-      className={cn(
-        'min-h-11 rounded-lg border px-2 text-xs font-semibold transition-colors',
-        focusRing,
-        action === 'accent' ? 'border-flame-400/60 bg-flame-400/15 text-flame-200' : 'border-charcoal-600 bg-charcoal-800 text-smoke-200 hover:border-flame-400/40',
-        action === 'rest' && 'opacity-60',
-      )}
-      aria-label={`Set ${slotLabel(index)} ${downstroke ? 'down' : 'up'} stroke to ${nextAction(action)}`}
-      data-testid={`custom-strum-step-${index}`}
-    >
-      {downstroke ? '↓' : '↑'} {slotLabel(index)} · {actionLabel(action)}
-    </button>
+    <div className="rounded-lg border border-charcoal-600 bg-charcoal-950/60 p-2" data-testid={`custom-strum-step-${index}`}>
+      <div className="text-center text-sm font-bold text-smoke-200">{downstroke ? '↓' : '↑'} {slotLabel(index)}</div>
+      <button
+        type="button"
+        onClick={() => onPlayToggle(index)}
+        className={cn('mt-2 min-h-11 w-full touch-manipulation rounded-md border px-2 text-xs font-semibold transition-colors hover:border-emerald-300/70 motion-reduce:transition-none', played ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-200' : 'border-charcoal-600 bg-charcoal-800 text-smoke-400', focusRing)}
+        aria-label={`${played ? 'Skip' : 'Play'} ${slotLabel(index)} ${downstroke ? 'downstroke' : 'upstroke'}`}
+        aria-pressed={played}
+        data-testid={`custom-strum-play-${index}`}
+      >
+        {played ? 'Played' : 'Skipped'}
+      </button>
+      <button
+        type="button"
+        onClick={() => onAccentToggle(index)}
+        disabled={!played}
+        className={cn('mt-1 min-h-11 w-full touch-manipulation rounded-md border px-2 text-xs font-semibold transition-colors hover:border-sky-300/70 disabled:cursor-not-allowed disabled:opacity-35 motion-reduce:transition-none', accented ? 'border-sky-400/70 bg-sky-400/15 text-sky-200' : 'border-charcoal-600 bg-charcoal-800 text-smoke-400', focusRing)}
+        aria-label={`${accented ? 'Remove accent from' : 'Accent'} ${slotLabel(index)} ${downstroke ? 'downstroke' : 'upstroke'}`}
+        aria-pressed={accented}
+        data-testid={`custom-strum-accent-${index}`}
+      >
+        {accented ? 'Accented' : 'Normal'}
+      </button>
+    </div>
   )
 }
 
-function ExerciseComposer({ beatsPerBar, beatUnit, name, steps, onNameChange, onStepChange, onSave, onClose }: ExerciseComposerProps) {
+function TempoControl({ tempo, onTempoChange }: TempoControlProps) {
+  return (
+    <label htmlFor="custom-exercise-tempo" className="mt-4 block text-xs font-semibold text-smoke-300">
+      <span className="flex justify-between gap-3"><span>Practice tempo</span><span className="tabular-nums text-flame-200">{tempo} BPM</span></span>
+      <input id="custom-exercise-tempo" name="custom-exercise-tempo" type="range" min="40" max="240" value={tempo} onChange={(event) => onTempoChange(Number(event.target.value))} autoComplete="off" className={cn('mt-2 w-full accent-flame-400', focusRing)} data-testid="custom-exercise-tempo" />
+    </label>
+  )
+}
+
+function ExerciseComposer({ beatsPerBar, beatUnit, name, tempo, steps, onNameChange, onTempoChange, onPlayToggle, onAccentToggle, onSave, onClose }: ExerciseComposerProps) {
   return (
     <form className="mt-4 rounded-xl border border-flame-400/30 bg-charcoal-900/70 p-4" onSubmit={onSave} data-testid="strumming-composer">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-smoke-100">Compose {beatsPerBar}/{beatUnit}</h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className={cn('min-h-11 px-2 text-xs text-smoke-400 hover:text-smoke-100', focusRing)}
-          data-testid="close-strumming-composer"
-        >
-          Cancel
-        </button>
+        <h3 className="text-sm font-semibold text-smoke-100">Build {beatsPerBar}/{beatUnit} pattern</h3>
+        <button type="button" onClick={onClose} className={cn('min-h-11 px-2 text-xs text-smoke-400 hover:text-smoke-100', focusRing)} data-testid="close-strumming-composer">Cancel</button>
       </div>
       <label htmlFor="custom-exercise-name" className="mt-3 block text-xs font-semibold text-smoke-300">Exercise name</label>
-      <input
-        id="custom-exercise-name"
-        name="custom-exercise-name"
-        value={name}
-        onChange={(event) => onNameChange(event.target.value)}
-        required
-        maxLength={40}
-        autoComplete="off"
-        className={cn('mt-1 min-h-11 w-full rounded-lg border border-charcoal-600 bg-charcoal-950 px-3 text-sm text-smoke-100', focusRing)}
-        data-testid="custom-exercise-name"
-      />
-      <p className="mt-3 text-xs text-smoke-400">Cycle each fixed-direction slot from Skip to Strum to Accent.</p>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {steps.map((action, index) => <DraftStepButton key={index} index={index} action={action} onStepChange={onStepChange} />)}
+      <input id="custom-exercise-name" name="custom-exercise-name" value={name} onChange={(event) => onNameChange(event.target.value)} required pattern=".*\S.*" title="Enter at least one non-space character." maxLength={40} autoComplete="off" className={cn('mt-1 min-h-11 w-full rounded-lg border border-charcoal-600 bg-charcoal-950 px-3 text-sm text-smoke-100', focusRing)} data-testid="custom-exercise-name" />
+      <TempoControl tempo={tempo} onTempoChange={onTempoChange} />
+      <p className="mt-4 text-xs text-smoke-400">Choose whether each fixed-direction stroke is played, then accent any played stroke.</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {steps.map((action, index) => <DraftStepControl key={index} index={index} action={action} onPlayToggle={onPlayToggle} onAccentToggle={onAccentToggle} />)}
       </div>
-      <button type="submit" disabled={!name.trim()} className={cn('mt-4 min-h-11 rounded-lg border border-flame-400/50 bg-flame-400/15 px-4 text-sm font-semibold text-flame-100 transition-colors hover:border-flame-300 disabled:cursor-not-allowed disabled:opacity-40', focusRing)} data-testid="save-strumming-exercise">
-        Save exercise
-      </button>
+      <button type="submit" className={cn('mt-4 min-h-11 touch-manipulation rounded-lg border border-flame-400/50 bg-flame-400/15 px-4 text-sm font-semibold text-flame-100 transition-colors hover:border-flame-300 motion-reduce:transition-none', focusRing)} data-testid="save-strumming-exercise">Save exercise</button>
     </form>
+  )
+}
+
+function ScreenAwakeStatus({ status }: ScreenAwakeStatusProps) {
+  return (
+    <p className="mt-3 flex items-center gap-2 text-xs text-smoke-400" aria-live="polite" data-testid="screen-wake-lock-status">
+      <span className={cn('size-2 rounded-full', status === 'active' ? 'bg-emerald-400' : 'bg-smoke-600')} aria-hidden="true" />
+      {wakeLockMessages[status]}
+    </p>
   )
 }
 
@@ -213,9 +242,10 @@ function SelectedExercise({ exercise, enabled, subdivision, onDelete }: Selected
   return (
     <div className="mt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-smoke-100" data-testid="strumming-exercise-name">{exercise.name}</h3>
+        <div className="min-w-0">
+          <h3 className="break-words font-semibold text-smoke-100" data-testid="strumming-exercise-name">{exercise.name}</h3>
           <p className="mt-1 text-sm text-smoke-400">{exercise.description}</p>
+          {exercise.bpm && <p className="mt-1 text-xs font-semibold tabular-nums text-flame-200" data-testid="strumming-exercise-tempo">Practice at {exercise.bpm} BPM</p>}
         </div>
         {exercise.custom && (
           <button
@@ -230,84 +260,89 @@ function SelectedExercise({ exercise, enabled, subdivision, onDelete }: Selected
           </button>
         )}
       </div>
-      <p className="mt-4 text-sm text-smoke-300">Keep your hand moving down/up through skips; mute the stroke, not the motion.</p>
+      <p className="mt-4 text-sm text-smoke-300">Keep your hand moving down/up through skips; mute the stroke, not the motion. <span className="font-semibold text-sky-200">Blue strokes are accents.</span></p>
       <div className="mt-3"><PatternGrid steps={exercise.steps} enabled={enabled} subdivision={subdivision} /></div>
     </div>
   )
 }
 
-function createCustomExercise(name: string, steps: StrumAction[], beatsPerBar: number, beatUnit: number): StrummingExercise {
+function createCustomExercise(name: string, steps: StrumAction[], bpm: number, beatsPerBar: number, beatUnit: number): StrummingExercise {
   return {
     id: `custom-${crypto.randomUUID()}`,
     name,
-    description: `Your ${beatsPerBar}/${beatUnit} pattern.`,
+    description: `Your ${beatsPerBar}/${beatUnit} pattern at ${bpm} BPM.`,
     beatsPerBar,
     beatUnit,
     steps: [...steps],
+    bpm,
     custom: true,
   }
 }
 
-function usePracticeState(beatsPerBar: number, beatUnit: number) {
+function togglePlayed(action: StrumAction): StrumAction {
+  return action === 'rest' ? 'play' : 'rest'
+}
+
+function toggleAccent(action: StrumAction): StrumAction {
+  return action === 'accent' ? 'play' : 'accent'
+}
+
+function usePracticeState(beatsPerBar: number, beatUnit: number, bpm: number, onBpmChange: (value: number) => void) {
   const customExercises = useStrummingExercisesStore((state) => state.customExercises)
   const addExercise = useStrummingExercisesStore((state) => state.addExercise)
   const removeExercise = useStrummingExercisesStore((state) => state.removeExercise)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [generatedExercise, setGeneratedExercise] = useState<StrummingExercise | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [draftName, setDraftName] = useState('')
+  const [draftTempo, setDraftTempo] = useState(bpm)
   const [draftSteps, setDraftSteps] = useState<StrumAction[]>([])
-  const compatibleExercises = exercisesForMeter([...COMMON_STRUMMING_EXERCISES, ...customExercises], beatsPerBar, beatUnit)
-  const availableExercises = generatedExercise ? [...compatibleExercises, generatedExercise] : compatibleExercises
+  const availableExercises = exercisesForMeter([...COMMON_STRUMMING_EXERCISES, ...customExercises], beatsPerBar, beatUnit)
   const selectedExercise = availableExercises.find((exercise) => exercise.id === selectedId) ?? availableExercises[0]
-  const inventPattern = () => {
-    const exercise = createRandomExercise(beatsPerBar, beatUnit)
-    setGeneratedExercise(exercise)
-    setSelectedId(exercise.id)
-  }
-  const openComposer = () => {
-    setDraftName('')
-    setDraftSteps(createPracticeSteps(beatsPerBar))
+  const startComposer = (invented: boolean) => {
+    setDraftName(invented ? 'Fresh pattern' : '')
+    setDraftTempo(bpm)
+    setDraftSteps(invented ? createRandomSteps(beatsPerBar) : createPracticeSteps(beatsPerBar))
     setComposerOpen(true)
   }
-  const cycleDraftStep = (index: number) => {
-    setDraftSteps((steps) => steps.map((action, stepIndex) => stepIndex === index ? nextAction(action) : action))
+  const updateStep = (index: number, update: (action: StrumAction) => StrumAction) => {
+    setDraftSteps((steps) => steps.map((action, stepIndex) => stepIndex === index ? update(action) : action))
+  }
+  const selectExercise = (id: string) => {
+    setSelectedId(id)
+    const exercise = availableExercises.find((candidate) => candidate.id === id)
+    if (exercise?.bpm) onBpmChange(exercise.bpm)
   }
   const saveExercise = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const exercise = createCustomExercise(draftName.trim(), draftSteps, beatsPerBar, beatUnit)
+    const exercise = createCustomExercise(draftName.trim(), draftSteps, draftTempo, beatsPerBar, beatUnit)
     addExercise(exercise)
     setSelectedId(exercise.id)
+    onBpmChange(draftTempo)
     setComposerOpen(false)
   }
   return {
-    availableExercises,
-    selectedExercise,
-    removeExercise,
-    composerOpen,
-    draftName,
-    draftSteps,
-    setSelectedId,
-    setDraftName,
-    inventPattern,
-    openComposer,
-    cycleDraftStep,
-    saveExercise,
+    availableExercises, selectedExercise, removeExercise, composerOpen, draftName, draftTempo, draftSteps,
+    setDraftName, setDraftTempo, selectExercise, saveExercise,
+    inventPattern: () => startComposer(true), openComposer: () => startComposer(false),
+    togglePlay: (index: number) => updateStep(index, togglePlayed),
+    toggleAccent: (index: number) => updateStep(index, toggleAccent),
     closeComposer: () => setComposerOpen(false),
   }
 }
 
-export function StrummingPractice({ beatsPerBar, beatUnit, enabled, subdivision }: StrummingPracticeProps) {
-  const practice = usePracticeState(beatsPerBar, beatUnit)
+export function StrummingPractice({ bpm, beatsPerBar, beatUnit, enabled, subdivision, onBpmChange }: StrummingPracticeProps) {
+  const practice = usePracticeState(beatsPerBar, beatUnit, bpm, onBpmChange)
+  const wakeLockStatus = useScreenWakeLock(enabled)
 
   return (
     <section className="mt-6 border-t border-white/10 pt-6" data-testid="strumming-practice">
       <PracticeControls onInvent={practice.inventPattern} onCompose={practice.openComposer} />
-      <ExerciseSelect exercises={practice.availableExercises} selectedExercise={practice.selectedExercise} onSelect={practice.setSelectedId} />
+      <ScreenAwakeStatus status={wakeLockStatus} />
+      <ExerciseSelect exercises={practice.availableExercises} selectedExercise={practice.selectedExercise} onSelect={practice.selectExercise} />
       {practice.selectedExercise
         ? <SelectedExercise exercise={practice.selectedExercise} enabled={enabled} subdivision={subdivision} onDelete={practice.removeExercise} />
         : <p className="mt-4 text-sm text-smoke-400">No saved or common exercises match this meter. Invent one or compose your own.</p>}
-      {practice.composerOpen && <ExerciseComposer beatsPerBar={beatsPerBar} beatUnit={beatUnit} name={practice.draftName} steps={practice.draftSteps} onNameChange={practice.setDraftName} onStepChange={practice.cycleDraftStep} onSave={practice.saveExercise} onClose={practice.closeComposer} />}
+      {practice.composerOpen && <ExerciseComposer beatsPerBar={beatsPerBar} beatUnit={beatUnit} name={practice.draftName} tempo={practice.draftTempo} steps={practice.draftSteps} onNameChange={practice.setDraftName} onTempoChange={practice.setDraftTempo} onPlayToggle={practice.togglePlay} onAccentToggle={practice.toggleAccent} onSave={practice.saveExercise} onClose={practice.closeComposer} />}
     </section>
   )
 }

@@ -306,10 +306,12 @@ function FullPanel(props: PanelViewProps) {
       <SongTempoButton {...props} />
       <StrummingPractice
         key={`${props.beatsPerBar}/${props.beatUnit}`}
+        bpm={props.bpm}
         beatsPerBar={props.beatsPerBar}
         beatUnit={props.beatUnit}
         enabled={props.enabled}
         subdivision={props.subdivision}
+        onBpmChange={props.onBpmChange}
       />
     </section>
   )
