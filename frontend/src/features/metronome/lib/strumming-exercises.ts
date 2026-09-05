@@ -1,4 +1,5 @@
 export type StrumAction = 'rest' | 'play' | 'accent'
+export type PracticeLevel = 'easy' | 'medium' | 'hard'
 
 export interface StrummingExercise {
   id: string
@@ -11,11 +12,45 @@ export interface StrummingExercise {
   custom?: boolean
 }
 
+const COMMON_EXERCISE_TEMPOS: Record<string, number> = {
+  'quarter-note-downstrokes': 80,
+  'straight-eighth-notes': 100,
+  'pop-d-d-u-u-d-u': 92,
+  'folk-variation': 88,
+  'reggae-offbeats': 80,
+  'driving-eighths': 120,
+  'country-train': 110,
+  'rock-backbeat': 108,
+  'accent-two-four': 90,
+  'two-beat-downstrokes': 90,
+  'two-beat-eighths': 110,
+  'waltz-downstrokes': 80,
+  'flowing-waltz-eighths': 100,
+  'bass-brush-waltz': 90,
+  'six-eight-pulse': 72,
+  'flowing-six-eight': 96,
+  'six-eight-ballad': 84,
+}
+
+const LEVEL_TEMPO_OFFSETS: Record<PracticeLevel, number> = {
+  easy: -20,
+  medium: 0,
+  hard: 20,
+}
+
 function commonExercise(exercise: StrummingExercise): StrummingExercise {
+  const bpm = COMMON_EXERCISE_TEMPOS[exercise.id]
+  if (!bpm) throw new Error(`Missing tempo for common exercise: ${exercise.id}`)
   return Object.freeze({
     ...exercise,
+    bpm,
     steps: Object.freeze([...exercise.steps]) as StrumAction[],
   }) as StrummingExercise
+}
+
+export function practiceTempo(exercise: StrummingExercise, level: PracticeLevel): number {
+  const mediumTempo = exercise.bpm ?? 120
+  return Math.max(40, Math.min(240, mediumTempo + LEVEL_TEMPO_OFFSETS[level]))
 }
 
 export const COMMON_STRUMMING_EXERCISES = Object.freeze([

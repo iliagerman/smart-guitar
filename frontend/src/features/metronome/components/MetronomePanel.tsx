@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Minus, Music2, Plus, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useMetronome, type MetronomeMode } from '../hooks/use-metronome'
@@ -329,10 +329,10 @@ function usePanelState({ autoBpm, mode, playbackTime, playbackPlaying }: Metrono
   const bpm = manualOverride ? manualBpm : clampBpm(autoBpm ?? manualBpm)
   const metronome = useMetronome({ bpm, beatsPerBar, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying })
 
-  const updateBpm = (value: number) => {
+  const updateBpm = useCallback((value: number) => {
     setManualOverride(true)
     setManualBpm(clampBpm(value))
-  }
+  }, [])
   const useSongTempo = () => {
     if (!autoBpm) return
     setManualBpm(clampBpm(autoBpm))

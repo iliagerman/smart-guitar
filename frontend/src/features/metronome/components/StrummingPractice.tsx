@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Dice5, PencilLine, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import {
   COMMON_STRUMMING_EXERCISES,
   createPracticeSteps,
   createRandomSteps,
+  practiceTempo,
+  type PracticeLevel,
   type StrumAction,
   type StrummingExercise,
 } from '../lib/strumming-exercises'
@@ -69,8 +71,14 @@ interface ExerciseSelectProps {
   onSelect: (id: string) => void
 }
 
+interface PracticeLevelSelectProps {
+  level: PracticeLevel
+  onChange: (level: PracticeLevel) => void
+}
+
 interface SelectedExerciseProps {
   exercise: StrummingExercise
+  level: PracticeLevel
   enabled: boolean
   subdivision: number
   onDelete: (id: string) => void
@@ -81,6 +89,11 @@ interface ScreenAwakeStatusProps {
 }
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/40'
+const PRACTICE_LEVEL_OPTIONS: Array<{ value: PracticeLevel; label: string }> = [
+  { value: 'easy', label: 'Easy · slower' },
+  { value: 'medium', label: 'Medium · standard' },
+  { value: 'hard', label: 'Hard · faster' },
+]
 const wakeLockMessages: Record<ScreenWakeLockStatus, string> = {
   idle: 'Screen wake lock starts with the metronome.',
   requesting: 'Keeping the screen awake…',
@@ -169,7 +182,7 @@ function DraftStepControl({ index, action, onPlayToggle, onAccentToggle }: Draft
 function TempoControl({ tempo, onTempoChange }: TempoControlProps) {
   return (
     <label htmlFor="custom-exercise-tempo" className="mt-4 block text-xs font-semibold text-smoke-300">
-      <span className="flex justify-between gap-3"><span>Practice tempo</span><span className="tabular-nums text-flame-200">{tempo} BPM</span></span>
+      <span className="flex justify-between gap-3"><span>Medium tempo</span><span className="tabular-nums text-flame-200">{tempo} BPM</span></span>
       <input id="custom-exercise-tempo" name="custom-exercise-tempo" type="range" min="40" max="240" value={tempo} onChange={(event) => onTempoChange(Number(event.target.value))} autoComplete="off" className={cn('mt-2 w-full accent-flame-400', focusRing)} data-testid="custom-exercise-tempo" />
     </label>
   )
@@ -238,14 +251,33 @@ function ExerciseSelect({ exercises, selectedExercise, onSelect }: ExerciseSelec
   )
 }
 
-function SelectedExercise({ exercise, enabled, subdivision, onDelete }: SelectedExerciseProps) {
+function PracticeLevelSelect({ level, onChange }: PracticeLevelSelectProps) {
+  return (
+    <label htmlFor="strumming-practice-level" className="mt-3 block text-xs font-semibold text-smoke-300">
+      Level
+      <select
+        id="strumming-practice-level"
+        name="strumming-practice-level"
+        value={level}
+        onChange={(event) => onChange(event.target.value as PracticeLevel)}
+        className={cn('mt-1 min-h-11 w-full rounded-lg border border-charcoal-600 bg-charcoal-900 px-3 text-sm text-smoke-100', focusRing)}
+        data-testid="strumming-practice-level"
+      >
+        {PRACTICE_LEVEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function SelectedExercise({ exercise, level, enabled, subdivision, onDelete }: SelectedExerciseProps) {
+  const tempo = practiceTempo(exercise, level)
   return (
     <div className="mt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="break-words font-semibold text-smoke-100" data-testid="strumming-exercise-name">{exercise.name}</h3>
           <p className="mt-1 text-sm text-smoke-400">{exercise.description}</p>
-          {exercise.bpm && <p className="mt-1 text-xs font-semibold tabular-nums text-flame-200" data-testid="strumming-exercise-tempo">Practice at {exercise.bpm} BPM</p>}
+          <p className="mt-1 text-xs font-semibold capitalize tabular-nums text-flame-200" data-testid="strumming-exercise-tempo">{level} · {tempo} BPM</p>
         </div>
         {exercise.custom && (
           <button
@@ -292,37 +324,37 @@ function usePracticeState(beatsPerBar: number, beatUnit: number, bpm: number, on
   const addExercise = useStrummingExercisesStore((state) => state.addExercise)
   const removeExercise = useStrummingExercisesStore((state) => state.removeExercise)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [level, setLevel] = useState<PracticeLevel>('medium')
   const [composerOpen, setComposerOpen] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [draftTempo, setDraftTempo] = useState(bpm)
   const [draftSteps, setDraftSteps] = useState<StrumAction[]>([])
   const availableExercises = exercisesForMeter([...COMMON_STRUMMING_EXERCISES, ...customExercises], beatsPerBar, beatUnit)
   const selectedExercise = availableExercises.find((exercise) => exercise.id === selectedId) ?? availableExercises[0]
+  const selectedTempo = selectedExercise ? practiceTempo(selectedExercise, level) : null
+  useEffect(() => {
+    if (selectedTempo !== null) onBpmChange(selectedTempo)
+  }, [selectedExercise?.id, selectedTempo, onBpmChange])
   const startComposer = (invented: boolean) => {
     setDraftName(invented ? 'Fresh pattern' : '')
-    setDraftTempo(bpm)
+    setDraftTempo(selectedExercise ? selectedExercise.bpm ?? 120 : bpm)
     setDraftSteps(invented ? createRandomSteps(beatsPerBar) : createPracticeSteps(beatsPerBar))
     setComposerOpen(true)
   }
   const updateStep = (index: number, update: (action: StrumAction) => StrumAction) => {
     setDraftSteps((steps) => steps.map((action, stepIndex) => stepIndex === index ? update(action) : action))
   }
-  const selectExercise = (id: string) => {
-    setSelectedId(id)
-    const exercise = availableExercises.find((candidate) => candidate.id === id)
-    if (exercise?.bpm) onBpmChange(exercise.bpm)
-  }
+  const selectExercise = (id: string) => setSelectedId(id)
   const saveExercise = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const exercise = createCustomExercise(draftName.trim(), draftSteps, draftTempo, beatsPerBar, beatUnit)
     addExercise(exercise)
     setSelectedId(exercise.id)
-    onBpmChange(draftTempo)
     setComposerOpen(false)
   }
   return {
-    availableExercises, selectedExercise, removeExercise, composerOpen, draftName, draftTempo, draftSteps,
-    setDraftName, setDraftTempo, selectExercise, saveExercise,
+    availableExercises, selectedExercise, removeExercise, level, composerOpen, draftName, draftTempo, draftSteps,
+    setLevel, setDraftName, setDraftTempo, selectExercise, saveExercise,
     inventPattern: () => startComposer(true), openComposer: () => startComposer(false),
     togglePlay: (index: number) => updateStep(index, togglePlayed),
     toggleAccent: (index: number) => updateStep(index, toggleAccent),
@@ -339,8 +371,9 @@ export function StrummingPractice({ bpm, beatsPerBar, beatUnit, enabled, subdivi
       <PracticeControls onInvent={practice.inventPattern} onCompose={practice.openComposer} />
       <ScreenAwakeStatus status={wakeLockStatus} />
       <ExerciseSelect exercises={practice.availableExercises} selectedExercise={practice.selectedExercise} onSelect={practice.selectExercise} />
+      <PracticeLevelSelect level={practice.level} onChange={practice.setLevel} />
       {practice.selectedExercise
-        ? <SelectedExercise exercise={practice.selectedExercise} enabled={enabled} subdivision={subdivision} onDelete={practice.removeExercise} />
+        ? <SelectedExercise exercise={practice.selectedExercise} level={practice.level} enabled={enabled} subdivision={subdivision} onDelete={practice.removeExercise} />
         : <p className="mt-4 text-sm text-smoke-400">No saved or common exercises match this meter. Invent one or compose your own.</p>}
       {practice.composerOpen && <ExerciseComposer beatsPerBar={beatsPerBar} beatUnit={beatUnit} name={practice.draftName} tempo={practice.draftTempo} steps={practice.draftSteps} onNameChange={practice.setDraftName} onTempoChange={practice.setDraftTempo} onPlayToggle={practice.togglePlay} onAccentToggle={practice.toggleAccent} onSave={practice.saveExercise} onClose={practice.closeComposer} />}
     </section>
