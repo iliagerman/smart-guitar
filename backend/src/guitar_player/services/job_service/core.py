@@ -8,7 +8,7 @@ from guitar_player.app_state import get_storage
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
-from guitar_player.exceptions import NotFoundError
+from guitar_player.exceptions import BadRequestError, NotFoundError
 from guitar_player.schemas.job import JobResponse
 from guitar_player.schemas.records import JobRecord
 from guitar_player.services.processing_service import ProcessingService
@@ -100,6 +100,11 @@ class JobService:
             if existing is not None:
                 return existing
 
+        if processing is not None and (
+            not song.audio_key or not self._storage.file_exists(song.audio_key)
+        ):
+            raise BadRequestError("Audio is not ready. Wait for the download before processing.")
+
         job = await self._job_dao.create(
             user_id=user.id,
             song_id=song.id,
@@ -118,7 +123,7 @@ class JobService:
         if processing is not None:
             await self._song_dao.commit()
             self._write_initial_manifest(song, job)
-            self._dispatch_job(job)
+            await self._dispatch_job(job)
 
         return self._enrich_job(job)
 
@@ -165,7 +170,7 @@ class JobService:
         except Exception:
             logger.debug("Failed to write initial job manifest", exc_info=True)
 
-    def _dispatch_job(self, job) -> None:
+    async def _dispatch_job(self, job: JobRecord) -> None:
         """Dispatch job to Lambda orchestrator or local background task."""
         try:
             from guitar_player.config import get_settings
@@ -176,17 +181,19 @@ class JobService:
                 getattr(settings, "lambdas", None), "job_orchestrator", None
             )
             if fn:
-                import asyncio
-                asyncio.create_task(invoke_event(
+                await invoke_event(
                     region=settings.aws.region,
                     function_name=fn,
                     payload={"job_id": str(job.id)},
-                ))
+                )
             else:
                 _pkg_enqueue("_enqueue_job_processing", job.id)
         except Exception:
+            from .stem_processing import fail_job
+
             logger.exception("Failed to dispatch job %s", job.id)
-            _pkg_enqueue("_enqueue_job_processing", job.id)
+            await fail_job(job.id, "Could not start processing. Please retry.")
+            raise
 
     async def trigger_reprocess(
         self,

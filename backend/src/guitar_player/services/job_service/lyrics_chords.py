@@ -204,10 +204,7 @@ async def transcribe_lyrics_only(
         if quick_task is not None:
             if not quick_task.done():
                 quick_task.cancel()
-            try:
-                await quick_task
-            except Exception:
-                pass
+            await asyncio.gather(quick_task, return_exceptions=True)
 
     await _persist_lyrics_results(storage, song_id, song_name)
 

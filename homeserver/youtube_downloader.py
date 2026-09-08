@@ -59,8 +59,9 @@ def download_and_upload(
         s3_client.head_object(Bucket=bucket, Key=target_s3_key)
         logger.info("Already on S3: s3://%s/%s — skipping download", bucket, target_s3_key)
         return
-    except s3_client.exceptions.ClientError:
-        pass
+    except s3_client.exceptions.ClientError as exc:
+        if exc.response["Error"]["Code"] not in ("404", "NoSuchKey", "NotFound"):
+            raise
 
     tmp_dir = tempfile.mkdtemp(prefix="yt_dl_")
     try:
@@ -71,7 +72,7 @@ def download_and_upload(
             "format": "bestaudio/best",
             "outtmpl": raw_output,
             "quiet": True,
-            "no_warnings": True,
+            "no_warnings": False,
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",

@@ -206,6 +206,10 @@ class AdminService:
         audio_exists = bool(song.audio_key) and self._storage.file_exists(song.audio_key)
         if audio_exists:
             return None
+        if song.download_requested_at is not None:
+            return AdminSongResponse(
+                song_id=song_id, warnings=[*warnings, "audio_download_pending"],
+            )
 
         reason = audio_heal_error or "audio missing after heal attempt"
 
@@ -217,6 +221,12 @@ class AdminService:
             warnings.append(f"auth_required: {reason}")
             return AdminSongResponse(
                 song_id=song_id, audio_thumbnail_fixed=False, warnings=warnings,
+            )
+
+        if audio_heal_exception is not None:
+            logger.warning("Keeping song %s after failed audio repair: %s", song_id, reason)
+            return AdminSongResponse(
+                song_id=song_id, warnings=[*warnings, f"audio_heal_failed: {reason}"],
             )
 
         _log_unrecoverable(

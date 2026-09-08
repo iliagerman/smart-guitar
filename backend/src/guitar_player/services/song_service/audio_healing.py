@@ -5,7 +5,9 @@ import os
 import shutil
 import tempfile
 import uuid
+from datetime import datetime, timezone
 
+from guitar_player.config import get_settings
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.exceptions import NotFoundError
@@ -14,6 +16,7 @@ from guitar_player.services.audio_normalize import (
     ensure_canonical_audio_mp3,
     transcode_audio_to_mp3_cbr192,
 )
+from guitar_player.services.download_queue import publish_download_request
 from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 
@@ -80,11 +83,38 @@ async def heal_audio_and_thumbnail(
         )
         return updated
 
+    queue_url = get_settings().youtube.youtube_download_queue_url
+    if not audio_ok and queue_url:
+        return await _queue_missing_audio(song.id, song_dao, queue_url)
+
     # Re-download missing files
     return await _redownload_missing(
         song, audio_ok, thumb_ok, user_sub, user_email,
         song_dao, user_dao, storage, youtube, updated,
     )
+
+
+async def _queue_missing_audio(
+    song_id: uuid.UUID, song_dao: SongDAO, queue_url: str,
+) -> bool:
+    """Serialize repair requests and let the homeserver callback start processing."""
+    song = await song_dao.acquire_processing_lock(song_id)
+    if not song:
+        raise NotFoundError("Song", str(song_id))
+    if song.download_requested_at is not None:
+        return False
+    audio_key = f"{song.song_name}/audio.mp3"
+    await song_dao.update_by_id(
+        song.id, audio_key=audio_key, download_requested_at=datetime.now(timezone.utc),
+    )
+    await song_dao.commit()
+    try:
+        await publish_download_request(song.youtube_id, audio_key, song.id, queue_url)
+    except Exception:
+        await song_dao.update_by_id(song.id, download_requested_at=None)
+        await song_dao.commit()
+        raise
+    return True
 
 
 def _try_canonicalize_audio(

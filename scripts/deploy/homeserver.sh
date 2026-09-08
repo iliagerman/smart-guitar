@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Deploy the YouTube downloader service to the homeserver.
-# Builds the container image locally, transfers it via SSH, and restarts the service.
+# Transfers the build context, builds on the homeserver, and restarts the service.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/_lib.sh"
@@ -21,13 +21,10 @@ prepare_secrets "${project_dir}/backend" "${merged_secrets}"
 # 2. Read SQS queue URL from infra outputs
 sqs_queue_url="$(read_output youtube_download_queue_url)"
 
-# 3. Build the container image
-echo "==> Building ${image_name} image..."
-docker build --platform linux/amd64 -t "${image_name}:${image_tag}" "${homeserver_dir}"
-
-# 4. Save and transfer the image to homeserver
-echo "==> Transferring image to ${remote_host}..."
-docker save "${image_name}:${image_tag}" | ssh "${remote_host}" "docker load"
+# 3. Transfer only source files; avoid uploading the full image over Tailscale.
+echo "==> Building ${image_name} image on ${remote_host}..."
+tar -C "${homeserver_dir}" -czf - Dockerfile youtube_downloader.py \
+  | ssh "${remote_host}" "docker build --platform linux/amd64 -t ${image_name}:${image_tag} -"
 
 # 5. Stop existing container (if running)
 echo "==> Stopping existing container..."

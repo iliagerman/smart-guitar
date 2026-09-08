@@ -1,8 +1,11 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir boto3 yt-dlp requests pyyaml watchtower
+RUN uv pip install --system --no-cache boto3 "yt-dlp[default]==2026.8.19" requests pyyaml watchtower
 
 WORKDIR /app
 COPY youtube_downloader.py .

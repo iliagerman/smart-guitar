@@ -24,8 +24,13 @@ logger = logging.getLogger(__name__)
 
 async def _run(job_id: uuid.UUID) -> None:
     from guitar_player.services.job_service import _process_job
+    from guitar_player.services.job_service.stem_processing import fail_job
 
-    await _process_job(job_id)
+    try:
+        await _process_job(job_id)
+    except Exception as exc:
+        await fail_job(job_id, str(exc))
+        raise
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
