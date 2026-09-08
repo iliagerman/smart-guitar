@@ -45,7 +45,7 @@ push-stale-job-sweeper-image:
 push-unconfirmed-user-cleanup-image:
     bash "{{project_dir}}/scripts/deploy/push_unconfirmed_user_cleanup_image.sh"
 
-# Deploy YouTube downloader to homeserver (build container, transfer, start)
+# Deploy YouTube downloader to homeserver (transfer source, build remotely, start)
 deploy-homeserver:
     bash "{{project_dir}}/scripts/deploy/homeserver.sh"
 
@@ -1046,6 +1046,60 @@ logs-lyrics since="5m":
         export AWS_DEFAULT_REGION=$(grep 'region:' "{{project_dir}}/secrets.yml" | awk '{print $2}')
     fi
     aws logs tail /aws/lambda/smart-guitar-lyrics-generator --follow --since "{{since}}" --format short
+
+# Repair one production song (heal), or inspect a processing job (job).
+admin-song action id:
+    cd {{project_dir}}/backend && uv run python scripts/admin_song.py {{quote(action)}} {{quote(id)}}
+
+# Verify download/job persistence against a disposable PostgreSQL database.
+test-download-lifecycle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+    container=$(docker run -d --rm -e POSTGRES_PASSWORD -e POSTGRES_DB=generation_check -p 127.0.0.1::5432 postgres:17-alpine)
+    trap 'docker stop "$container" >/dev/null' EXIT
+    for attempt in $(seq 1 30); do
+        if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi
+        sleep 1
+    done
+    port=$(docker port "$container" 5432/tcp | cut -d: -f2)
+    export DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@127.0.0.1:${port}/generation_check"
+    cd {{project_dir}}/backend
+    APP_ENV=test JOB_ORCHESTRATOR_FUNCTION_NAME=integration-check uv run python scripts/check_download_lifecycle.py
+
+# Build the downloader without changing production.
+test-downloader:
+    bash -n {{project_dir}}/scripts/deploy/homeserver.sh
+    docker build --platform linux/amd64 -t youtube-downloader:test {{project_dir}}/homeserver
+    docker image ls youtube-downloader
+
+# Download a video with the candidate image on the homeserver; no S3 or DB writes.
+test-downloader-song youtube_id:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    youtube_id={{quote(youtube_id)}}
+    [[ "$youtube_id" =~ ^[A-Za-z0-9_-]{11}$ ]] || { echo "Invalid YouTube ID" >&2; exit 2; }
+    tar -C {{project_dir}}/homeserver -czf - Dockerfile youtube_downloader.py | ssh homeserver 'docker build --platform linux/amd64 -t youtube-downloader:test -'
+    ssh homeserver "docker run --rm --entrypoint yt-dlp youtube-downloader:test --no-playlist -f bestaudio -x --audio-format mp3 --audio-quality 192K -o '/tmp/probe.%(ext)s' 'https://www.youtube.com/watch?v=${youtube_id}'"
+
+# Inspect the residential download worker without exposing its environment.
+status-downloader:
+    ssh -o ConnectTimeout=10 homeserver 'df -h /; ps -C dockerd,containerd,docker -o pid,pcpu,pmem,etime,comm; docker ps -a --filter name=youtube-downloader; docker logs --tail 60 youtube-downloader'
+
+# Format selected Python files with Ruff.
+format-backend *files:
+    cd {{project_dir}}/backend && uv run ruff format {{files}}
+
+# Lint the Python files touched by a change.
+lint-backend *files:
+    cd {{project_dir}}/backend && uv run ruff check {{files}}
+
+# Query a production log group without streaming.
+cw-recent group minutes="60":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export AWS_PROFILE="${AWS_PROFILE:-smart-guitar}" AWS_PAGER=""
+    aws logs tail {{quote(group)}} --since {{quote(minutes + "m")}} --format short
 
 # Query recent backend logs (finite output). Optional CloudWatch filter pattern.
 cw-backend-recent minutes="60" filter="":

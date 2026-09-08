@@ -1,7 +1,5 @@
 """Song service -- orchestrates song lifecycle."""
 
-import asyncio
-import json
 import logging
 import os
 import shutil
@@ -11,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import boto3
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.chord_vote_dao import ChordVoteDAO
@@ -32,6 +29,7 @@ from guitar_player.schemas.song import (
 from guitar_player.services.artwork_service import ArtworkService
 from guitar_player.services.audio_merge import ensure_stem_mix
 from guitar_player.services.audio_normalize import transcode_audio_to_mp3_cbr192
+from guitar_player.services.download_queue import publish_download_request
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
@@ -116,12 +114,12 @@ class SongService:
     ) -> SongResponse:
         """Download a song from YouTube, upload to storage, create DB record."""
         existing = await self._song_dao.get_by_youtube_id(youtube_id)
+        if existing and existing.download_requested_at is not None:
+            return SongResponse.model_validate(existing)
         if existing and existing.audio_key:
             if self._storage.file_exists(existing.audio_key):
                 return SongResponse.model_validate(existing)
             existing = await self._song_dao.update_by_id(existing.id, audio_key=None)
-        if existing and existing.download_requested_at is not None:
-            return SongResponse.model_validate(existing)
 
         t0_total = _time.monotonic()
         title_for_policy = await self._youtube.fetch_title(youtube_id)
@@ -176,6 +174,7 @@ class SongService:
             return SongResponse.model_validate(song)
         except Exception:
             await self._song_dao.update_by_id(song.id, download_requested_at=None)
+            await self._song_dao.commit()
             raise
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -287,7 +286,8 @@ class SongService:
             thumbnail_key=thumbnail_key,
             download_requested_at=datetime.now(timezone.utc),
         )
-        await self._publish_download_request(
+        await self._song_dao.commit()
+        await publish_download_request(
             youtube_id=youtube_id,
             target_s3_key=audio_key,
             song_id=song.id,
@@ -329,39 +329,6 @@ class SongService:
             audio_key=audio_key_to_use,
             thumbnail_key=thumbnail_key,
             download_requested_at=None,
-        )
-
-    async def _publish_download_request(
-        self, youtube_id: str, target_s3_key: str,
-        song_id: uuid.UUID, sqs_queue_url: str,
-    ) -> None:
-        """Send a YouTube download request to the homeserver via SQS."""
-        from guitar_player.config import get_settings
-        from guitar_player.request_context import (
-            request_id_var,
-            user_email_var,
-            user_id_var,
-        )
-
-        settings = get_settings()
-        sqs = boto3.client("sqs", region_name=settings.aws.region)
-        message = {
-            "youtube_id": youtube_id,
-            "target_s3_key": target_s3_key,
-            "bucket": settings.storage.bucket,
-            "song_id": str(song_id),
-            "request_id": request_id_var.get(),
-            "user_id": user_id_var.get(),
-            "user_email": user_email_var.get(),
-        }
-        await asyncio.to_thread(
-            sqs.send_message,
-            QueueUrl=sqs_queue_url,
-            MessageBody=json.dumps(message),
-        )
-        logger.info(
-            "Published SQS download request for yt=%s -> %s",
-            youtube_id, target_s3_key,
         )
 
     # --- Read / Query ---

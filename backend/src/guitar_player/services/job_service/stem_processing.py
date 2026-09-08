@@ -512,6 +512,8 @@ async def _persist_results(
         if vg_key:
             song_changes["vocals_guitar_key"] = vg_key
 
+        if song.processing_job_id == job_id:
+            song_changes["processing_job_id"] = None
         if song_changes:
             await song_dao.update_by_id(song.id, **song_changes)
 
@@ -570,10 +572,7 @@ async def process_job(job_id: uuid.UUID) -> None:
         await job_dao.commit()
 
         if not song.audio_key or not storage.file_exists(song.audio_key):
-            await job_dao.update_status(
-                job.id, "FAILED", error_message="Audio file not found"
-            )
-            await job_dao.commit()
+            await fail_job(job.id, "Audio file not found")
             return
 
         audio_path = storage.resolve_service_path(song.audio_key)
@@ -785,10 +784,7 @@ async def _run_separation_and_chords(
         tick_task.cancel()
         if not chords_task.done():
             chords_task.cancel()
-        try:
-            await chords_task
-        except Exception:
-            pass
+        await asyncio.gather(chords_task, tick_task, return_exceptions=True)
         await fail_job(job_id, str(e))
         return None, None
     finally:
