@@ -72,9 +72,9 @@ async def heal_audio_and_thumbnail(
             thumb_ok = "thumbnail_key" in pending_updates or thumb_ok
 
     if updated and pending_updates:
-        await song_dao.update_by_id(song.id, **pending_updates)
-        pending_updates = {}
-        return True
+        song = await song_dao.update_by_id(song.id, **pending_updates)
+        if audio_ok and thumb_ok:
+            return True
 
     # Try to discover youtube_id if missing
     song = await _discover_youtube_id_if_missing(song, song_dao, youtube)

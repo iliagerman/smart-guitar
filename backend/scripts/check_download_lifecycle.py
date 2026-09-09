@@ -124,6 +124,7 @@ async def check_metadata_heal(storage: StorageBackend, song_id: uuid.UUID) -> No
     ) as publisher:
         async with safe_session() as session:
             original = await SongDAO(session).get_by_id(song_id)
+            storage.write_json(f"{original.song_name}/cover.jpg", {})
             assert await heal_audio_and_thumbnail(
                 song_id,
                 "generation-check",
