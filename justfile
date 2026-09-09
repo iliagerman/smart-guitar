@@ -1313,9 +1313,13 @@ verify-client-deploy:
     done
     echo "Published frontend matches local build; CDN invalidation complete."
 
+# Install Chromium for client E2E tests.
+setup-client-browser:
+    cd {{project_dir}}/frontend && npx playwright install chromium
+
 # Run client E2E tests (Playwright)
-test-client:
-    cd {{project_dir}}/frontend && npx playwright test
+test-client *args:
+    cd {{project_dir}}/frontend && npx playwright test {{args}}
 
 # Isolated custom capo E2E checks; requires an installed Playwright Chromium.
 test-capo:

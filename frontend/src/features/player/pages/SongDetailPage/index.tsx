@@ -167,7 +167,6 @@ export function SongDetailPage() {
   const { data: favorites } = useFavorites()
   const { add: addFav, remove: removeFav } = useToggleFavorite()
   const globalTranspose = usePlayerPrefsStore((s) => s.transposeSemitones)
-  const globalLyricsOffset = usePlayerPrefsStore((s) => s.lyricsOffsetMs)
   const globalStrumSource = usePlayerPrefsStore((s) => s.strumSource)
   const showBassNotes = usePlayerPrefsStore((s) => s.showBassNotes)
   const songOverrides = usePlayerPrefsStore((s) => s.songOverrides[songId!])
@@ -186,7 +185,7 @@ export function SongDetailPage() {
   // Per-song values with global fallback
   const selectedLyricsSource = songOverrides?.selectedLyricsSource ?? 'auto'
   const transposeSemitones = songOverrides?.transposeSemitones ?? globalTranspose
-  const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? globalLyricsOffset
+  const lyricsOffsetMs = songOverrides?.lyricsOffsetMs ?? 0
   const strumSource = songOverrides?.strumSource ?? globalStrumSource
 
   // Sync per-song effective values into global store

@@ -34,34 +34,12 @@ function usesCustomLyrics(activeVersion: ChordOption | undefined): boolean {
   return false
 }
 
-function isLikelyNonLatin(detail: SongDetail): boolean {
-  const sample = [
-    ...getVer1Lyrics(detail),
-    ...getVer2Lyrics(detail),
-  ]
-    .map((segment) => segment.text)
-    .join(' ')
-    .slice(0, 600)
-
-  const letters = Array.from(sample).filter((char) => /\p{Letter}/u.test(char))
-  if (letters.length === 0) {
-    return false
-  }
-  const latinLetters = letters.filter((char) => /\p{Script=Latin}/u.test(char)).length
-  return latinLetters / letters.length < 0.6
-}
-
 function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefined): LyricsSourceOption | null {
   const onlineLyrics = getVer1Lyrics(detail)
   const timedLyrics = getVer2Lyrics(detail)
   const altLyrics = detail.ver4_lyrics ?? []
-  const likelyNonLatin = isLikelyNonLatin(detail)
-  const preferOnlineLyrics =
-    activeVersion?.lyrics_source === 'community'
-    && likelyNonLatin
-    && onlineLyrics.length > 0
-
-  if (usesCustomLyrics(activeVersion) && !preferOnlineLyrics) {
+  // Sheet chord positions belong to their paired lyrics, regardless of script.
+  if (usesCustomLyrics(activeVersion)) {
     const isCommunity = activeVersion?.lyrics_source === 'community'
     return {
       key: 'auto',
@@ -72,15 +50,6 @@ function getAutoLyrics(detail: SongDetail, activeVersion: ChordOption | undefine
     }
   }
 
-  if (likelyNonLatin && onlineLyrics.length > 0) {
-    return {
-      key: 'auto',
-      label: 'Auto',
-      description: 'Recommended: online lyrics for this language',
-      segments: onlineLyrics,
-      source: getVer1Source(detail),
-    }
-  }
   if (timedLyrics.length > 0) {
     return {
       key: 'auto',
