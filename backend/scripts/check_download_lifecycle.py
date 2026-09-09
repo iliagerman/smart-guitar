@@ -1,6 +1,7 @@
 """Integration checks against disposable PostgreSQL and filesystem storage."""
 
 import asyncio
+import time
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -14,8 +15,16 @@ from guitar_player.exceptions import BadRequestError
 from guitar_player.models import Base
 from guitar_player.services.admin_service import AdminService
 from guitar_player.services.job_service import JobService
-from guitar_player.services.job_service.stem_processing import process_job
-from guitar_player.services.processing_service import ProcessingService
+from guitar_player.services.job_service.stem_processing import (
+    _persist_results,
+    _run_separation_and_chords,
+    process_job,
+)
+from guitar_player.services.processing_service import (
+    ChordRecognitionResult,
+    ProcessingService,
+    SeparationResult,
+)
 from guitar_player.services.song_service.audio_healing import (
     _queue_missing_audio,
     heal_audio_and_thumbnail,
@@ -174,6 +183,53 @@ async def check_dispatch_failure(storage: StorageBackend, song_id: uuid.UUID) ->
         assert manifest["status"] == "FAILED"
 
 
+async def check_empty_stem_response(
+    storage: StorageBackend, song_id: uuid.UUID
+) -> None:
+    async with safe_session() as session:
+        song = await SongDAO(session).get_by_id(song_id)
+        job = await JobService(session, storage).create_and_process_job(
+            "generation-check",
+            "generation@example.test",
+            song_id,
+            ["vocals"],
+        )
+        await session.commit()
+
+    async def separate(*args: object, **kwargs: object) -> SeparationResult:
+        for stem in ("vocals", "guitar", "drums", "bass", "piano", "other"):
+            storage.write_json(f"{song.song_name}/{stem}.mp3", {})
+        return SeparationResult(stems=[], output_path=song.song_name)
+
+    processing = ProcessingService(get_settings())
+    chords = ChordRecognitionResult(chords=[], output_path="")
+    with (
+        patch.object(processing, "separate_stems", new=AsyncMock(side_effect=separate)),
+        patch.object(
+            processing, "recognize_chords", new=AsyncMock(return_value=chords)
+        ),
+        patch.object(processing, "detect_bass", new=AsyncMock()),
+    ):
+        result, chords = await _run_separation_and_chords(
+            processing,
+            storage,
+            song.audio_key,
+            song.song_name,
+            job.id,
+            ["vocals_isolated"],
+            time.monotonic(),
+        )
+    assert len(result.stems) == 6
+    assert await _persist_results(job.id, result, chords, song.song_name, storage)
+    async with safe_session() as session:
+        song = await SongDAO(session).get_by_id(song_id)
+        saved = await JobDAO(session).get_by_id(job.id)
+        assert storage.file_exists(song.guitar_key)
+        assert storage.file_exists(song.vocals_key)
+        assert song.processing_job_id is None
+        assert len(saved.results) == 6
+
+
 async def main() -> None:
     settings = get_settings()
     assert settings.db.url.startswith("postgresql") and settings.db.url.endswith(
@@ -202,6 +258,7 @@ async def main() -> None:
         await check_queue_failure(storage, song.id)
         await check_metadata_heal(storage, song.id)
         await check_dispatch_failure(storage, song.id)
+        await check_empty_stem_response(storage, song.id)
         print(
             "PASS: audio readiness, failed manifest, repair commit/deduplication, pending preservation, queue and dispatch failures"
         )
