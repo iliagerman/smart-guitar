@@ -780,6 +780,11 @@ async def _run_separation_and_chords(
 
     try:
         separation_result = await sep_task
+        if not separation_result.stems:
+            logger.warning("Splitter omitted stem metadata for job %s; resolving stored outputs", job_id)
+            separation_result = await _cached_separation(storage, song_name)
+        if not separation_result.stems:
+            raise ValueError("Separation returned no stems and no stored stems were found")
     except Exception as e:
         tick_task.cancel()
         if not chords_task.done():
