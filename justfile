@@ -1051,6 +1051,10 @@ logs-lyrics since="5m":
 admin-song action id:
     cd {{project_dir}}/backend && uv run python scripts/admin_song.py {{quote(action)}} {{quote(id)}}
 
+# Check artist/title orientation against the live music catalog.
+test-song-metadata:
+    cd {{project_dir}}/backend && uv run python scripts/check_song_metadata.py
+
 # Verify download/job persistence against a disposable PostgreSQL database.
 test-download-lifecycle:
     #!/usr/bin/env bash
@@ -1065,7 +1069,7 @@ test-download-lifecycle:
     port=$(docker port "$container" 5432/tcp | cut -d: -f2)
     export DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@127.0.0.1:${port}/generation_check"
     cd {{project_dir}}/backend
-    APP_ENV=test JOB_ORCHESTRATOR_FUNCTION_NAME=integration-check uv run python scripts/check_download_lifecycle.py
+    APP_ENV=test JOB_ORCHESTRATOR_FUNCTION_NAME=integration-check YOUTUBE_DOWNLOAD_QUEUE_URL=test-queue uv run python scripts/check_download_lifecycle.py
 
 # Build the downloader without changing production.
 test-downloader:

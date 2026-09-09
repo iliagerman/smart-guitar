@@ -17,6 +17,7 @@ from guitar_player.services.audio_normalize import (
     transcode_audio_to_mp3_cbr192,
 )
 from guitar_player.services.download_queue import publish_download_request
+from guitar_player.services.song_metadata import metadata_is_reversed
 from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 
@@ -44,6 +45,8 @@ async def heal_audio_and_thumbnail(
 
     audio_ok = bool(song.audio_key) and storage.file_exists(song.audio_key)
     thumb_ok = bool(song.thumbnail_key) and storage.file_exists(song.thumbnail_key)
+    if not audio_ok and song.download_requested_at is not None:
+        return False
 
     updated = False
     pending_updates: dict[str, str | None] = {}
@@ -82,6 +85,11 @@ async def heal_audio_and_thumbnail(
             song.song_name,
         )
         return updated
+
+    if not audio_ok and song.artist and await metadata_is_reversed(song.artist, song.title):
+        # Keep storage keys stable; only correct the metadata used by downstream searches.
+        song = await song_dao.update_by_id(song.id, artist=song.title, title=song.artist)
+        logger.info("Corrected reversed artist/title for song %s", song.id)
 
     queue_url = get_settings().youtube.youtube_download_queue_url
     if not audio_ok and queue_url:

@@ -31,6 +31,7 @@ from guitar_player.services.audio_merge import ensure_stem_mix
 from guitar_player.services.audio_normalize import transcode_audio_to_mp3_cbr192
 from guitar_player.services.download_queue import publish_download_request
 from guitar_player.services.llm_service import LlmService
+from guitar_player.services.song_metadata import metadata_is_reversed
 from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend
 from guitar_player.utils.youtube_filters import is_probable_live_performance_title
@@ -186,6 +187,8 @@ class SongService:
         try:
             t0 = _time.monotonic()
             parsed = await self._llm.parse_song_name(title)
+            if await metadata_is_reversed(parsed.artist, parsed.song):
+                parsed = parsed.model_copy(update={"artist": parsed.song, "song": parsed.artist})
             logger.info(
                 "TIMING llm.parse_song_name took %.1fs [yt=%s]",
                 _time.monotonic() - t0, youtube_id,

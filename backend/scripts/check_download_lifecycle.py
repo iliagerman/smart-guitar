@@ -8,6 +8,7 @@ from guitar_player.app_state import set_storage
 from guitar_player.config import get_settings
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
+from guitar_player.dao.user_dao import UserDAO
 from guitar_player.database import close_db, init_db, safe_session
 from guitar_player.exceptions import BadRequestError
 from guitar_player.models import Base
@@ -15,7 +16,11 @@ from guitar_player.services.admin_service import AdminService
 from guitar_player.services.job_service import JobService
 from guitar_player.services.job_service.stem_processing import process_job
 from guitar_player.services.processing_service import ProcessingService
-from guitar_player.services.song_service.audio_healing import _queue_missing_audio
+from guitar_player.services.song_service.audio_healing import (
+    _queue_missing_audio,
+    heal_audio_and_thumbnail,
+)
+from guitar_player.services.youtube_service import YoutubeService
 from guitar_player.storage import StorageBackend, create_storage
 
 
@@ -112,6 +117,31 @@ async def check_queue_failure(storage: StorageBackend, song_id: uuid.UUID) -> No
         assert await SongDAO(session).get_by_id(song_id) is not None
 
 
+async def check_metadata_heal(storage: StorageBackend, song_id: uuid.UUID) -> None:
+    with patch(
+        "guitar_player.services.song_service.audio_healing.publish_download_request",
+        new=AsyncMock(),
+    ) as publisher:
+        async with safe_session() as session:
+            original = await SongDAO(session).get_by_id(song_id)
+            assert await heal_audio_and_thumbnail(
+                song_id,
+                "generation-check",
+                "generation@example.test",
+                SongDAO(session),
+                UserDAO(session),
+                storage,
+                YoutubeService(),
+            )
+        async with safe_session() as session:
+            song = await SongDAO(session).get_by_id(song_id)
+            assert (song.artist, song.title) == ("Pleasantries", "Apocalypse")
+            assert song.song_name == original.song_name
+            assert song.audio_key == original.audio_key
+            assert song.download_requested_at is not None
+        assert publisher.await_count == 1
+
+
 async def check_dispatch_failure(storage: StorageBackend, song_id: uuid.UUID) -> None:
     async with safe_session() as session:
         song = await SongDAO(session).get_by_id(song_id)
@@ -169,6 +199,7 @@ async def main() -> None:
         await check_missing_audio(storage, song.id)
         await check_queued_repair(storage, song.id)
         await check_queue_failure(storage, song.id)
+        await check_metadata_heal(storage, song.id)
         await check_dispatch_failure(storage, song.id)
         print(
             "PASS: audio readiness, failed manifest, repair commit/deduplication, pending preservation, queue and dispatch failures"
