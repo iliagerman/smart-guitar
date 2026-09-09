@@ -42,6 +42,7 @@ function computeSync(
   lines: ChordSheetLine[],
   flatChords: FlatChord[],
   adjustedLyricsTime: number,
+  audioTime: number,
   lineCursor: ScanCursor,
   chordCursor: ScanCursor,
 ): SyncState {
@@ -89,7 +90,7 @@ function computeSync(
   // chords get skipped during playback.
   const activeFlatIndex = scanForwardMostRecentStarted(
     flatChords.length,
-    adjustedLyricsTime,
+    audioTime,
     (i) => flatChords[i].startTime,
     chordCursor,
   )
@@ -154,7 +155,7 @@ export function useChordSheetSync(lines: ChordSheetLine[], options?: UseChordShe
 
   const [state, setState] = useState<SyncState>(() =>
     enabled
-      ? computeSync(lines, flatChordsRef.current, getAdjustedLyricsTime(), lineCursorRef.current, chordCursorRef.current)
+      ? computeSync(lines, flatChordsRef.current, getAdjustedLyricsTime(), usePlaybackStore.getState().currentTime, lineCursorRef.current, chordCursorRef.current)
       : EMPTY_STATE
   )
 
@@ -164,6 +165,7 @@ export function useChordSheetSync(lines: ChordSheetLine[], options?: UseChordShe
       linesRef.current,
       flatChordsRef.current,
       getAdjustedLyricsTime(),
+      usePlaybackStore.getState().currentTime,
       lineCursorRef.current,
       chordCursorRef.current,
     )
@@ -173,7 +175,8 @@ export function useChordSheetSync(lines: ChordSheetLine[], options?: UseChordShe
   useEffect(() => {
     if (!enabled) return
 
-    // Recompute when lines change
+    // Preferences may have changed while highlighting was disabled.
+    offsetRef.current = usePlayerPrefsStore.getState().lyricsOffsetMs
     recompute()
 
     // Recompute on every currentTime update (playback ticking).

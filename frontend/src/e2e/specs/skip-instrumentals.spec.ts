@@ -235,7 +235,7 @@ test.describe('Skip instrumentals', () => {
     await expect(page.getByText('community')).toBeVisible()
   })
 
-  test('Hebrew song keeps its online timed lyrics when a community sheet is selected', async ({ authenticatedPage: page }) => {
+  test('non-Latin song keeps paired lyrics when a community sheet is selected', async ({ authenticatedPage: page }) => {
     await mockSongDetail(
       page,
       [buildChordOption(), SYNCED_SHORT_COMMUNITY_OPTION],
@@ -247,9 +247,54 @@ test.describe('Skip instrumentals', () => {
     await page.getByTestId('sheet-selector-trigger').click()
     await page.getByTestId('sheet-selector-source-1').click()
 
-    await expect(
-      page.getByRole('button', { name: HEBREW_LYRICS[0].words[0].word, exact: true }),
-    ).toBeVisible()
+    await expect(page.getByText('community', { exact: true })).toBeVisible()
+  })
+
+  test('audio-timed lyrics take precedence over estimated online lyrics', async ({ authenticatedPage: page }) => {
+    await mockSongDetail(page, [buildChordOption()], COMMUNITY_LYRICS, HEBREW_LYRICS)
+    await page.goto(`/songs/${SONG_ID}`)
+    await expect(page.getByText('community', { exact: true })).toBeVisible()
+  })
+
+  test('lyrics offset does not move chord highlighting off the audio clock', async ({ authenticatedPage: page }) => {
+    await page.addInitScript((songId) => {
+      const prefs = JSON.parse(localStorage.getItem('player-prefs')!)
+      prefs.state.songOverrides = { [songId]: { lyricsOffsetMs: 2000 } }
+      localStorage.setItem('player-prefs', JSON.stringify(prefs))
+    }, SONG_ID)
+    await page.goto(`/songs/${SONG_ID}`)
+    await waitForDuration(page)
+    await expect(page.getByRole('button', { name: 'Reset lyrics sync' })).toHaveText('+2000ms')
+    await expect(page.getByTestId('chord-sheet').locator('button[aria-current="true"]')).toHaveText('G')
+  })
+
+  test('lyrics offset stays with its song and survives reload', async ({ authenticatedPage: page }) => {
+    await page.addInitScript(() => {
+      const prefs = JSON.parse(localStorage.getItem('player-prefs')!)
+      prefs.state.lyricsOffsetMs = 1500
+      localStorage.setItem('player-prefs', JSON.stringify(prefs))
+    })
+    await page.goto(`/songs/${SONG_ID}`)
+    const reset = page.getByRole('button', { name: 'Reset lyrics sync' })
+    await expect(reset).toHaveText('0ms')
+    await page.getByRole('button', { name: 'Lyrics later', exact: true }).click()
+    await expect(reset).toHaveText('+50ms')
+    await page.reload()
+    await expect(reset).toHaveText('+50ms')
+  })
+
+  test('mobile keeps paired lyrics and the audio-timed chord with a lyrics delay', async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await mockSongDetail(page, [buildChordOption(), SYNCED_SHORT_COMMUNITY_OPTION], LYRICS, HEBREW_LYRICS)
+    await page.goto(`/songs/${SONG_ID}`)
+    await waitForDuration(page)
+    await page.getByTestId('sheet-selector-trigger').click()
+    await page.getByTestId('sheet-selector-source-1').click()
+    await expect(page.getByText('community', { exact: true })).toBeVisible()
+    await page.getByTestId('transport-toggle-secondary').click()
+    await page.getByRole('button', { name: 'Lyrics later', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Reset lyrics sync' })).toHaveText('+50ms')
+    await expect(page.getByTestId('chord-sheet').locator('button[aria-current="true"]')).toHaveText('G')
   })
 
   test('toggle is disabled when the active sheet has unsynced lyrics', async ({ authenticatedPage: page }) => {

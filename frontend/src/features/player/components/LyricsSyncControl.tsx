@@ -5,9 +5,17 @@ import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 
 const STEP_MS = 50
 
-export function LyricsSyncControl({ className }: { className?: string }) {
+interface LyricsSyncControlProps {
+  songId: string
+  className?: string
+}
+
+export function LyricsSyncControl({ songId, className }: LyricsSyncControlProps) {
   const lyricsOffsetMs = usePlayerPrefsStore((s) => s.lyricsOffsetMs)
-  const setLyricsOffsetMs = usePlayerPrefsStore((s) => s.setLyricsOffsetMs)
+  const setSongOverride = usePlayerPrefsStore((s) => s.setSongOverride)
+  const setOffset = (ms: number) => {
+    setSongOverride(songId, 'lyricsOffsetMs', Math.max(-2000, Math.min(2000, ms)))
+  }
 
   return (
     <div
@@ -24,7 +32,7 @@ export function LyricsSyncControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setLyricsOffsetMs((prev) => prev - STEP_MS)}
+        onClick={() => setOffset(lyricsOffsetMs - STEP_MS)}
         aria-label="Lyrics earlier"
         title="Lyrics earlier"
       >
@@ -34,7 +42,7 @@ export function LyricsSyncControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-charcoal-800/60 transition-colors"
-        onClick={() => setLyricsOffsetMs(0)}
+        onClick={() => setOffset(0)}
         aria-label="Reset lyrics sync"
         title="Reset lyrics sync"
       >
@@ -51,7 +59,7 @@ export function LyricsSyncControl({ className }: { className?: string }) {
       <button
         type="button"
         className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
-        onClick={() => setLyricsOffsetMs((prev) => prev + STEP_MS)}
+        onClick={() => setOffset(lyricsOffsetMs + STEP_MS)}
         aria-label="Lyrics later"
         title="Lyrics later"
       >

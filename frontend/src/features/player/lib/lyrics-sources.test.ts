@@ -52,7 +52,7 @@ describe('getAvailableLyricsSources', () => {
     expect(options.some((o) => o.label === 'Merged')).toBe(false)
   })
 
-  it('Auto prefers ver1 (online) for non-Latin songs', () => {
+  it('Auto prefers audio timing regardless of the lyrics script', () => {
     const detail = makeDetail({
       ver1_lyrics: hebrewSegs,
       ver1_lyrics_source: 'lrclib_quick_synced',
@@ -61,7 +61,7 @@ describe('getAvailableLyricsSources', () => {
     })
     const options = getAvailableLyricsSources(detail, undefined)
     const auto = options.find((o) => o.key === 'auto')
-    expect(auto?.segments).toEqual(hebrewSegs)
+    expect(auto?.segments).toEqual(detail.ver2_lyrics)
   })
 
   it('always offers an Off option', () => {

@@ -118,7 +118,6 @@ function ChordSheetLineImpl({
       {isInstrumental ? (
         <InstrumentalContent
           line={line}
-          isActive={isActive}
           showHighlight={showHighlight}
           isEditMode={isEditMode}
           activeChordIndex={activeChordIndex}
@@ -165,7 +164,6 @@ export const ChordSheetLine = memo(ChordSheetLineImpl)
 
 interface InstrumentalContentProps {
   line: ChordSheetLineType
-  isActive: boolean
   showHighlight: boolean
   isEditMode: boolean
   activeChordIndex: number
@@ -181,7 +179,6 @@ interface InstrumentalContentProps {
 
 function InstrumentalContent({
   line,
-  isActive,
   showHighlight,
   isEditMode,
   activeChordIndex,
@@ -195,7 +192,7 @@ function InstrumentalContent({
       </span>
       {line.chords.map((chord, ci) => {
         const gci = globalChordIndexMap.get(chord) ?? ci
-        const isChordActive = !isEditMode && isActive && showHighlight && ci === activeChordIndex
+        const isChordActive = !isEditMode && showHighlight && ci === activeChordIndex
         return renderChordLabel({ chord, ci, gci, isChordActive, isRtl: false })
       })}
     </div>
@@ -477,7 +474,7 @@ function WordColumn({
       >
         {wordChords.map((chord, ci) => {
           const gci = globalChordIndexMap.get(chord) ?? lineChords.indexOf(chord)
-          const isChordActive = !isEditMode && isActive && showHighlight && lineChords.indexOf(chord) === activeChordIndex
+          const isChordActive = !isEditMode && showHighlight && lineChords.indexOf(chord) === activeChordIndex
           return renderChordLabel({ chord, ci, gci, isChordActive, isRtl })
         })}
       </div>
@@ -561,7 +558,7 @@ function ChordsOnlyLine({
       <div className="min-h-8 flex flex-wrap items-end gap-2">
         {line.chords.map((chord, ci) => {
           const gci = globalChordIndexMap.get(chord) ?? ci
-          const isChordActive = !isEditMode && isActive && showHighlight && ci === activeChordIndex
+          const isChordActive = !isEditMode && showHighlight && ci === activeChordIndex
           return renderChordLabel({ chord, ci, gci, isChordActive, isRtl })
         })}
       </div>

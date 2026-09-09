@@ -1296,9 +1296,13 @@ deploy-homepage:
 deploy-client:
     bash "{{project_dir}}/scripts/deploy/client.sh"
 
+# Install Chromium for client E2E tests.
+setup-client-browser:
+    cd {{project_dir}}/frontend && npx playwright install chromium
+
 # Run client E2E tests (Playwright)
-test-client:
-    cd {{project_dir}}/frontend && npx playwright test
+test-client *args:
+    cd {{project_dir}}/frontend && npx playwright test {{args}}
 
 # Run frontend unit/integration tests (Vitest). Optionally pass a file or pattern.
 test-frontend *args:

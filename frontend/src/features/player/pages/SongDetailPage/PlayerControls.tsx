@@ -186,7 +186,7 @@ export function PlayerControls({
             <ChordDisplayControls />
             <HighlightToggle />
             <PlaybackSpeedSelector />
-            <LyricsSyncControl />
+            <LyricsSyncControl songId={songId} />
             <ScrollModeControl />
             <CountInToggle />
             <ABLoopControl />
