@@ -304,4 +304,47 @@ describe('normalizeWords', () => {
       expect(w.end).toBeGreaterThan(w.start)
     }
   })
+
+  it('does not bridge a long silent gap between two words', () => {
+    // Real case: Eddie Vedder - Society. A guitar solo sits between "not" and
+    // "lonely"; bridging the gap parked the highlight on "not" for 21 seconds.
+    const segment: LyricsSegment = {
+      start: 96.29,
+      end: 144.82,
+      text: "I hope you're not lonely without me",
+      words: [
+        { word: 'I', start: 99.9, end: 100.1 },
+        { word: 'hope', start: 100.1, end: 105.3 },
+        { word: "you're", start: 106.3, end: 107.2 },
+        { word: 'not', start: 107.6, end: 110.0 },
+        { word: 'lonely', start: 131.2, end: 132.5 },
+        { word: 'without', start: 132.6, end: 141.1 },
+        { word: 'me', start: 141.1, end: 144.8 },
+      ],
+    }
+    const result = normalizeWords(segment)
+
+    const not = result.find((w) => w.word === 'not')!
+    expect(not.end).toBeLessThan(112)
+    // The solo stays unhighlighted: nothing covers the middle of the gap.
+    const silent = 120
+    expect(result.some((w) => silent >= w.start && silent < w.end)).toBe(false)
+  })
+
+  it('still bridges an ordinary breath-sized gap between words', () => {
+    const segment: LyricsSegment = {
+      start: 10,
+      end: 14,
+      text: 'hello world',
+      words: [
+        { word: 'hello', start: 10, end: 11 },
+        { word: 'world', start: 12, end: 14 },
+      ],
+    }
+    const result = normalizeWords(segment)
+
+    // Previous word owns 70% of the 1s gap.
+    expect(result[0].end).toBeCloseTo(11.7, 5)
+    expect(result[1].start).toBeCloseTo(11.7, 5)
+  })
 })

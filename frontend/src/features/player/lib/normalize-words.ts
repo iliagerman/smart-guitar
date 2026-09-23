@@ -104,9 +104,14 @@ export function normalizeWords(segment: LyricsSegment): LyricsWord[] {
   // 30%.  In natural speech/singing, listeners attribute the trailing silence
   // to the preceding word (forward masking), so the highlight should linger
   // on the previous word and transition to the next word slightly early.
+  //
+  // Only breath-sized gaps are bridged. A longer gap is an instrumental break
+  // inside the line — bridging it parks the highlight on one word for the
+  // whole break, so it stays unhighlighted instead.
+  const MAX_BRIDGED_GAP_S = 2
   for (let i = 0; i < phase1.length - 1; i++) {
     const gap = phase1[i + 1].start - phase1[i].end
-    if (gap > 0) {
+    if (gap > 0 && gap <= MAX_BRIDGED_GAP_S) {
       const splitPoint = phase1[i].end + gap * 0.7
       phase1[i].end = splitPoint
       phase1[i + 1].start = splitPoint

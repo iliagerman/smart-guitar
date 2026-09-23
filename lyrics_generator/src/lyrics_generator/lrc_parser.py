@@ -59,6 +59,11 @@ def _distribute_words(text: str, start: float, end: float) -> list[WordInfo]:
 def parse_lrc(lrc_text: str, total_duration: float | None = None) -> list[SegmentInfo]:
     """Parse an LRC string into a list of SegmentInfo with synthetic word timestamps.
 
+    A line with a timestamp but no text is LRC's "vocals stop here" marker.
+    It never becomes a segment, but it does end the line before it — without
+    it, a line followed by a solo runs until the next sung line and the whole
+    instrumental break stays highlighted.
+
     Args:
         lrc_text: The full LRC-format string (newline-separated timestamped lines).
         total_duration: Total audio duration in seconds. Used to set the end time
@@ -67,24 +72,25 @@ def parse_lrc(lrc_text: str, total_duration: float | None = None) -> list[Segmen
     Returns:
         List of SegmentInfo with evenly-distributed word timestamps.
     """
-    lines: list[tuple[float, str]] = []
+    marks: list[tuple[float, str]] = []
 
     for raw_line in lrc_text.splitlines():
         m = _LRC_LINE_RE.match(raw_line.strip())
         if not m:
             continue
         ts = _parse_timestamp(m.group(1), m.group(2), m.group(3))
-        text = m.group(4).strip()
-        if text:
-            lines.append((ts, text))
+        marks.append((ts, m.group(4).strip()))
 
-    if not lines:
+    if not any(text for _, text in marks):
         return []
 
     segments: list[SegmentInfo] = []
-    for i, (start, text) in enumerate(lines):
-        if i + 1 < len(lines):
-            end = lines[i + 1][0]
+    for i, (start, text) in enumerate(marks):
+        if not text:
+            continue
+
+        if i + 1 < len(marks):
+            end = marks[i + 1][0]
         elif total_duration is not None:
             end = total_duration
         else:

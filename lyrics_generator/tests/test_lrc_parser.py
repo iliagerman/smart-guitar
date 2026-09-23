@@ -66,6 +66,39 @@ def test_parse_lrc_empty_lines_skipped():
     assert segments[1].text == "Another real line"
 
 
+def test_blank_line_ends_the_previous_line():
+    """A blank timestamped line is LRC's "vocals stop here" marker.
+
+    Without it the preceding line runs until the next sung line and the
+    whole instrumental break in between stays highlighted.
+    """
+    lrc = "[00:01.00] Real line\n[00:05.00]  \n[00:10.00] Another real line\n"
+    segments = parse_lrc(lrc, total_duration=15.0)
+    assert segments[0].end == 5.0
+    assert segments[0].words[-1].end == 5.0
+
+
+def test_blank_line_before_a_long_solo_leaves_a_real_gap():
+    """Eddie Vedder - Society: 40s of solo between two sung lines."""
+    lrc = (
+        "[01:36.29] I hope you're not lonely without me\n"
+        "[01:44.31] \n"
+        "[02:24.82] There's those thinking, more or less, less is more\n"
+    )
+    segments = parse_lrc(lrc, total_duration=236.0)
+    assert len(segments) == 2
+    assert segments[0].end == 104.31
+    assert segments[1].start == 144.82
+
+
+def test_trailing_blank_line_ends_the_final_line():
+    """Without the marker the last line inherits the entire outro."""
+    lrc = "[03:37.70] Without me\n[03:42.47] \n"
+    segments = parse_lrc(lrc, total_duration=236.78)
+    assert len(segments) == 1
+    assert segments[0].end == 222.47
+
+
 def test_parse_lrc_empty_string():
     assert parse_lrc("") == []
 
