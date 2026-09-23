@@ -62,7 +62,6 @@ export function SheetSelector({
 
   const viewOptions = useMemo(() => {
     return buildViewOptions({
-      bestCapoFrets,
       hasTabs,
       hasBars,
       currentSongId,
@@ -71,7 +70,7 @@ export function SheetSelector({
       setChordDisplayMode,
       close: () => setOpen(false),
     })
-  }, [bestCapoFrets, currentSongId, hasTabs, hasBars, setChordDisplayMode, setSheetMode, setSongOverride])
+  }, [currentSongId, hasTabs, hasBars, setChordDisplayMode, setSheetMode, setSongOverride])
 
   const currentViewKey =
     sheetMode === 'tabs'
@@ -163,7 +162,10 @@ export function SheetSelector({
 
             <SectionTitle title="Display" />
             <div className="space-y-1">
-              {viewOptions.map((option) => {
+              {viewOptions.filter((option) =>
+                !option.key.startsWith('capo-') ||
+                bestCapoFrets.some(({ fret }) => option.key === `capo-${fret}`),
+              ).map((option) => {
                 const isSelected = option.key === currentViewKey
                 return (
                   <button
@@ -184,6 +186,26 @@ export function SheetSelector({
                 )
               })}
             </div>
+
+            <label className="mx-3 mt-3 flex flex-col gap-1.5 text-sm text-smoke-200">
+              <span className="font-medium">Custom capo</span>
+              <select
+                aria-label="Custom capo fret"
+                data-testid="custom-capo-fret"
+                value={chordDisplayMode === 'capo' ? `capo-${chordCapoFret}` : ''}
+                onChange={(event) => viewOptions.find((option) => option.key === event.target.value)?.apply()}
+                className="min-h-11 w-full rounded-lg border border-charcoal-600 bg-charcoal-700 px-3 text-smoke-100 focus:outline-none focus:ring-2 focus:ring-flame-400/40"
+              >
+                <option value="" disabled>Select fret</option>
+                {viewOptions.filter((option) => option.key.startsWith('capo-')).map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.key === 'capo-0' ? 'No capo (0)' : option.label}
+                    {bestCapoFrets.some(({ fret }) => option.key === `capo-${fret}`) ? ' (suggested)' : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-smoke-500">Chord shapes adjust to your fret. Audio pitch stays unchanged.</span>
+            </label>
 
             {currentIsOwned && onDeleteCurrentVersion && (
               <>
@@ -214,7 +236,6 @@ export function SheetSelector({
 }
 
 interface BuildViewOptionsParams {
-  bestCapoFrets: Array<{ fret: number }>
   hasTabs: boolean
   hasBars: boolean
   currentSongId: string | null
@@ -225,7 +246,6 @@ interface BuildViewOptionsParams {
 }
 
 function buildViewOptions({
-  bestCapoFrets,
   hasTabs,
   hasBars,
   currentSongId,
@@ -263,7 +283,7 @@ function buildViewOptions({
     { key: 'beginner', label: 'Easy', apply: () => applyView('beginner', 0, 'chords') },
   ]
 
-  for (const { fret } of bestCapoFrets) {
+  for (let fret = 0; fret <= 12; fret++) {
     options.push({
       key: `capo-${fret}`,
       label: `Capo ${fret}`,

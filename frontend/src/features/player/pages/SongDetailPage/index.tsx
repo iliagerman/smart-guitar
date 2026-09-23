@@ -507,9 +507,8 @@ export function SongDetailPage() {
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
     let chords = activeChords
-    // Beginner/capo sheets re-spell chords, so any detected slash bass no longer
-    // applies — drop it there. Slash bass is only meaningful on the detected sheet.
-    const simplified = chordDisplayMode === 'beginner' || (chordDisplayMode === 'capo' && chordCapoFret > 0)
+    // Beginner mode approximates harmony; capo mode preserves it, including bass.
+    const simplified = chordDisplayMode === 'beginner'
     if (chordDisplayMode === 'beginner') {
       chords = simplifyChords(chords)
     } else if (chordDisplayMode === 'capo' && chordCapoFret > 0) {

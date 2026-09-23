@@ -1242,6 +1242,18 @@ deploy-client:
 test-client:
     cd {{project_dir}}/frontend && npx playwright test
 
+# Isolated custom capo E2E checks; requires an installed Playwright Chromium.
+test-capo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sandbox="$(mktemp -d)"
+    trap 'rm -rf "$sandbox"' EXIT
+    export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    export HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" XDG_CACHE_HOME="$sandbox/cache" TMPDIR="$sandbox/tmp"
+    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
+    cd "{{project_dir}}/frontend"
+    npx playwright test --config playwright.capo.config.ts
+
 # Run frontend unit/integration tests (Vitest). Optionally pass a file or pattern.
 test-frontend *args:
     cd {{project_dir}}/frontend && npm run test -- {{args}}

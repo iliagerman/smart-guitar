@@ -93,6 +93,7 @@ export function transposeForCapo(chords: ChordEntry[], capoFret: number): ChordE
   return chords.map((c) => ({
     ...c,
     chord: transposeChordLabel(c.chord, -capoFret),
+    bass: c.bass ? transposeChordLabel(c.bass, -capoFret) : c.bass,
   }))
 }
 
