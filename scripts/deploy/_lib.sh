@@ -357,13 +357,20 @@ deploy_ecs_container_image() {
 
 merge_secrets_deep() {
   # Deep-merge two YAML files and write to output file.
-  # Uses `uv run` within the specified directory so PyYAML is available.
-  local uv_dir="$1"
+  #
+  # Runs in a throwaway env with only PyYAML. Syncing a service's own project
+  # env just to read YAML made the deploy depend on that service's full
+  # dependency tree — lyrics_generator pins torch, which has no macOS-arm64
+  # wheel, so `just deploy-lyrics` failed on Apple Silicon before it ever
+  # reached the (linux/amd64) Docker build.
+  #
+  # $1 is the former uv project dir, kept for call-site compatibility.
+  local _unused_uv_dir="$1"
   local base="$2"
   local overlay="$3"
   local out="$4"
 
-  uv run --directory "${uv_dir}" python3 -c "
+  uv run --no-project --with pyyaml python3 -c "
 import yaml, sys
 base = yaml.safe_load(open(sys.argv[1])) or {}
 overlay = yaml.safe_load(open(sys.argv[2])) or {}
