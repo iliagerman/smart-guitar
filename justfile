@@ -1238,6 +1238,23 @@ deploy-homepage:
 deploy-client:
     bash "{{project_dir}}/scripts/deploy/client.sh"
 
+# Verify published frontend bytes and wait for the latest CDN invalidation.
+verify-client-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source "{{project_dir}}/scripts/deploy/_lib.sh"
+    require_infra_outputs
+    load_aws_env_from_secrets_if_missing
+    bucket="$(read_output frontend_bucket_name)"
+    distribution="$(read_output cloudfront_distribution_id)"
+    invalidation="$(aws cloudfront list-invalidations --distribution-id "$distribution" --query 'InvalidationList.Items[0].Id' --output text)"
+    aws cloudfront wait invalidation-completed --distribution-id "$distribution" --id "$invalidation"
+    for file in "{{project_dir}}/frontend/dist/index.html" "{{project_dir}}/frontend/dist/sw.js" "{{project_dir}}/frontend/dist/assets/"*.js; do
+        key="${file#{{project_dir}}/frontend/dist/}"
+        aws s3 cp "s3://$bucket/$key" - --only-show-errors | cmp "$file" -
+    done
+    echo "Published frontend matches local build; CDN invalidation complete."
+
 # Run client E2E tests (Playwright)
 test-client:
     cd {{project_dir}}/frontend && npx playwright test
