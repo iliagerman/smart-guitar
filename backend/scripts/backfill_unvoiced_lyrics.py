@@ -101,7 +101,7 @@ def _voiced_mask(samples: np.ndarray) -> np.ndarray:
 
     n_frames = (len(filtered) - win) // hop + 1
     frames = np.lib.stride_tricks.sliding_window_view(filtered, win)[np.arange(n_frames) * hop]
-    rms = np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=1) + 1e-10)
+    rms = np.sqrt(np.mean(np.square(frames), axis=1, dtype=np.float64) + 1e-10)
     energy = 20.0 * np.log10(rms + 1e-10)
 
     threshold = float(np.median(energy)) + 0.3 * (float(np.mean(energy)) - float(np.median(energy)))
@@ -119,6 +119,12 @@ def _voiced_ratio(mask: np.ndarray, start: float, end: float) -> float:
 def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> SongResult:
     song_dir = os.path.dirname(lyrics_key)
     vocals_key = f"{song_dir}/vocals.mp3"
+    backup_key = f"{song_dir}/{BACKUP_NAME}"
+
+    # A backup means an earlier run already rewrote this song. Skip before
+    # downloading the stem, so an interrupted pass resumes cheaply.
+    if apply and storage.file_exists(backup_key):
+        return SongResult(lyrics_key, 0, [], skipped="already done")
 
     if not storage.file_exists(vocals_key):
         return SongResult(lyrics_key, 0, [], skipped="no vocals stem")
@@ -151,9 +157,7 @@ def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> Song
     if dropped and apply:
         # The audio bucket is not versioned, so keep the original alongside —
         # restoring a song is then a copy, not a re-transcription.
-        backup_key = lyrics_key.replace("/lyrics.json", f"/{BACKUP_NAME}")
-        if not storage.file_exists(backup_key):
-            storage.write_json(backup_key, payload)
+        storage.write_json(backup_key, payload)
         payload["segments"] = kept
         storage.write_json(lyrics_key, payload)
 
