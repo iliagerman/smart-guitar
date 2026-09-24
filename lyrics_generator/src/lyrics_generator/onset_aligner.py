@@ -418,6 +418,67 @@ def refine_segments_with_onsets(
     return refined
 
 
+# Share of a segment's frames that must carry vocal energy for it to be real
+# singing. Measured over 3,659 transcribed segments from 120 songs: genuine
+# lines sit at 41% and above (10th percentile), while 5.5% of segments score
+# exactly 0% -- Whisper text placed over an instrumental break. Almost nothing
+# lands in between, so the cutoff only has to sit inside that empty band.
+_MIN_VOICED_RATIO = 0.05
+
+# Below this, the vocals stem carries no usable signal at all (a failed
+# separation, or a full-mix fallback). Gating on it would delete the whole
+# song's lyrics, so we leave every segment alone instead.
+_MIN_USABLE_VOICED_RATIO = 0.02
+
+
+def drop_unvoiced_segments(
+    segments: list[SegmentInfo],
+    audio: np.ndarray,
+    *,
+    min_voiced_ratio: float = _MIN_VOICED_RATIO,
+) -> list[SegmentInfo]:
+    """Drop transcribed segments that sit over audio with no vocal energy.
+
+    Whisper does not fall silent when the singer does -- over an instrumental
+    break it emits confident text, typically a repeat of a line it already
+    transcribed or a stock phrase like "Thank you.". Nothing in the timing
+    gives that away: the invented segments look ordinary, they are simply
+    placed where nobody is singing. The separated vocals stem does give it
+    away, so check each segment against it.
+    """
+    if len(segments) == 0 or len(audio) == 0:
+        return segments
+
+    energy = _compute_energy(_bandpass_filter(audio))
+    if len(energy) < 2:
+        return segments
+
+    threshold = float(np.median(energy)) + 0.3 * (float(np.mean(energy)) - float(np.median(energy)))
+    voiced = energy >= threshold
+
+    if float(voiced.mean()) < _MIN_USABLE_VOICED_RATIO:
+        logger.warning("Vocals stem carries no usable signal; keeping all %d segments", len(segments))
+        return segments
+
+    kept: list[SegmentInfo] = []
+    for seg in segments:
+        start_frame = max(0, min(int(seg.start / _HOP_S), len(voiced)))
+        end_frame = max(start_frame + 1, min(int(seg.end / _HOP_S), len(voiced)))
+        if start_frame >= len(voiced):
+            continue
+        if float(voiced[start_frame:end_frame].mean()) >= min_voiced_ratio:
+            kept.append(seg)
+        else:
+            logger.info(
+                "Dropping unvoiced segment %.2f-%.2f: %r", seg.start, seg.end, seg.text[:60],
+            )
+
+    if len(kept) < len(segments):
+        logger.info("Dropped %d/%d segments with no vocal energy", len(segments) - len(kept), len(segments))
+
+    return kept
+
+
 # ---------------------------------------------------------------------------
 # Fast-track: speech detection + plain lyrics alignment
 # ---------------------------------------------------------------------------

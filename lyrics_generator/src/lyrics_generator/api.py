@@ -23,6 +23,7 @@ from lyrics_generator.lyrics_fetcher import fetch_lyrics
 from lyrics_generator.lrc_parser import parse_lrc
 from lyrics_generator.onset_aligner import (
     align_plain_lyrics,
+    drop_unvoiced_segments,
     load_audio,
     refine_segments_with_onsets,
 )
@@ -252,11 +253,13 @@ async def _transcribe_with_fallback(
     if results is None:
         raise RuntimeError(f"Transcription failed for job {job_id}")
 
-    # Refine word timestamps with audio onset detection.
-    # WhisperX's wav2vec2 alignment provides ~50ms word boundaries;
-    # onset detection adds guitar-strum-aware refinement on top.
+    # Drop text Whisper invented over instrumental breaks, then refine word
+    # timestamps with audio onset detection. WhisperX's wav2vec2 alignment
+    # provides ~50ms word boundaries; onset detection adds guitar-strum-aware
+    # refinement on top.
     try:
         audio = await asyncio.to_thread(load_audio, local_input)
+        results = await asyncio.to_thread(drop_unvoiced_segments, results, audio)
         results = await asyncio.to_thread(
             refine_segments_with_onsets, results, audio,
             trust_existing_words=True,
