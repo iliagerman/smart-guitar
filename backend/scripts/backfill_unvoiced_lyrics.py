@@ -20,7 +20,6 @@ Usage:
 """
 
 import argparse
-import asyncio
 import logging
 import os
 import subprocess
@@ -29,11 +28,8 @@ import tempfile
 from dataclasses import dataclass
 
 import numpy as np
-from sqlalchemy import select
 
 from guitar_player.config import load_settings
-from guitar_player.database import close_db, init_db
-from guitar_player.models.song import Song
 from guitar_player.storage import StorageBackend, create_storage
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -164,17 +160,6 @@ def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> Song
     return SongResult(lyrics_key, len(segments), dropped)
 
 
-async def _lyrics_keys(settings) -> list[str]:
-    """Every lyrics.json the app actually serves, straight from the song table."""
-    session_factory = init_db(settings)
-    try:
-        async with session_factory() as session:
-            rows = await session.execute(select(Song.lyrics_key).where(Song.lyrics_key.is_not(None)))
-            return sorted({key for (key,) in rows if key})
-    finally:
-        await close_db()
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="write changes (default: dry run)")
@@ -187,7 +172,9 @@ def main() -> int:
     storage = create_storage(settings)
     storage.init()
 
-    keys = asyncio.run(_lyrics_keys(settings))
+    # Storage, not the song table: the prod database sits inside the VPC and
+    # is unreachable from a developer machine, while the bucket is not.
+    keys = sorted(k for k in storage.list_files("") if k.endswith("/lyrics.json"))
     if args.song:
         keys = [k for k in keys if args.song in k]
     if args.limit:

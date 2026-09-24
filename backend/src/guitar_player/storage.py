@@ -71,10 +71,16 @@ class LocalStorage:
         return self.get_url(key)
 
     def list_files(self, prefix: str) -> list[str]:
+        # Recursive, to match S3's list_objects_v2: a prefix returns every key
+        # beneath it at any depth, and an empty prefix walks the whole bucket.
         base = self._base_path / prefix
         if not base.is_dir():
             return []
-        return [f"{prefix}/{f.name}" for f in base.iterdir() if f.is_file()]
+        return [
+            str(f.relative_to(self._base_path).as_posix())
+            for f in base.rglob("*")
+            if f.is_file()
+        ]
 
     def delete_file(self, key: str) -> bool:
         path = self._base_path / key
