@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Guitar Brand Book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --fire-50: #fff7ed; --fire-100: #ffedd5; --fire-200: #fed7aa;
+      --fire-300: #fdba74; --fire-400: #fb923c; --fire-500: #f97316;
+      --fire-600: #ea580c; --fire-700: #c2410c; --fire-800: #9a3412;
+      --fire-900: #7c2d12; --fire-950: #431407;
+      --ember-50: #fef2f2; --ember-100: #fee2e2; --ember-400: #f87171;
+      --ember-500: #ef4444; --ember-600: #dc2626; --ember-700: #b91c1c;
+      --ember-900: #7f1d1d; --ember-950: #450a0a;
+      --flame-300: #fde047; --flame-400: #facc15; --flame-500: #eab308;
+      --flame-600: #ca8a04; --flame-800: #854d0e; --flame-900: #713f12;
+      --charcoal-600: #383838; --charcoal-700: #282828;
+      --charcoal-800: #1a1a1a; --charcoal-900: #121212; --charcoal-950: #0a0a0a;
+      --smoke-100: #f5f5f4; --smoke-300: #d6d3d1; --smoke-400: #a8a29e;
+      --smoke-500: #78716c; --smoke-600: #57534e;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--charcoal-950);
+      color: var(--smoke-100);
+      line-height: 1.6;
+      color-scheme: dark;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--charcoal-700);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    nav .brand {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.5rem;
+      letter-spacing: 0.05em;
+      color: var(--fire-500);
+    }
+    nav ul { list-style: none; display: flex; gap: 2rem; }
+    nav ul li a {
+      color: var(--smoke-400);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: color 0.2s;
+    }
+    nav ul li a:hover { color: var(--fire-400); }
+
+    /* ── SECTIONS ── */
+    section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 6rem 2rem;
+    }
+    section:first-of-type { padding-top: 8rem; }
+
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--fire-500);
+      margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-family: 'Bebas Neue', cursive;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      line-height: 1.05;
+      color: var(--smoke-100);
+      margin-bottom: 1.5rem;
+    }
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--smoke-400);
+      max-width: 640px;
+      line-height: 1.7;
+      margin-bottom: 3rem;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--charcoal-700);
+      margin: 0 auto;
+      max-width: 1100px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 100%;
+      padding: 0;
+      position: relative;
+      height: 100vh;
+      min-height: 600px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background: url('brand-assets/2026-04-11-banner-fire-strings.png') center/cover no-repeat;
+      opacity: 0.5;
+    }
+    .hero-bg::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(10,10,10,0.3) 0%, rgba(10,10,10,0.9) 85%, var(--charcoal-950) 100%);
+    }
+    .hero-content {
+      position: relative; z-index: 2;
+      padding: 2rem;
+    }
+    .hero-content .section-label { font-size: 0.85rem; margin-bottom: 1.5rem; }
+    .hero-content h1 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: clamp(3.5rem, 8vw, 7rem);
+      line-height: 1;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(180deg, var(--smoke-100) 40%, var(--fire-400) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-content p {
+      font-size: 1.15rem;
+      color: var(--smoke-400);
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+    .hero-version {
+      margin-top: 2rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--smoke-600);
+    }
+
+    /* ── LOGO SECTION ── */
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+    .logo-card {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .logo-card img {
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    .logo-card .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--smoke-500);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .logo-card .name {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--smoke-100);
+    }
+    .logo-card .desc {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .logo-donts {
+      background: var(--charcoal-900);
+      border: 1px solid var(--ember-900);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+    .logo-donts h4 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.5rem;
+      color: var(--ember-500);
+      margin-bottom: 1rem;
+    }
+    .logo-donts ul {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 0.75rem;
+    }
+    .logo-donts li {
+      font-size: 0.9rem;
+      color: var(--smoke-400);
+      padding-left: 1.5rem;
+      position: relative;
+    }
+    .logo-donts li::before {
+      content: '\2717';
+      position: absolute;
+      left: 0;
+      color: var(--ember-500);
+      font-weight: 700;
+    }
+
+    /* ── COLORS ── */
+    .color-family {
+      margin-bottom: 3rem;
+    }
+    .color-family-title {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.8rem;
+      margin-bottom: 0.25rem;
+    }
+    .color-family-desc {
+      font-size: 0.85rem;
+      color: var(--smoke-500);
+      margin-bottom: 1.25rem;
+    }
+    .color-row {
+      display: flex;
+      gap: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+    .color-swatch {
+      flex: 1;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0.75rem;
+      position: relative;
+      transition: transform 0.2s;
+    }
+    .color-swatch:hover { transform: scale(1.05); z-index: 2; border-radius: 8px; }
+    .color-swatch .token {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+    .color-swatch .hex {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .color-swatch.light-text { color: var(--smoke-100); }
+    .color-swatch.dark-text { color: var(--charcoal-950); }
+
+    .color-usage-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+    .color-usage-card {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .color-usage-card .dot {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      margin-bottom: 1rem;
+    }
+    .color-usage-card h5 {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 0.25rem;
+    }
+    .color-usage-card p {
+      font-size: 0.8rem;
+      color: var(--smoke-500);
+      line-height: 1.5;
+    }
+
+    .color-ratio-bar {
+      display: flex;
+      height: 32px;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .color-ratio-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--smoke-500);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── TYPOGRAPHY ── */
+    .type-specimen {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 16px;
+      padding: 2.5rem;
+      margin-bottom: 2rem;
+    }
+    .type-specimen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .type-specimen-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--fire-500);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+    .type-specimen-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--smoke-600);
+    }
+    .type-specimen-sample {
+      margin: 1.5rem 0;
+      overflow: hidden;
+    }
+    .type-specimen-role {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      border-top: 1px solid var(--charcoal-700);
+      padding-top: 1.25rem;
+      line-height: 1.6;
+    }
+
+    .type-hierarchy {
+      display: grid;
+      gap: 1px;
+      background: var(--charcoal-700);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 3rem;
+    }
+    .type-hierarchy-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      background: var(--charcoal-900);
+      align-items: center;
+    }
+    .type-hierarchy-row.header {
+      background: var(--charcoal-800);
+    }
+    .type-hierarchy-row .meta {
+      padding: 1rem 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--smoke-500);
+      border-right: 1px solid var(--charcoal-700);
+    }
+    .type-hierarchy-row .preview {
+      padding: 1rem 1.5rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    /* ── IMAGERY ── */
+    .imagery-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .imagery-card {
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid var(--charcoal-700);
+    }
+    .imagery-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .imagery-card .overlay-label {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 1rem 1.25rem;
+      background: linear-gradient(transparent, rgba(10,10,10,0.9));
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--smoke-400);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .imagery-card.tall { grid-row: span 2; }
+
+    .imagery-guidelines {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .guideline-card {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .guideline-card.do { border-left: 3px solid var(--fire-500); }
+    .guideline-card.dont { border-left: 3px solid var(--ember-500); }
+    .guideline-card h5 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.2rem;
+      margin-bottom: 0.75rem;
+    }
+    .guideline-card.do h5 { color: var(--fire-500); }
+    .guideline-card.dont h5 { color: var(--ember-500); }
+    .guideline-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .guideline-card li {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      padding-left: 1.25rem;
+      position: relative;
+      line-height: 1.5;
+    }
+    .guideline-card.do li::before { content: '\2713'; position: absolute; left: 0; color: var(--fire-500); }
+    .guideline-card.dont li::before { content: '\2717'; position: absolute; left: 0; color: var(--ember-500); }
+
+    /* ── COMPONENTS ── */
+    .component-showcase {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    .component-group {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+    .component-group h4 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: var(--smoke-300);
+    }
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.7rem 1.75rem;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+      text-decoration: none;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--fire-500); color: white; }
+    .btn-primary:hover { box-shadow: 0 4px 20px rgba(249,115,22,0.4); }
+    .btn-golden { background: var(--flame-400); color: var(--charcoal-950); }
+    .btn-golden:hover { box-shadow: 0 4px 20px rgba(250,204,21,0.4); }
+    .btn-secondary { background: transparent; color: var(--smoke-100); border: 1px solid var(--smoke-500); }
+    .btn-secondary:hover { border-color: var(--smoke-300); }
+    .btn-ghost { background: transparent; color: var(--smoke-400); border: 1px solid var(--charcoal-600); }
+    .btn-ghost:hover { color: var(--smoke-100); border-color: var(--smoke-500); }
+
+    .btn-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--smoke-600);
+      text-align: center;
+      margin-top: 0.4rem;
+    }
+
+    .card-examples {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+    .example-card {
+      background: var(--charcoal-800);
+      border: 1px solid var(--charcoal-600);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .example-card.accent-left { border-left: 3px solid var(--fire-600); }
+    .example-card h5 {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .example-card p {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      line-height: 1.5;
+    }
+    .example-input {
+      background: rgba(26,26,26,0.8);
+      border: 1px solid var(--charcoal-600);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      color: var(--smoke-500);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      width: 100%;
+      margin-top: 0.75rem;
+    }
+    .example-input:focus {
+      outline: none;
+      border-color: var(--flame-400);
+    }
+
+    /* ── ANIMATION ── */
+    .anim-demos {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .anim-card {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+    }
+    .anim-card h5 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--fire-500);
+      margin-bottom: 1.5rem;
+    }
+    .anim-card .demo-area {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    .anim-card p {
+      font-size: 0.8rem;
+      color: var(--smoke-500);
+      line-height: 1.5;
+    }
+
+    .flame-pulse-demo {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--flame-400);
+      animation: flame-pulse 2s ease-in-out infinite;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .flame-pulse-demo svg { width: 24px; height: 24px; }
+
+    @keyframes flame-pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(250,204,21,0.3); }
+      50% { box-shadow: 0 0 30px rgba(250,204,21,0.7); }
+    }
+
+    .fav-ignite-demo {
+      width: 40px; height: 40px;
+      color: var(--ember-500);
+      cursor: pointer;
+    }
+    .fav-ignite-demo:hover {
+      animation: favorite-ignite 0.3s ease-out;
+    }
+
+    @keyframes favorite-ignite {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); filter: brightness(1.5); }
+      100% { transform: scale(1); }
+    }
+
+    .slide-up-demo {
+      opacity: 0;
+      animation: slide-up-loop 3s ease-out infinite;
+    }
+
+    @keyframes slide-up-loop {
+      0%, 60% { opacity: 0; transform: translateY(1rem); }
+      20%, 40% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── MESSAGING ── */
+    .messaging-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .messaging-card {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .messaging-card h5 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 1.3rem;
+      color: var(--smoke-300);
+      margin-bottom: 1rem;
+    }
+    .messaging-card blockquote {
+      font-size: 1.1rem;
+      font-style: italic;
+      color: var(--smoke-100);
+      border-left: 3px solid var(--fire-500);
+      padding-left: 1rem;
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+    .messaging-card .context {
+      font-size: 0.8rem;
+      color: var(--smoke-500);
+    }
+    .cta-examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .cta-pill {
+      background: var(--fire-500);
+      color: white;
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    /* ── AD LAYOUTS ── */
+    .ad-showcase {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .ad-mockup {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--charcoal-700);
+      position: relative;
+    }
+    .ad-mockup img {
+      width: 100%;
+      display: block;
+    }
+    .ad-mockup .ad-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 2rem;
+      background: linear-gradient(transparent 30%, rgba(10,10,10,0.85) 70%, rgba(10,10,10,0.95) 100%);
+    }
+    .ad-mockup .ad-overlay h3 {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 2rem;
+      color: var(--smoke-100);
+      line-height: 1.1;
+      margin-bottom: 0.5rem;
+    }
+    .ad-mockup .ad-overlay p {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      margin-bottom: 1rem;
+    }
+    .ad-type-label {
+      position: absolute;
+      top: 1rem; left: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      background: rgba(10,10,10,0.7);
+      color: var(--fire-500);
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      backdrop-filter: blur(10px);
+    }
+
+    /* ── BRAND DONTS ── */
+    .donts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .dont-item {
+      background: var(--charcoal-900);
+      border: 1px solid var(--charcoal-700);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .dont-item .icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--ember-950);
+      border: 1px solid var(--ember-700);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: var(--ember-500);
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+    .dont-item p {
+      font-size: 0.85rem;
+      color: var(--smoke-400);
+      line-height: 1.5;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 4rem 2rem;
+      border-top: 1px solid var(--charcoal-700);
+      color: var(--smoke-600);
+      font-size: 0.8rem;
+    }
+    footer .logo-text {
+      font-family: 'Bebas Neue', cursive;
+      font-size: 2rem;
+      color: var(--fire-500);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav ul { display: none; }
+      .imagery-grid { grid-template-columns: 1fr; }
+      .imagery-card.tall { grid-row: auto; }
+      .anim-demos { grid-template-columns: 1fr; }
+      .ad-showcase { grid-template-columns: 1fr; }
+      .color-usage-grid { grid-template-columns: 1fr; }
+      .type-hierarchy-row { grid-template-columns: 120px 1fr; }
+      .imagery-guidelines { grid-template-columns: 1fr; }
+      section { padding: 4rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="brand">SMART GUITAR BRAND BOOK</div>
+    <ul>
+      <li><a href="#logo">Logo</a></li>
+      <li><a href="#colors">Colors</a></li>
+      <li><a href="#typography">Typography</a></li>
+      <li><a href="#imagery">Imagery</a></li>
+      <li><a href="#components">Components</a></li>
+      <li><a href="#animation">Motion</a></li>
+      <li><a href="#messaging">Messaging</a></li>
+      <li><a href="#ads">Ad Guidelines</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <div class="section-label">Brand Guidelines</div>
+      <h1>SMART GUITAR</h1>
+      <p>The visual identity system for Smart Guitar &mdash; an AI-powered music practice tool that transforms any song into an interactive learning experience.</p>
+      <div class="hero-version">v1.0 &mdash; April 2026</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- BRAND OVERVIEW -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="overview">
+    <div class="section-label">01 / Overview</div>
+    <div class="section-title">BRAND ESSENCE</div>
+    <div class="section-desc">
+      Smart Guitar uses AI to split any song into individual instrument stems, detect chords in real time, sync lyrics, and generate guitar tabs. Musicians play along as if they're in the band.
+    </div>
+
+    <div class="messaging-grid" style="margin-bottom: 2rem;">
+      <div class="messaging-card">
+        <h5>Brand Personality</h5>
+        <p style="color: var(--smoke-400); font-size: 0.9rem; line-height: 1.7;">
+          <strong style="color: var(--fire-400);">Bold</strong> &mdash; unapologetic, direct, confident<br>
+          <strong style="color: var(--fire-400);">Fiery</strong> &mdash; passionate, energetic, alive<br>
+          <strong style="color: var(--fire-400);">Empowering</strong> &mdash; removes barriers to playing<br>
+          <strong style="color: var(--fire-400);">Modern</strong> &mdash; cutting-edge AI, sleek dark UI<br>
+          <strong style="color: var(--fire-400);">Accessible</strong> &mdash; free to try, no credit card
+        </p>
+      </div>
+      <div class="messaging-card">
+        <h5>Voice &amp; Tone</h5>
+        <p style="color: var(--smoke-400); font-size: 0.9rem; line-height: 1.7;">
+          Short, punchy, imperative sentences.<br>
+          Action-oriented: &ldquo;Start Playing Free.&rdquo;<br>
+          Second person: &ldquo;You decide.&rdquo;<br>
+          No jargon &mdash; speaks to musicians, not engineers.<br>
+          Never passive or apologetic.
+        </p>
+      </div>
+      <div class="messaging-card">
+        <h5>Tagline</h5>
+        <blockquote>Your smart guitar companion</blockquote>
+        <p class="context">Domain: smart-guitar.com<br>App: app.smart-guitar.com</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- LOGO -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="logo">
+    <div class="section-label">02 / Logo</div>
+    <div class="section-title">LOGO SYSTEM</div>
+    <div class="section-desc">
+      The Smart Guitar logo features an electric guitar engulfed in flames &mdash; a dramatic, photorealistic illustration on pure black. Two variants serve different contexts.
+    </div>
+
+    <div class="logo-grid">
+      <div class="logo-card">
+        <div class="label">Primary &mdash; App Icon</div>
+        <img src="frontend/public/art/logo.png" alt="Smart Guitar App Icon">
+        <div class="name">App Icon Variant</div>
+        <div class="desc">
+          Detailed electric guitar with realistic fire. Used for app icon, favicon, PWA icon, and in-app branding.
+        </div>
+      </div>
+      <div class="logo-card">
+        <div class="label">Secondary &mdash; Marketing</div>
+        <img src="homepage/assets/logo-clean.png" alt="Smart Guitar Marketing Logo">
+        <div class="name">Marketing Variant</div>
+        <div class="desc">
+          Guitar silhouette fully consumed by a ring of fire. More dramatic and abstract. Used in hero sections, ads, and splash screens.
+        </div>
+      </div>
+    </div>
+
+    <div class="logo-donts">
+      <h4>LOGO USAGE RULES</h4>
+      <ul>
+        <li>Always place on pure black (#0a0a0a) or very dark backgrounds</li>
+        <li>Never place on light or white backgrounds</li>
+        <li>Maintain clear space equal to the logo's own width on all sides</li>
+        <li>Never add drop shadows, outlines, or additional effects</li>
+        <li>Never rotate, stretch, crop, or recolor the flames</li>
+        <li>Never overlay text directly on the logo</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- COLORS -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="colors">
+    <div class="section-label">03 / Color Palette</div>
+    <div class="section-title">FORGED IN FIRE</div>
+    <div class="section-desc">
+      A dark-mode-only palette built around five color families. Charcoal backgrounds dominate, warm fire and flame accents draw attention to key actions.
+    </div>
+
+    <!-- Fire -->
+    <div class="color-family">
+      <div class="color-family-title">Fire &mdash; Primary Brand</div>
+      <div class="color-family-desc">CTAs, buttons, links, key interactive accents</div>
+      <div class="color-row">
+        <div class="color-swatch dark-text" style="background:#fff7ed"><span class="token">50</span><span class="hex">#fff7ed</span></div>
+        <div class="color-swatch dark-text" style="background:#ffedd5"><span class="token">100</span><span class="hex">#ffedd5</span></div>
+        <div class="color-swatch dark-text" style="background:#fed7aa"><span class="token">200</span><span class="hex">#fed7aa</span></div>
+        <div class="color-swatch dark-text" style="background:#fdba74"><span class="token">300</span><span class="hex">#fdba74</span></div>
+        <div class="color-swatch dark-text" style="background:#fb923c"><span class="token">400</span><span class="hex">#fb923c</span></div>
+        <div class="color-swatch light-text" style="background:#f97316"><span class="token">500</span><span class="hex">#f97316</span></div>
+        <div class="color-swatch light-text" style="background:#ea580c"><span class="token">600</span><span class="hex">#ea580c</span></div>
+        <div class="color-swatch light-text" style="background:#c2410c"><span class="token">700</span><span class="hex">#c2410c</span></div>
+        <div class="color-swatch light-text" style="background:#9a3412"><span class="token">800</span><span class="hex">#9a3412</span></div>
+        <div class="color-swatch light-text" style="background:#7c2d12"><span class="token">900</span><span class="hex">#7c2d12</span></div>
+        <div class="color-swatch light-text" style="background:#431407"><span class="token">950</span><span class="hex">#431407</span></div>
+      </div>
+    </div>
+
+    <!-- Flame -->
+    <div class="color-family">
+      <div class="color-family-title">Flame &mdash; Golden Accent</div>
+      <div class="color-family-desc">Play button, auth actions, interactive highlights, active states</div>
+      <div class="color-row">
+        <div class="color-swatch dark-text" style="background:#fde047"><span class="token">300</span><span class="hex">#fde047</span></div>
+        <div class="color-swatch dark-text" style="background:#facc15"><span class="token">400</span><span class="hex">#facc15</span></div>
+        <div class="color-swatch dark-text" style="background:#eab308"><span class="token">500</span><span class="hex">#eab308</span></div>
+        <div class="color-swatch light-text" style="background:#ca8a04"><span class="token">600</span><span class="hex">#ca8a04</span></div>
+        <div class="color-swatch light-text" style="background:#854d0e"><span class="token">800</span><span class="hex">#854d0e</span></div>
+        <div class="color-swatch light-text" style="background:#713f12"><span class="token">900</span><span class="hex">#713f12</span></div>
+      </div>
+    </div>
+
+    <!-- Ember -->
+    <div class="color-family">
+      <div class="color-family-title">Ember &mdash; Danger / Alert</div>
+      <div class="color-family-desc">Error states, destructive actions, critical warnings</div>
+      <div class="color-row">
+        <div class="color-swatch dark-text" style="background:#fef2f2"><span class="token">50</span><span class="hex">#fef2f2</span></div>
+        <div class="color-swatch dark-text" style="background:#fee2e2"><span class="token">100</span><span class="hex">#fee2e2</span></div>
+        <div class="color-swatch dark-text" style="background:#f87171"><span class="token">400</span><span class="hex">#f87171</span></div>
+        <div class="color-swatch light-text" style="background:#ef4444"><span class="token">500</span><span class="hex">#ef4444</span></div>
+        <div class="color-swatch light-text" style="background:#dc2626"><span class="token">600</span><span class="hex">#dc2626</span></div>
+        <div class="color-swatch light-text" style="background:#b91c1c"><span class="token">700</span><span class="hex">#b91c1c</span></div>
+        <div class="color-swatch light-text" style="background:#7f1d1d"><span class="token">900</span><span class="hex">#7f1d1d</span></div>
+        <div class="color-swatch light-text" style="background:#450a0a"><span class="token">950</span><span class="hex">#450a0a</span></div>
+      </div>
+    </div>
+
+    <!-- Charcoal -->
+    <div class="color-family">
+      <div class="color-family-title">Charcoal &mdash; Backgrounds</div>
+      <div class="color-family-desc">Page backgrounds, cards, panels, surfaces, borders</div>
+      <div class="color-row">
+        <div class="color-swatch light-text" style="background:#383838"><span class="token">600</span><span class="hex">#383838</span></div>
+        <div class="color-swatch light-text" style="background:#282828"><span class="token">700</span><span class="hex">#282828</span></div>
+        <div class="color-swatch light-text" style="background:#1a1a1a"><span class="token">800</span><span class="hex">#1a1a1a</span></div>
+        <div class="color-swatch light-text" style="background:#121212"><span class="token">900</span><span class="hex">#121212</span></div>
+        <div class="color-swatch light-text" style="background:#0a0a0a"><span class="token">950</span><span class="hex">#0a0a0a</span></div>
+      </div>
+    </div>
+
+    <!-- Smoke -->
+    <div class="color-family">
+      <div class="color-family-title">Smoke &mdash; Text</div>
+      <div class="color-family-desc">Headings, body, captions, metadata, disabled states</div>
+      <div class="color-row">
+        <div class="color-swatch dark-text" style="background:#f5f5f4"><span class="token">100</span><span class="hex">#f5f5f4</span></div>
+        <div class="color-swatch dark-text" style="background:#d6d3d1"><span class="token">300</span><span class="hex">#d6d3d1</span></div>
+        <div class="color-swatch dark-text" style="background:#a8a29e"><span class="token">400</span><span class="hex">#a8a29e</span></div>
+        <div class="color-swatch light-text" style="background:#78716c"><span class="token">500</span><span class="hex">#78716c</span></div>
+        <div class="color-swatch light-text" style="background:#57534e"><span class="token">600</span><span class="hex">#57534e</span></div>
+      </div>
+    </div>
+
+    <!-- Usage Cards -->
+    <div class="color-usage-grid">
+      <div class="color-usage-card">
+        <div class="dot" style="background: var(--fire-500);"></div>
+        <h5>Fire 500</h5>
+        <p>Primary CTAs, navigation accents, links, "Sign Up Free" buttons</p>
+      </div>
+      <div class="color-usage-card">
+        <div class="dot" style="background: var(--flame-400);"></div>
+        <h5>Flame 400</h5>
+        <p>Play button, "Sign In" auth, active controls, golden highlights</p>
+      </div>
+      <div class="color-usage-card">
+        <div class="dot" style="background: var(--charcoal-950);"></div>
+        <h5>Charcoal 950</h5>
+        <p>Page background, meta theme color, the canvas everything sits on</p>
+      </div>
+    </div>
+
+    <!-- Ratio Bar -->
+    <div style="margin-top: 3rem;">
+      <div class="section-label" style="margin-bottom: 1rem;">Color Ratios in Compositions</div>
+      <div class="color-ratio-bar">
+        <div style="flex: 90; background: var(--charcoal-900);"></div>
+        <div style="flex: 7; background: var(--fire-500);"></div>
+        <div style="flex: 3; background: var(--smoke-300);"></div>
+      </div>
+      <div class="color-ratio-label">
+        <span>90% Dark (Charcoal)</span>
+        <span>7% Accents (Fire / Flame)</span>
+        <span>3% Text (Smoke)</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- TYPOGRAPHY -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="typography">
+    <div class="section-label">04 / Typography</div>
+    <div class="section-title">THREE VOICES</div>
+    <div class="section-desc">
+      A three-font system: Bebas Neue commands attention, Inter communicates clearly, JetBrains Mono handles musical precision.
+    </div>
+
+    <!-- Bebas Neue -->
+    <div class="type-specimen">
+      <div class="type-specimen-header">
+        <span class="type-specimen-name">Bebas Neue</span>
+        <span class="type-specimen-meta">Display &bull; Regular 400 &bull; Always uppercase</span>
+      </div>
+      <div class="type-specimen-sample">
+        <div style="font-family: 'Bebas Neue', cursive; font-size: clamp(3rem, 6vw, 5rem); line-height: 1.05; letter-spacing: 0.02em;">
+          SEE THE CHORDS.<br>FEEL THE RHYTHM.
+        </div>
+      </div>
+      <div style="font-family: 'Bebas Neue', cursive; font-size: 1.5rem; color: var(--smoke-400); letter-spacing: 0.1em; margin-bottom: 1.5rem;">
+        ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+      </div>
+      <div class="type-specimen-role">
+        <strong>Role:</strong> Hero headlines, section titles, bold statements. Bebas Neue is the brand's loudest voice &mdash; cinematic, condensed, and always in full caps. Never use for body text or small UI labels.
+      </div>
+    </div>
+
+    <!-- Inter -->
+    <div class="type-specimen">
+      <div class="type-specimen-header">
+        <span class="type-specimen-name">Inter</span>
+        <span class="type-specimen-meta">Sans-serif &bull; 400&ndash;900 &bull; Primary body font</span>
+      </div>
+      <div class="type-specimen-sample">
+        <div style="font-family: 'Inter', sans-serif; display: flex; flex-direction: column; gap: 0.5rem;">
+          <span style="font-weight: 400; font-size: 1rem; color: var(--smoke-400);">Regular 400 &mdash; AI splits any song into vocals, guitar, bass, drums, and piano.</span>
+          <span style="font-weight: 500; font-size: 1rem;">Medium 500 &mdash; See every chord. Follow the strumming pattern.</span>
+          <span style="font-weight: 600; font-size: 1rem;">Semibold 600 &mdash; Play like you're in the band.</span>
+          <span style="font-weight: 700; font-size: 1.15rem;">Bold 700 &mdash; Search for Any Song</span>
+          <span style="font-weight: 800; font-size: 1.15rem;">Extrabold 800 &mdash; Start Playing Free</span>
+        </div>
+      </div>
+      <div class="type-specimen-role">
+        <strong>Role:</strong> All readable content &mdash; body text, button labels, descriptions, navigation items, UI controls. Inter is optimized for screen readability at all sizes.
+      </div>
+    </div>
+
+    <!-- JetBrains Mono -->
+    <div class="type-specimen">
+      <div class="type-specimen-header">
+        <span class="type-specimen-name">JetBrains Mono</span>
+        <span class="type-specimen-meta">Monospace &bull; 400&ndash;600 &bull; Technical &amp; musical data</span>
+      </div>
+      <div class="type-specimen-sample">
+        <div style="font-family: 'JetBrains Mono', monospace; display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
+          <span style="background: var(--fire-500); color: white; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500;">Am</span>
+          <span style="background: var(--charcoal-700); border: 1px solid var(--charcoal-600); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500;">F</span>
+          <span style="background: var(--charcoal-700); border: 1px solid var(--charcoal-600); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500;">C</span>
+          <span style="background: var(--charcoal-700); border: 1px solid var(--charcoal-600); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500;">G</span>
+          <span style="color: var(--smoke-500); font-size: 0.85rem; margin-left: 1rem;">e|---0---1---0---3---|</span>
+        </div>
+      </div>
+      <div class="type-specimen-role">
+        <strong>Role:</strong> Chord labels, guitar tab notation, section labels, technical metadata. JetBrains Mono provides the precision needed for musical data where character alignment matters.
+      </div>
+    </div>
+
+    <!-- Hierarchy Table -->
+    <div class="type-hierarchy">
+      <div class="type-hierarchy-row header">
+        <div class="meta" style="font-weight: 600; color: var(--smoke-300);">Level</div>
+        <div class="preview" style="font-weight: 600; color: var(--smoke-300); font-size: 0.85rem;">Preview</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Hero Headline<br>Bebas Neue 48&ndash;72px</div>
+        <div class="preview" style="font-family: 'Bebas Neue', cursive; font-size: 2.5rem; line-height: 1.1;">STOP WATCHING TUTORIALS</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Section Title<br>Bebas Neue 32&ndash;40px</div>
+        <div class="preview" style="font-family: 'Bebas Neue', cursive; font-size: 1.8rem; line-height: 1.1;">HOW IT WORKS</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Card Title<br>Inter 18&ndash;20px Bold</div>
+        <div class="preview" style="font-weight: 700; font-size: 1.15rem;">Search for Any Song</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Body<br>Inter 14&ndash;16px Regular</div>
+        <div class="preview" style="color: var(--smoke-400); font-size: 0.95rem;">Our engine isolates every instrument, detects all chords, and syncs lyrics.</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Caption<br>Inter 12&ndash;14px Regular</div>
+        <div class="preview" style="color: var(--smoke-500); font-size: 0.8rem;">Acoustic guitarist, 3 years</div>
+      </div>
+      <div class="type-hierarchy-row">
+        <div class="meta">Chord Label<br>JetBrains Mono 14&ndash;16px</div>
+        <div class="preview" style="font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 0.95rem; color: var(--flame-400);">Am &nbsp; F &nbsp; C &nbsp; G &nbsp; Dm7 &nbsp; E</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- IMAGERY -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="imagery">
+    <div class="section-label">05 / Imagery</div>
+    <div class="section-title">VISUAL LANGUAGE</div>
+    <div class="section-desc">
+      Dark, dramatic, fire-lit. Every image reinforces the brand's energy and warmth against deep black backgrounds.
+    </div>
+
+    <div class="imagery-grid">
+      <div class="imagery-card">
+        <img src="brand-assets/2026-04-11-banner-fire-strings.png" alt="Fire strings banner">
+        <span class="overlay-label">Hero Banner &mdash; Fire Strings</span>
+      </div>
+      <div class="imagery-card tall">
+        <img src="brand-assets/2026-04-11-social-ad-pick.png" alt="Social ad pick on fire">
+        <span class="overlay-label">Social &mdash; 9:16 Story</span>
+      </div>
+      <div class="imagery-card">
+        <img src="brand-assets/2026-04-11-fretboard-fire.png" alt="Fretboard with fire">
+        <span class="overlay-label">Detail &mdash; Fretboard Close-Up</span>
+      </div>
+    </div>
+
+    <!-- Brand Texture -->
+    <div style="margin: 2rem 0;">
+      <div class="section-label" style="margin-bottom: 1rem;">Brand Texture</div>
+      <div style="height: 120px; border-radius: 12px; overflow: hidden; border: 1px solid var(--charcoal-700); background: url('brand-assets/2026-04-11-brand-texture.png') center/cover;"></div>
+      <p style="font-size: 0.8rem; color: var(--smoke-500); margin-top: 0.5rem;">Subtle ember particle texture for dark backgrounds and ad compositions</p>
+    </div>
+
+    <!-- Do / Don't -->
+    <div class="imagery-guidelines">
+      <div class="guideline-card do">
+        <h5>DO</h5>
+        <ul>
+          <li>Use dark, dramatic backgrounds with warm fire/amber lighting</li>
+          <li>Show real musicians in natural practice environments</li>
+          <li>Apply rounded corners (12&ndash;16px) on photo containers</li>
+          <li>Use dark overlays/vignettes to blend images into the UI</li>
+          <li>Keep the fire as the primary/only light source</li>
+          <li>Use portrait framing for testimonial photos</li>
+        </ul>
+      </div>
+      <div class="guideline-card dont">
+        <h5>DON'T</h5>
+        <ul>
+          <li>Use bright, high-key or white-background photography</li>
+          <li>Show generic stock photos of hands on keyboards</li>
+          <li>Add borders, frames, or drop shadows around photos</li>
+          <li>Use cool-toned (blue/green) lighting or filters</li>
+          <li>Place images without dark overlay on light surfaces</li>
+          <li>Mix illustration styles with the photorealistic fire motif</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- COMPONENTS -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="components">
+    <div class="section-label">06 / UI Components</div>
+    <div class="section-title">DESIGN SYSTEM</div>
+    <div class="section-desc">
+      Core interactive elements that make up the Smart Guitar interface. All components are built for dark backgrounds only.
+    </div>
+
+    <div class="component-showcase">
+      <!-- Buttons -->
+      <div class="component-group">
+        <h4>BUTTONS</h4>
+        <div class="button-row">
+          <div style="text-align: center;">
+            <button class="btn btn-primary">Start Playing Free</button>
+            <div class="btn-label">Primary CTA</div>
+          </div>
+          <div style="text-align: center;">
+            <button class="btn btn-golden">Sign In</button>
+            <div class="btn-label">Golden Action</div>
+          </div>
+          <div style="text-align: center;">
+            <button class="btn btn-secondary">Sign In</button>
+            <div class="btn-label">Secondary</div>
+          </div>
+          <div style="text-align: center;">
+            <button class="btn btn-ghost">Learn More</button>
+            <div class="btn-label">Ghost</div>
+          </div>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--smoke-500); line-height: 1.6;">
+          Primary: fire-500 bg, white text. Golden: flame-400 bg, dark text. Secondary: transparent, white border. Ghost: transparent, charcoal border. All use 8px radius, 600 weight, Inter font.
+        </p>
+      </div>
+
+      <!-- Cards -->
+      <div class="component-group">
+        <h4>CARDS</h4>
+        <div class="card-examples">
+          <div class="example-card">
+            <h5>Standard Card</h5>
+            <p>Charcoal-800 background, charcoal-600 border, 12px radius. No drop shadows.</p>
+          </div>
+          <div class="example-card accent-left">
+            <h5>Accent Card</h5>
+            <p>Same as standard with a 3px fire-600 left border for emphasis and visual hierarchy.</p>
+          </div>
+          <div class="example-card" style="background: var(--charcoal-900); border-color: var(--charcoal-700);">
+            <h5>Elevated Card</h5>
+            <p>Charcoal-900 background for a sunken/elevated feel. Elevation via background lightness, not shadow.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inputs -->
+      <div class="component-group">
+        <h4>INPUTS</h4>
+        <div style="max-width: 400px; display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label style="font-size: 0.8rem; color: var(--smoke-400); display: block; margin-bottom: 0.4rem;">Song Search</label>
+            <input type="text" class="example-input" placeholder="hotel california..." readonly>
+          </div>
+          <div>
+            <label style="font-size: 0.8rem; color: var(--smoke-400); display: block; margin-bottom: 0.4rem;">Email</label>
+            <input type="text" class="example-input" placeholder="your@email.com" readonly>
+          </div>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--smoke-500); margin-top: 1rem;">
+          Semi-transparent charcoal-800 background. Charcoal-600 border, flame-400 on focus. Smoke-500 placeholder text. Matching button radius.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ANIMATION -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="animation">
+    <div class="section-label">07 / Motion</div>
+    <div class="section-title">ANIMATION</div>
+    <div class="section-desc">
+      Motion is subtle and purposeful. Three signature animations reinforce the fire metaphor while keeping the interface fast and responsive.
+    </div>
+
+    <div class="anim-demos">
+      <div class="anim-card">
+        <h5>Flame Pulse</h5>
+        <div class="demo-area">
+          <div class="flame-pulse-demo">
+            <svg viewBox="0 0 24 24" fill="white"><polygon points="8,5 19,12 8,19"/></svg>
+          </div>
+        </div>
+        <p>Gentle golden glow pulsing via box-shadow. 2s infinite loop. Used on the active play button.</p>
+      </div>
+      <div class="anim-card">
+        <h5>Favorite Ignite</h5>
+        <div class="demo-area">
+          <div class="fav-ignite-demo">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </div>
+        </div>
+        <p>Scale to 1.3x with brightness boost, 0.3s ease-out. Hover to preview. Used when favoriting a song.</p>
+      </div>
+      <div class="anim-card">
+        <h5>Slide Up</h5>
+        <div class="demo-area">
+          <div class="slide-up-demo" style="display: flex; gap: 0.5rem;">
+            <span style="background: var(--charcoal-700); padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.8rem;">Vocals</span>
+            <span style="background: var(--charcoal-700); padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.8rem;">Guitar</span>
+            <span style="background: var(--charcoal-700); padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.8rem;">Bass</span>
+          </div>
+        </div>
+        <p>Opacity 0&rarr;1 with 1rem upward translation, 0.3s ease-out. Used for content entrances.</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 2rem; background: var(--charcoal-900); border: 1px solid var(--charcoal-700); border-radius: 12px; padding: 1.5rem;">
+      <h5 style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--fire-500); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">Motion Principles</h5>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem; color: var(--smoke-400);">
+        <div>Animate only <code style="color: var(--flame-400);">transform</code> and <code style="color: var(--flame-400);">opacity</code></div>
+        <div>Duration: <code style="color: var(--flame-400);">200&ndash;300ms</code> for UI, <code style="color: var(--flame-400);">2s</code> for ambient loops</div>
+        <div>Always honor <code style="color: var(--flame-400);">prefers-reduced-motion</code></div>
+        <div>Easing: <code style="color: var(--flame-400);">ease-out</code> entrances, <code style="color: var(--flame-400);">ease-in-out</code> loops</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- MESSAGING -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="messaging">
+    <div class="section-label">08 / Messaging</div>
+    <div class="section-title">WORDS THAT BURN</div>
+    <div class="section-desc">
+      Smart Guitar's copy is short, punchy, and action-oriented. Headlines command. Body text clarifies. CTAs ignite action.
+    </div>
+
+    <div class="messaging-grid" style="margin-bottom: 2rem;">
+      <div class="messaging-card">
+        <h5>Headlines</h5>
+        <blockquote>SEE THE CHORDS. FEEL THE RHYTHM.</blockquote>
+        <blockquote>STOP WATCHING TUTORIALS. START PLAYING.</blockquote>
+        <blockquote>FROM SOLO TO FULL BAND</blockquote>
+        <p class="context">Bebas Neue, always uppercase. Short imperative phrases. Period-separated for rhythm.</p>
+      </div>
+      <div class="messaging-card">
+        <h5>Supporting Copy</h5>
+        <blockquote>AI splits any song into vocals, guitar, bass, drums, and piano.</blockquote>
+        <blockquote>Three steps. That's it.</blockquote>
+        <blockquote>Free to try. No credit card required.</blockquote>
+        <p class="context">Inter, sentence case. Conversational, concise, benefit-focused.</p>
+      </div>
+      <div class="messaging-card">
+        <h5>Value Propositions</h5>
+        <p style="color: var(--smoke-300); font-size: 0.9rem; line-height: 1.8;">
+          <strong style="color: var(--fire-400);">Stems:</strong> Solo the guitar. Mute vocals. Isolate any instrument.<br>
+          <strong style="color: var(--fire-400);">Chords:</strong> See every chord as the song plays, in real time.<br>
+          <strong style="color: var(--fire-400);">Any song:</strong> Millions of songs. Search and play instantly.<br>
+          <strong style="color: var(--fire-400);">Speed:</strong> In seconds, not minutes.<br>
+          <strong style="color: var(--fire-400);">Control:</strong> Your way. You decide.
+        </p>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-bottom: 1rem;">Call-to-Action Phrases</div>
+    <div class="cta-examples">
+      <span class="cta-pill">Start Playing Free</span>
+      <span class="cta-pill">Start Playing Now</span>
+      <span class="cta-pill">Sign Up Free</span>
+      <span class="cta-pill">Try It Free</span>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- AD GUIDELINES -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="ads">
+    <div class="section-label">09 / Ad Creative Guidelines</div>
+    <div class="section-title">AD LAYOUTS</div>
+    <div class="section-desc">
+      All ad creatives use the dark canvas as foundation. The fire motif provides visual energy. Typography leads messaging.
+    </div>
+
+    <div class="ad-showcase">
+      <!-- Layout A: Hero Statement -->
+      <div class="ad-mockup">
+        <img src="brand-assets/2026-04-11-banner-fire-strings.png" alt="Ad Layout A">
+        <div class="ad-overlay">
+          <h3 style="font-size: clamp(1.5rem, 3vw, 2.5rem);">SEE THE CHORDS.<br>FEEL THE RHYTHM.</h3>
+          <p>AI splits any song into stems. See every chord in real time.</p>
+          <div><button class="btn btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.5rem;">Start Playing Free</button></div>
+        </div>
+        <span class="ad-type-label">Layout A &mdash; Hero Statement</span>
+      </div>
+
+      <!-- Layout B: Social Story -->
+      <div class="ad-mockup" style="max-height: 500px; overflow: hidden;">
+        <img src="brand-assets/2026-04-11-social-ad-pick.png" alt="Ad Layout B" style="object-fit: cover; height: 500px;">
+        <div class="ad-overlay">
+          <h3>STOP WATCHING<br>TUTORIALS.</h3>
+          <p>Start playing.</p>
+          <div><button class="btn btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.5rem;">Try Free</button></div>
+        </div>
+        <span class="ad-type-label">Layout B &mdash; Social Story</span>
+      </div>
+    </div>
+
+    <!-- Layout C: Feature -->
+    <div style="margin-top: 1.5rem;">
+      <div class="ad-mockup">
+        <img src="brand-assets/2026-04-11-fretboard-fire.png" alt="Ad Layout C" style="height: 300px; object-fit: cover; width: 100%;">
+        <div class="ad-overlay" style="justify-content: center; text-align: center; align-items: center;">
+          <h3 style="font-size: clamp(1.5rem, 3vw, 2.5rem);">FROM SOLO TO FULL BAND</h3>
+          <p>AI isolates every instrument. Chords appear in real time. Play any song your way.</p>
+          <div><button class="btn btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.5rem;">Start Playing Now</button></div>
+        </div>
+        <span class="ad-type-label">Layout C &mdash; Feature Banner</span>
+      </div>
+    </div>
+
+    <!-- Ad Color Ratios -->
+    <div style="margin-top: 3rem;">
+      <div class="section-label" style="margin-bottom: 1rem;">Ad Color Ratios</div>
+      <div class="color-ratio-bar">
+        <div style="flex: 75; background: var(--charcoal-900);"></div>
+        <div style="flex: 17; background: linear-gradient(90deg, var(--fire-900), var(--fire-500));"></div>
+        <div style="flex: 8; background: var(--smoke-300);"></div>
+      </div>
+      <div class="color-ratio-label">
+        <span>70&ndash;80% Charcoal Background</span>
+        <span>15&ndash;20% Fire Visual (guitar, flames)</span>
+        <span>5&ndash;10% Text &amp; CTA</span>
+      </div>
+    </div>
+
+    <!-- Video Guidelines -->
+    <div style="margin-top: 3rem; background: var(--charcoal-900); border: 1px solid var(--charcoal-700); border-radius: 12px; padding: 2rem;">
+      <h4 style="font-family: 'Bebas Neue', cursive; font-size: 1.5rem; margin-bottom: 1rem; color: var(--smoke-300);">VIDEO AD SEQUENCE</h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+        <div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--fire-500); margin-bottom: 0.5rem;">0&ndash;2s</div>
+          <p style="font-size: 0.85rem; color: var(--smoke-400);">Guitar-in-flames logo reveal on black</p>
+        </div>
+        <div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--fire-500); margin-bottom: 0.5rem;">2&ndash;8s</div>
+          <p style="font-size: 0.85rem; color: var(--smoke-400);">App demo: search &rarr; stems separating &rarr; chords appearing</p>
+        </div>
+        <div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--fire-500); margin-bottom: 0.5rem;">8&ndash;12s</div>
+          <p style="font-size: 0.85rem; color: var(--smoke-400);">User playing along with isolated stems</p>
+        </div>
+        <div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--fire-500); margin-bottom: 0.5rem;">12&ndash;15s</div>
+          <p style="font-size: 0.85rem; color: var(--smoke-400);">Bebas Neue headline + CTA button on black</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- BRAND DON'TS -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="donts">
+    <div class="section-label">10 / Brand Don'ts</div>
+    <div class="section-title">GUARD RAILS</div>
+    <div class="section-desc">
+      Rules to keep the brand consistent and recognizable across all touchpoints.
+    </div>
+
+    <div class="donts-grid">
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never use light or white backgrounds for primary compositions</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never set Bebas Neue in lowercase or mixed case &mdash; always full uppercase</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never use colors outside the palette (no blues, greens, or purples)</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never use thin or light font weights for headlines</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never show the product without the dark theme</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never use generic stock music photography</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never add gradients outside the fire/flame color family</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never compete fire-500 and flame-400 at the same hierarchy level &mdash; one leads, one supports</p>
+      </div>
+      <div class="dont-item">
+        <div class="icon">&times;</div>
+        <p>Never use <code style="color: var(--flame-400);">transition: all</code> &mdash; list specific properties</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ASSETS -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="assets">
+    <div class="section-label">11 / Asset Index</div>
+    <div class="section-title">BRAND ASSETS</div>
+    <div class="section-desc">
+      All brand asset files and their locations in the repository.
+    </div>
+
+    <div style="background: var(--charcoal-900); border: 1px solid var(--charcoal-700); border-radius: 12px; overflow: hidden;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <thead>
+          <tr style="background: var(--charcoal-800); text-align: left;">
+            <th style="padding: 1rem 1.25rem; color: var(--smoke-300); font-weight: 600;">Asset</th>
+            <th style="padding: 1rem 1.25rem; color: var(--smoke-300); font-weight: 600;">Path</th>
+            <th style="padding: 1rem 1.25rem; color: var(--smoke-300); font-weight: 600;">Use</th>
+          </tr>
+        </thead>
+        <tbody style="color: var(--smoke-400);">
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">logo.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">frontend/public/art/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">App icon, favicon, PWA</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">logo-clean.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">homepage/assets/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Marketing, hero sections</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">banner-fire-strings.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">brand-assets/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Ad banners, hero backgrounds</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">fretboard-fire.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">brand-assets/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Detail shots, feature banners</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">social-ad-pick.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">brand-assets/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Instagram/TikTok stories</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">brand-texture.png</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">brand-assets/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Background textures, overlays</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--charcoal-700);">
+            <td style="padding: 0.75rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">hero-bg.jpg</td>
+            <td style="padding: 0.75rem 1.25rem;"><code style="color: var(--smoke-500);">frontend/public/art/</code></td>
+            <td style="padding: 0.75rem 1.25rem;">Login page backdrop</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="logo-text">SMART GUITAR</div>
+    <p>Brand Book v1.0 &mdash; April 2026</p>
+    <p style="margin-top: 0.25rem;">smart-guitar.com</p>
+  </footer>
+
+</body>
+</html>
