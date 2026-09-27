@@ -16,7 +16,9 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from guitar_player.schemas.song import TabRhythm
 from guitar_player.services.source_match import accept_match, match_components
+from guitar_player.services.tab_rhythm import read_tab_rhythm
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class SongsterrResult:
     matched_title: str = ""
     num_strings: int = 6
     time_signature: tuple[int, int] = (4, 4)  # e.g. (3, 4) for 3/4 time
+    tab_rhythm: TabRhythm | None = None
 
 
 # Keep old name as alias for backward compat
@@ -120,6 +123,14 @@ def _rank_guitar_track_indices(song_data: dict, max_tracks: int = 3) -> list[int
     _add(0)
 
     return ranked[:max_tracks]
+
+
+def _find_drum_track_index(song_data: dict) -> int | None:
+    """Find the drum kit track (not shakers or tambourines, which share the instrument)."""
+    tracks = song_data.get("tracks", [])
+    drums = [i for i, track in enumerate(tracks) if track.get("instrument", "").lower() == "drums"]
+    named = [i for i in drums if "drum" in tracks[i].get("name", "").lower()]
+    return (named or drums or [None])[0]
 
 
 def _find_vocals_track_index(song_data: dict) -> int | None:
@@ -354,7 +365,7 @@ def _find_best_match(
 async def _select_best_track(
     client: httpx.AsyncClient, song_id: int, revision_id: int,
     image: str | None, ranked_tracks: list[int],
-) -> tuple[dict | None, list[SongsterrStrum], list[SongsterrNote], list[SongsterrSection], tuple[int, int], float, list[int], int, int]:
+) -> tuple[dict | None, list[SongsterrStrum], list[SongsterrNote], list[SongsterrSection], tuple[int, int], float, list[int], int, int, list[dict]]:
     """Try ranked guitar tracks, preferring one with mixed strum directions."""
     best: dict | None = None
     b_strums: list[SongsterrStrum] = []
@@ -364,11 +375,14 @@ async def _select_best_track(
     b_bpm, b_num = 120.0, 6
     b_tuning: list[int] = []
     b_idx = ranked_tracks[0]
+    b_has_ups = False
+    guitar_tabs: list[dict] = []
 
     for track_idx in ranked_tracks:
         tab = await _download_track_json(client, song_id, revision_id, image, track_idx)
         if not tab:
             continue
+        guitar_tabs.append(tab)
 
         bpm = 120.0
         tempo_entries = tab.get("automations", {}).get("tempo", [])
@@ -380,15 +394,16 @@ async def _select_best_track(
         strums, notes, sections, sig = _parse_tab_json(tab, bpm, num)
         has_ups = any(s.direction == "up" for s in strums)
 
-        if best is None or has_ups:
+        # Keep downloading the other ranked tracks: the strum pattern is read
+        # from whichever one is strummed the most.
+        if best is None or (has_ups and not b_has_ups):
             best, b_strums, b_notes, b_sections = tab, strums, notes, sections
             b_sig, b_bpm, b_tuning, b_num, b_idx = sig, bpm, tuning, num, track_idx
+            b_has_ups = has_ups
+            if has_ups:
+                logger.info("Songsterr: track %d has mixed strum directions, using it", track_idx)
 
-        if has_ups:
-            logger.info("Songsterr: track %d has mixed strum directions, using it", track_idx)
-            break
-
-    return best, b_strums, b_notes, b_sections, b_sig, b_bpm, b_tuning, b_num, b_idx
+    return best, b_strums, b_notes, b_sections, b_sig, b_bpm, b_tuning, b_num, b_idx, guitar_tabs
 
 
 async def _fetch_lyrics_text(
@@ -444,12 +459,19 @@ async def fetch_songsterr_data(
                 return None
 
             (tab_data, strums, notes, sections, time_sig, bpm,
-             tuning, num_strings, track_idx) = await _select_best_track(
+             tuning, num_strings, track_idx, guitar_tabs) = await _select_best_track(
                 client, song_id, revision_id, image, ranked_tracks,
             )
             if tab_data is None:
                 logger.info("Songsterr: could not download tab data for song %d", song_id)
                 return None
+
+            drum_idx = _find_drum_track_index(best_result)
+            drum_tab = (
+                await _download_track_json(client, song_id, revision_id, image, drum_idx)
+                if drum_idx is not None else None
+            )
+            tab_rhythm = read_tab_rhythm(guitar_tabs, drum_tab)
 
             lyrics = await _fetch_lyrics_text(
                 client, tab_data, track_idx, song_id, revision_id, image,
@@ -471,6 +493,7 @@ async def fetch_songsterr_data(
                 source_bpm=bpm, strums=strums, notes=notes, sections=sections,
                 tuning=tuning, lyrics_text=lyrics, matched_artist=matched_artist,
                 matched_title=matched_title, num_strings=num_strings, time_signature=time_sig,
+                tab_rhythm=tab_rhythm,
             )
 
     except httpx.HTTPStatusError as e:

@@ -1,3 +1,5 @@
+import type { BeatEmphasis } from './beat-emphasis'
+
 type AudioContextConstructor = typeof AudioContext
 
 let audioContext: AudioContext | null = null
@@ -19,23 +21,29 @@ export function resumeMetronomeAudio(): void {
   if (context?.state === 'suspended') void context.resume()
 }
 
-/** Play a short pitched click. Beat one uses a higher, louder accent. */
-export function playMetronomeClick(accented: boolean, volume: number): void {
+const CLICK_SOUND: Record<BeatEmphasis, { frequency: number; peak: number; seconds: number }> = {
+  downbeat: { frequency: 1500, peak: 0.55, seconds: 0.09 },
+  accent: { frequency: 1150, peak: 0.45, seconds: 0.08 },
+  normal: { frequency: 850, peak: 0.3, seconds: 0.06 },
+}
+
+/** Play a short pitched click: highest for beat one, then accents, then plain beats. */
+export function playMetronomeClick(emphasis: BeatEmphasis, volume: number): void {
   const context = getAudioContext()
   if (!context || context.state !== 'running' || volume === 0) return
 
+  const sound = CLICK_SOUND[emphasis]
   const now = context.currentTime
   const oscillator = context.createOscillator()
   const gain = context.createGain()
-  const peak = volume * (accented ? 0.55 : 0.3)
 
   oscillator.type = 'square'
-  oscillator.frequency.value = accented ? 1500 : 850
+  oscillator.frequency.value = sound.frequency
   gain.gain.setValueAtTime(0.0001, now)
-  gain.gain.exponentialRampToValueAtTime(peak, now + 0.003)
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + (accented ? 0.09 : 0.06))
+  gain.gain.exponentialRampToValueAtTime(volume * sound.peak, now + 0.003)
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + sound.seconds)
 
   oscillator.connect(gain).connect(context.destination)
   oscillator.start(now)
-  oscillator.stop(now + (accented ? 0.1 : 0.07))
+  oscillator.stop(now + sound.seconds + 0.01)
 }

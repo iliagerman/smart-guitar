@@ -34,8 +34,8 @@ def _song_dir(settings, song_name: str) -> Path:
     return base / song_name.split("/")[0]
 
 
-def _songsterr_payload(sections: list[dict]) -> dict:
-    return {
+def _songsterr_payload(sections: list[dict], *, with_tab_rhythm: bool = True) -> dict:
+    payload = {
         "matched_artist": ARTIST,
         "matched_title": TITLE,
         "tabs": [{"t": 0.0}],
@@ -43,6 +43,9 @@ def _songsterr_payload(sections: list[dict]) -> dict:
         "tutorial_url": "https://www.youtube.com/watch?v=xeFEWBN5O5A",
         "tutorial_links": [],
     }
+    if with_tab_rhythm:
+        payload["tab_rhythm"] = None  # tab checked, no usable pattern
+    return payload
 
 
 _SECTION = {"name": "Verse", "start_time": 0.0, "end_time": 10.0, "strum_pattern": ["down", "up"]}
@@ -151,3 +154,52 @@ async def test_fetch_strum_patterns_passes_tavily_key(settings, monkeypatch):
     await external_data._fetch_strum_patterns(settings, ARTIST, TITLE, 200.0)
 
     assert captured["tavily_api_key"] == settings.tavily.api_key
+
+
+@pytest.mark.asyncio
+async def test_refreshes_once_when_saved_before_tab_rhythm_existed(settings, storage, monkeypatch):
+    """A file with strum sections but no tab_rhythm field predates tab patterns: refetch it."""
+    factory = init_db(settings)
+    set_storage(storage)
+    song_name = f"test_strum_old_{uuid.uuid4().hex[:8]}/song"
+    key = f"{song_name}/songsterr_data.json"
+    calls: list = []
+    monkeypatch.setattr(job_pkg, "_enqueue_external_strums_fetch", lambda sid: calls.append(sid))
+    try:
+        storage.write_json(key, _songsterr_payload([_SECTION], with_tab_rhythm=False))
+        song_id = await _make_song(factory, song_name, key)
+        async with factory() as session:
+            enqueued = await JobService(session, storage).trigger_external_strums_if_missing(song_id)
+        assert enqueued is True
+        assert calls == [song_id]
+    finally:
+        await _cleanup(factory, settings, song_name)
+
+
+@pytest.mark.asyncio
+async def test_fetch_records_tab_rhythm_even_without_a_tab(settings, storage, monkeypatch):
+    """No Songsterr tab still writes tab_rhythm (null), so the song is not refetched on every open."""
+    factory = init_db(settings)
+    set_storage(storage)
+    song_name = f"test_strum_notab_{uuid.uuid4().hex[:8]}/song"
+
+    async def _no_songsterr(*_a, **_k):
+        return None
+
+    async def _llm_sections(*_a, **_k):
+        return [_SECTION], "", "", []
+
+    monkeypatch.setattr(external_data, "_fetch_songsterr_result", _no_songsterr)
+    monkeypatch.setattr(external_data, "_fetch_strum_patterns", _llm_sections)
+    try:
+        song_id = await _make_song(factory, song_name, None)
+        await external_data.fetch_external_strums(song_id)
+
+        data = storage.read_json(f"{song_name}/songsterr_data.json")
+        assert "tab_rhythm" in data
+        assert data["tab_rhythm"] is None
+        async with factory() as session:
+            enqueued = await JobService(session, storage).trigger_external_strums_if_missing(song_id)
+        assert enqueued is False
+    finally:
+        await _cleanup(factory, settings, song_name)

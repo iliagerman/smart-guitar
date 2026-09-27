@@ -77,3 +77,77 @@ test('bars view shows the song meter and detected tempo', async ({ authenticated
   await page.getByTestId('sheet-selector-view-bars').click()
   await expect(page.getByTestId('bars-sheet-tempo')).toHaveText('120 BPM · 3/4')
 })
+
+// From the tab: D . D U . U D U with the snare on 2 and 4.
+const tabRhythm = {
+  beats_per_bar: 4,
+  beat_accents: [0, 0.93, 0, 0.85],
+  strum_patterns: [{
+    name: 'Verse',
+    subdivision: 2,
+    bar_share: 0.8,
+    steps: ['down', 'miss', 'down', 'up', 'miss', 'up', 'down', 'up'].map((direction, index) => ({
+      direction, accent: index === 2 || index === 6,
+    })),
+  }],
+}
+const syncedBeats = {
+  beat_times: [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5],
+  bar_starts: [0.5, 2.5, 4.5],
+  detected_bpm: 120,
+  time_signature: [4, 4],
+}
+
+test('song metronome accents the beats the tab puts the snare on', async ({ authenticatedPage: page }) => {
+  await openSongMetronome(page, { ...syncedBeats, tab_rhythm: tabRhythm })
+  await expect(page.getByTestId('metronome-beat-0')).toHaveAttribute('data-emphasis', 'downbeat')
+  await expect(page.getByTestId('metronome-beat-1')).toHaveAttribute('data-emphasis', 'accent')
+  await expect(page.getByTestId('metronome-beat-2')).toHaveAttribute('data-emphasis', 'normal')
+  await expect(page.getByTestId('metronome-beat-3')).toHaveAttribute('data-emphasis', 'accent')
+})
+
+test('song metronome only accents beat 1 when the song has no measured emphasis', async ({ authenticatedPage: page }) => {
+  await openSongMetronome(page, syncedBeats)
+  await expect(page.getByTestId('metronome-beat-0')).toHaveAttribute('data-emphasis', 'downbeat')
+  await expect(page.locator('[data-testid^="metronome-beat-"][data-emphasis="accent"]')).toHaveCount(0)
+})
+
+async function openStrumCard(page: Page) {
+  // Phones show the chord map (with the strum card) in a dialog.
+  if (test.info().project.name === 'mobile') await page.getByTestId('chord-map-open-button').click()
+  return page.locator('[data-testid="strum-pattern-card"]:visible')
+}
+
+test('strumming pattern shows the tab pattern with its snare accents', async ({ authenticatedPage: page }) => {
+  await mockSong(page, {
+    ...syncedBeats,
+    tab_rhythm: tabRhythm,
+    songsterr_status: 'ready',
+    sections: [{ name: 'Verse', start_time: 0, end_time: 9, strum_pattern: ['down', 'down', 'up', 'up', 'down', 'up'], llm_pattern: null }],
+  })
+  const card = await openStrumCard(page)
+  await expect(card.getByTestId('strum-section-name')).toHaveText(['Verse'])
+  await expect(card.getByTestId('strum-bar-share')).toHaveText('80% of bars')
+  const steps = card.getByTestId('strum-step')
+  await expect(steps).toHaveCount(8)
+  await expect(steps.nth(1)).toHaveAttribute('data-direction', 'miss')
+  await expect(steps.nth(2)).toHaveAttribute('data-accent', 'true')
+  await expect(steps.nth(3)).toHaveAttribute('data-accent', 'false')
+  await expect(steps.nth(6)).toHaveAttribute('data-accent', 'true')
+  await expect(card.getByTestId('strum-step-label').nth(1)).toHaveText('&')
+})
+
+test('tutorial-site strum guesses are not shown without a tab pattern', async ({ authenticatedPage: page }) => {
+  await mockSong(page, {
+    ...syncedBeats,
+    songsterr_status: 'ready',
+    tutorial_url: 'https://www.youtube.com/watch?v=synthetic',
+    tutorial_links: [{ url: 'https://www.youtube.com/watch?v=synthetic', title: 'Synthetic lesson' }],
+    sections: [{ name: 'Verse', start_time: 0, end_time: 9, strum_pattern: ['down', 'down', 'up', 'up', 'down', 'up'], llm_pattern: ['down', 'down', 'up', 'up', 'down', 'up'] }],
+  })
+  const card = await openStrumCard(page)
+  await expect(card.getByTestId('strum-tutorial-button')).toBeVisible()
+  // A count of zero passes at once; let the page finish loading so the check is real.
+  await page.waitForLoadState('networkidle')
+  await expect(card.getByTestId('strum-step')).toHaveCount(0)
+})

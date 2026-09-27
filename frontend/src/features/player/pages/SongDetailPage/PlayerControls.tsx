@@ -223,6 +223,7 @@ interface MetronomePopupProps {
   autoBpm: number | null
   autoTimeSignature: readonly [number, number] | null
   beatTimes: readonly number[] | null
+  beatAccents: readonly number[] | null
   onTogglePlay: () => void
   onClose: () => void
 }
@@ -232,7 +233,7 @@ interface MetronomePopupProps {
  * rest of the primary controls don't re-render on every playback time update —
  * this only mounts while the metronome is open.
  */
-function MetronomePopup({ autoBpm, autoTimeSignature, beatTimes, onTogglePlay, onClose }: MetronomePopupProps) {
+function MetronomePopup({ autoBpm, autoTimeSignature, beatTimes, beatAccents, onTogglePlay, onClose }: MetronomePopupProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
 
@@ -251,6 +252,7 @@ function MetronomePopup({ autoBpm, autoTimeSignature, beatTimes, onTogglePlay, o
           autoBpm={autoBpm}
           autoTimeSignature={autoTimeSignature}
           autoBeatTimes={beatTimes}
+          autoBeatAccents={beatAccents}
           mode="playback"
           playbackTime={currentTime}
           playbackPlaying={isPlaying}
@@ -385,6 +387,7 @@ function PrimaryControls({
             autoBpm={songTempoBpm(detail)}
             autoTimeSignature={detail.time_signature ?? null}
             beatTimes={songBeatTimes(detail)}
+            beatAccents={detail.tab_rhythm?.beat_accents ?? null}
             onTogglePlay={onTogglePlay}
             onClose={() => setShowMetronome(false)}
           />

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { getStrumPattern, getSectionStrumPatterns } from './strum-pattern'
-import type { RhythmInfo, SongSection, StrumEvent } from '@/types/song'
+import { getStrumPattern } from './strum-pattern'
+import type { RhythmInfo, StrumEvent } from '@/types/song'
 
 function makeStrum(
   id: number,
@@ -155,25 +155,5 @@ describe('getStrumPattern', () => {
     const pattern = getStrumPattern(0.0, 1.0, strums, { rhythm })
     expect(pattern.length).toBeGreaterThan(0)
     expect(pattern[0].direction).toBe('down')
-  })
-})
-
-describe('getSectionStrumPatterns', () => {
-  function makeSection(name: string, pattern: ('down' | 'up' | 'miss')[]): SongSection {
-    return { name, start_time: 0, end_time: 10, strum_pattern: pattern, llm_pattern: pattern }
-  }
-
-  it('preserves stored directions so the display matches the text description', () => {
-    const sections = [makeSection('Verse', ['down', 'miss', 'down', 'up', 'miss', 'up', 'down', 'up'])]
-    const [sp] = getSectionStrumPatterns(sections)
-    expect(sp.pattern.map(s => s.direction)).toEqual(
-      ['down', 'miss', 'down', 'up', 'miss', 'up', 'down', 'up'],
-    )
-  })
-
-  it('renders symbols directly from the stored rhythm', () => {
-    const sections = [makeSection('Verse', ['down', 'miss', 'down', 'up'])]
-    const [sp] = getSectionStrumPatterns(sections)
-    expect(sp.pattern.map(s => s.symbol)).toEqual(['↓', '·', '↓', '↑'])
   })
 })

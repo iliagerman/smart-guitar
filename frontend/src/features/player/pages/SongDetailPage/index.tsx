@@ -11,7 +11,7 @@ import { CountInOverlay } from '../../components/CountInOverlay'
 import { resumeTickContext } from '../../lib/count-in-audio'
 import { formatChordWithBass } from '@/lib/chord-colors'
 import { normalizeWords } from '../../lib/normalize-words'
-import { getRepresentativeSongStrumPattern, getSectionStrumPatterns } from '../../lib/strum-pattern'
+import { getRepresentativeSongStrumPattern, getTabStrumPatterns } from '../../lib/strum-pattern'
 import { OnboardingTour } from '../../components/OnboardingTour'
 import { LyricsSyncDebug } from '../../components/LyricsSyncDebug'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
@@ -551,10 +551,12 @@ export function SongDetailPage() {
     })
   }, [detail, displayChords])
 
-  const sectionStrumPatterns = useMemo(() => {
-    if (!detail || !detail.sections?.length) return []
-    return getSectionStrumPatterns(detail.sections)
-  }, [detail])
+  // Only patterns notated in the song's tab are shown; tutorial-site guesses
+  // were too often the same generic pattern to be worth playing along to.
+  const sectionStrumPatterns = useMemo(
+    () => (detail?.tab_rhythm ? getTabStrumPatterns(detail.tab_rhythm) : []),
+    [detail],
+  )
 
   // --- Lyrics sync debug overlay (Ctrl+Shift+D) ---
   const [showLyricsDebug, setShowLyricsDebug] = useState(

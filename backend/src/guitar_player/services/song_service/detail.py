@@ -25,10 +25,12 @@ from guitar_player.schemas.song import (
     StemUrls,
     StrumEvent,
     TabNote,
+    TabRhythm,
 )
 from guitar_player.storage import StorageBackend
 
 from .beat_grid import BeatGridSource, build_beat_grid
+from .chord_cleanup import clean_detected_chords
 from .chord_data import load_chord_data
 from .chord_time_snap import build_anchor_times
 from .helpers import (
@@ -91,6 +93,8 @@ async def build_song_detail(
         notated_bpm=songsterr_data["source_bpm"],
     ))
     bar_starts = beat_grid.bar_starts if beat_grid else []
+    grid_beats = beat_grid.beat_times if beat_grid else []
+    autochord_chords = clean_detected_chords(autochord_chords, grid_beats)
     t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
@@ -104,7 +108,7 @@ async def build_song_detail(
     chord_options = await _assemble_chord_options(
         storage, song, song_id, chord_vote_dao,
         autochord_chords, recommended_capo, lyrics_data,
-        community_options,
+        community_options, grid_beats,
     )
     t8 = time.perf_counter()
 
@@ -163,13 +167,14 @@ async def build_song_detail(
         strum_notes=songsterr_data.get("strum_notes"),
         tutorial_url=songsterr_data.get("tutorial_url"),
         tutorial_links=songsterr_data.get("tutorial_links", []),
+        tab_rhythm=songsterr_data["tab_rhythm"],
         songsterr_status=songsterr_data.get("songsterr_status"),
         chord_source=primary_source,
         recommended_capo=recommended_capo,
         song_key=song_key,
         detected_bpm=beat_grid.bpm if beat_grid else None,
         bar_starts=bar_starts,
-        beat_times=beat_grid.beat_times if beat_grid else [],
+        beat_times=grid_beats,
         web_chords_failed=False,
         web_chords_pending=False,
         download_pending=song.download_requested_at is not None,
@@ -298,6 +303,7 @@ def _load_songsterr_data(storage: StorageBackend, song: SongRecord) -> dict[str,
         "sections": [], "source_bpm": None, "time_signature": None,
         "strum_notes": None, "tutorial_url": None, "tutorial_links": [],
         "songsterr_status": None, "ver4_lyrics": [], "ver4_lyrics_source": None,
+        "tab_rhythm": None,
     }
 
     if song.external_strums_failed:
@@ -382,6 +388,8 @@ def _parse_enriched_songsterr(raw: dict[str, Any], result: dict[str, Any]) -> No
         result["time_signature"] = raw["time_signature"]
     if raw.get("strum_notes"):
         result["strum_notes"] = raw["strum_notes"]
+    if isinstance(raw.get("tab_rhythm"), dict):
+        result["tab_rhythm"] = TabRhythm(**raw["tab_rhythm"])
     if raw.get("tutorial_url"):
         result["tutorial_url"] = raw["tutorial_url"]
     if isinstance(raw.get("tutorial_links"), list):
@@ -842,6 +850,7 @@ async def _assemble_chord_options(
     recommended_capo: int | None,
     lyrics_data: dict[str, Any],
     community_options: list[ChordOption],
+    beat_times: list[float],
 ) -> list[ChordOption]:
     """Assemble chord options with detected chords as the default source."""
     chord_options: list[ChordOption] = []
@@ -894,9 +903,11 @@ async def _assemble_chord_options(
             opt.lyrics_source = best_lyrics_source
         chord_options.append(opt)
 
-    # Beginner/capo variants at the end
+    # Beginner/capo variants at the end. They are derived from the detected
+    # chords, so they get the same cleanup.
     for opt in variant_options:
         opt.is_variant = True
+        opt.chords = clean_detected_chords(opt.chords, beat_times)
     chord_options.extend(variant_options)
 
     return chord_options

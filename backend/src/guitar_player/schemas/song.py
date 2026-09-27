@@ -131,6 +131,35 @@ class RhythmInfo(BaseModel):
     beat_times: list[float]
 
 
+class StrumStepDirection(StrEnum):
+    DOWN = "down"
+    UP = "up"
+    MISS = "miss"
+
+
+class StrumStep(BaseModel):
+    direction: StrumStepDirection
+    accent: bool  # lands on a beat the song's drum part hits with the snare
+
+
+class TabStrumPattern(BaseModel):
+    """The most common strummed bar of a section, read from the song's tab."""
+
+    name: str  # section name(s), e.g. "Verse" or "Verse / Chorus"
+    subdivision: int  # strum steps per beat
+    steps: list[StrumStep]  # one bar
+    bar_share: float  # share of the section's strummed bars played exactly like this
+
+
+class TabRhythm(BaseModel):
+    """Strumming and beat emphasis notated in the song's Songsterr tab."""
+
+    beats_per_bar: int
+    # Per beat of the bar: share of drum bars with a snare hit on it; empty without a drum part.
+    beat_accents: list[float]
+    strum_patterns: list[TabStrumPattern]
+
+
 class SongSection(BaseModel):
     name: str
     start_time: float
@@ -177,6 +206,7 @@ class SongDetailResponse(BaseModel):
     detected_bpm: float | None = None
     bar_starts: list[float] = []
     beat_times: list[float] = []
+    tab_rhythm: TabRhythm | None = None
     strums: list[StrumEvent] = []
     rhythm: RhythmInfo | None = None
     sections: list[SongSection] = []

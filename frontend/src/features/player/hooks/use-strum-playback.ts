@@ -1,14 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-/**
- * Determine the note subdivision based on pattern length.
- * Returns the interval in seconds between each strum.
- */
-function strumInterval(patternLength: number, bpm: number): number {
-  const beatDuration = 60 / bpm
-  if (patternLength <= 4) return beatDuration          // quarter notes
-  if (patternLength <= 8) return beatDuration / 2      // eighth notes
-  return beatDuration / 4                               // sixteenth notes
+/** Seconds between strum steps. */
+function strumInterval(bpm: number, stepsPerBeat: number): number {
+  return 60 / bpm / stepsPerBeat
 }
 
 /**
@@ -30,8 +24,9 @@ function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
  * Play a strum-like sound using filtered noise + a short chord tone.
  * Down strums are fuller and louder, up strums are lighter and brighter.
  */
-function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up') {
+function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up', accent: boolean) {
   const isDown = direction === 'down'
+  const loudness = accent ? 1.8 : 1
 
   // Layer 1: Filtered noise for the "scrape" character
   const noise = ctx.createBufferSource()
@@ -46,7 +41,7 @@ function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up') {
   noiseGain.connect(ctx.destination)
 
   const noiseDuration = isDown ? 0.08 : 0.05
-  noiseGain.gain.setValueAtTime(isDown ? 0.15 : 0.08, time)
+  noiseGain.gain.setValueAtTime((isDown ? 0.15 : 0.08) * loudness, time)
   noiseGain.gain.exponentialRampToValueAtTime(0.001, time + noiseDuration)
   noise.start(time)
   noise.stop(time + noiseDuration)
@@ -60,7 +55,7 @@ function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up') {
   // Down: open chord ~82Hz (low E). Up: higher partial ~165Hz
   osc.frequency.value = isDown ? 82 : 165
   const oscDuration = isDown ? 0.12 : 0.08
-  oscGain.gain.setValueAtTime(isDown ? 0.12 : 0.06, time)
+  oscGain.gain.setValueAtTime((isDown ? 0.12 : 0.06) * loudness, time)
   oscGain.gain.exponentialRampToValueAtTime(0.001, time + oscDuration)
   osc.start(time)
   osc.stop(time + oscDuration)
@@ -72,7 +67,12 @@ function playStrum(ctx: AudioContext, time: number, direction: 'down' | 'up') {
  */
 type StrumPlaybackStep = 'down' | 'up' | 'miss' | 'chuck'
 
-export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
+export function useStrumPlayback(
+  pattern: StrumPlaybackStep[],
+  bpm: number,
+  stepsPerBeat: number,
+  accents?: readonly boolean[],
+) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentBeatIndex, setCurrentBeatIndex] = useState(-1)
   const ctxRef = useRef<AudioContext | null>(null)
@@ -81,6 +81,8 @@ export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
   const startTimeRef = useRef(0)
   const patternRef = useRef(pattern)
   const bpmRef = useRef(bpm)
+  const stepsPerBeatRef = useRef(stepsPerBeat)
+  const accentsRef = useRef(accents)
 
   // Keep refs in sync
   useEffect(() => {
@@ -89,6 +91,10 @@ export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
   useEffect(() => {
     bpmRef.current = bpm
   }, [bpm])
+  useEffect(() => {
+    stepsPerBeatRef.current = stepsPerBeat
+    accentsRef.current = accents
+  }, [stepsPerBeat, accents])
 
   const stop = useCallback(() => {
     setIsPlaying(false)
@@ -116,7 +122,7 @@ export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
 
     const scheduleLoop = () => {
       const currentPattern = patternRef.current
-      const currentInterval = strumInterval(currentPattern.length, bpmRef.current)
+      const currentInterval = strumInterval(bpmRef.current, stepsPerBeatRef.current)
       if (nextStepTime < ctx.currentTime) {
         const skippedSteps = Math.ceil((ctx.currentTime - nextStepTime) / currentInterval)
         nextStepIndex = (nextStepIndex + skippedSteps) % currentPattern.length
@@ -126,8 +132,9 @@ export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
       const lookaheadEnd = ctx.currentTime + lookaheadSeconds
       while (nextStepTime < lookaheadEnd) {
         const dir = currentPattern[nextStepIndex]
-        if (dir === 'down' || dir === 'up') playStrum(ctx, nextStepTime, dir)
-        if (dir === 'chuck') playStrum(ctx, nextStepTime, 'down')
+        const accent = accentsRef.current?.[nextStepIndex] ?? false
+        if (dir === 'down' || dir === 'up') playStrum(ctx, nextStepTime, dir, accent)
+        if (dir === 'chuck') playStrum(ctx, nextStepTime, 'down', accent)
         nextStepIndex = (nextStepIndex + 1) % currentPattern.length
         nextStepTime += currentInterval
       }
@@ -140,7 +147,7 @@ export function useStrumPlayback(pattern: StrumPlaybackStep[], bpm: number) {
     // Track current beat for visual highlighting.
     const tick = () => {
       const currentPattern = patternRef.current
-      const currentInterval = strumInterval(currentPattern.length, bpmRef.current)
+      const currentInterval = strumInterval(bpmRef.current, stepsPerBeatRef.current)
       const elapsed = ctx.currentTime - startTimeRef.current
       const beatIndex = Math.floor(elapsed / currentInterval) % currentPattern.length
       setCurrentBeatIndex(beatIndex)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import type { BeatEmphasis } from '../lib/beat-emphasis'
 import { playMetronomeClick, resumeMetronomeAudio } from '../lib/metronome-audio'
 import { gridSubdivisionAt, type GridPosition } from '../lib/song-beat-grid'
 
@@ -7,6 +8,8 @@ export type MetronomeMode = 'standalone' | 'playback'
 interface UseMetronomeOptions {
   bpm: number
   beatsPerBar: number
+  /** Click strength for each beat of the bar (see beatEmphases). */
+  emphases: readonly BeatEmphasis[]
   enabled: boolean
   soundEnabled: boolean
   volume: number
@@ -101,6 +104,7 @@ function usePlaybackClock({
 export function useMetronome({
   bpm,
   beatsPerBar,
+  emphases,
   enabled,
   soundEnabled,
   volume,
@@ -113,16 +117,18 @@ export function useMetronome({
   const [subdivision, setSubdivision] = useState(0)
   const lastSubdivisionRef = useRef<number | null>(null)
   const beatsPerBarRef = useRef(beatsPerBar)
+  const emphasesRef = useRef(emphases)
   const soundRef = useRef(soundEnabled)
   const volumeRef = useRef(volume)
 
   useEffect(() => { beatsPerBarRef.current = beatsPerBar }, [beatsPerBar])
+  useEffect(() => { emphasesRef.current = emphases }, [emphases])
   useEffect(() => { soundRef.current = soundEnabled }, [soundEnabled])
   useEffect(() => { volumeRef.current = volume }, [volume])
 
   const triggerClick = useCallback(() => {
     resumeMetronomeAudio()
-    playMetronomeClick(beat === 0, volumeRef.current)
+    playMetronomeClick(emphasesRef.current[beat] ?? 'normal', volumeRef.current)
   }, [beat])
 
   const emitSubdivision = useCallback((subdivisionNumber: number) => {
@@ -132,7 +138,7 @@ export function useMetronome({
 
     const nextBeat = nextSubdivision / 2
     setBeat(nextBeat)
-    if (soundRef.current) playMetronomeClick(nextBeat === 0, volumeRef.current)
+    if (soundRef.current) playMetronomeClick(emphasesRef.current[nextBeat] ?? 'normal', volumeRef.current)
   }, [])
 
   const clockOptions = { bpm, enabled, mode, lastSubdivisionRef, emitSubdivision }

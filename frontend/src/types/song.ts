@@ -84,6 +84,31 @@ export interface RhythmInfo {
   beat_times: number[]
 }
 
+export interface StrumStep {
+  direction: 'down' | 'up' | 'miss'
+  /** Lands on a beat the song's drum part hits with the snare. */
+  accent: boolean
+}
+
+/** The most common strummed bar of a section, read from the song's tab. */
+export interface TabStrumPattern {
+  name: string
+  /** Strum steps per beat. */
+  subdivision: number
+  /** One bar. */
+  steps: StrumStep[]
+  /** Share of the section's strummed bars played exactly like this (0..1). */
+  bar_share: number
+}
+
+/** Strumming and beat emphasis notated in the song's Songsterr tab. */
+export interface TabRhythm {
+  beats_per_bar: number
+  /** Per beat of the bar: share of drum bars with a snare hit on it; empty without a drum part. */
+  beat_accents: number[]
+  strum_patterns: TabStrumPattern[]
+}
+
 export interface SongSection {
   name: string
   start_time: number
@@ -125,6 +150,7 @@ export interface SongDetail {
   detected_bpm?: number | null
   bar_starts?: number[]
   beat_times?: number[]
+  tab_rhythm?: TabRhythm | null
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
   sections: SongSection[]

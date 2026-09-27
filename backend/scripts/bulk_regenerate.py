@@ -4,6 +4,9 @@ For each song:
   * chords: POST /enhance on the chords service — beat-aligns existing
     chords.json, adds slash bass from the bass stem, and regenerates the
     simplified difficulty variants. Cheap (no autochord / demucs re-run).
+  * tab-rhythm: re-reads the song's Songsterr tab and adds its strum
+    patterns and snare-beat emphasis to the stored songsterr_data.json
+    (other fields untouched). Needs no local services.
   * lyrics: deletes lyrics.json / lyrics_quick.json / lyrics_corrected.json
     and re-runs the current transcription pipeline (LRCLIB + WhisperX +
     deterministic sanitizer). The legacy LLM-merged lyrics_corrected.json
@@ -36,6 +39,7 @@ from guitar_player.config import load_settings
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import close_db, init_db, safe_session
 from guitar_player.schemas.records import SongRecord
+from guitar_player.services.external_strum_fetcher import fetch_songsterr_data
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.storage import StorageBackend, create_storage
 
@@ -95,6 +99,24 @@ async def regenerate_chords(
         storage.resolve_service_path(bass_path) if bass_path else "",
     )
     return f"chords: beats={result.beats_detected} slash-bass={result.bass_count}"
+
+
+async def regenerate_tab_rhythm(storage: StorageBackend, song: SongRecord) -> str:
+    """Add the tab's strum patterns and beat emphasis to songsterr_data.json."""
+    key = song.external_strums_key
+    if not key or not storage.file_exists(key) or not song.artist or not song.title:
+        return "tab-rhythm: skipped (no Songsterr data)"
+    data = storage.read_json(key)
+    if not isinstance(data, dict):
+        return "tab-rhythm: skipped (legacy Songsterr format)"
+    result = await fetch_songsterr_data(song.artist, song.title)
+    tab_rhythm = result.tab_rhythm if result else None
+    # Null records "checked, no usable tab" so opening the song does not refetch it.
+    data["tab_rhythm"] = tab_rhythm.model_dump(mode="json") if tab_rhythm else None
+    storage.write_json(key, data)
+    if not tab_rhythm:
+        return "tab-rhythm: no tab found"
+    return f"tab-rhythm: {len(tab_rhythm.strum_patterns)} strum patterns"
 
 
 async def regenerate_lyrics(
@@ -162,6 +184,8 @@ async def process_song(
         storage.delete_file(f"{song.song_name}/lyrics_corrected.json")
         if "chords" in targets:
             parts.append(await regenerate_chords(processing, storage, song))
+        if "tab-rhythm" in targets:
+            parts.append(await regenerate_tab_rhythm(storage, song))
         if "lyrics" in targets:
             parts.append(await regenerate_lyrics(processing, storage, song, settings))
         append_state(state_file, str(song.id), song.song_name, "done", "; ".join(parts))

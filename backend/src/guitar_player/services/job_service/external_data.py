@@ -692,6 +692,11 @@ def _build_songsterr_output(
         output["tutorial_links"] = tutorial_links
     if result and result.lyrics_text:
         output["lyrics_text"] = result.lyrics_text
+    # Always present (null when the tab had no usable pattern) so the on-open
+    # heal can tell a checked sheet from one saved before tab patterns existed.
+    output["tab_rhythm"] = (
+        result.tab_rhythm.model_dump(mode="json") if result and result.tab_rhythm else None
+    )
     return output
 
 

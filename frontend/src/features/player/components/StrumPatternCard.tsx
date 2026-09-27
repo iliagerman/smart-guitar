@@ -5,28 +5,19 @@ import { cn } from '@/lib/cn'
 import type { SectionStrumPattern } from '../lib/strum-pattern'
 import { useStrumPlayback } from '../hooks/use-strum-playback'
 
-/**
- * Generate beat labels for a strum pattern based on its length.
- */
-function beatLabels(patternLength: number): string[] {
-  if (patternLength <= 4) {
-    return Array.from({ length: patternLength }, (_, i) => String(i + 1))
-  }
-  if (patternLength <= 8) {
-    const labels: string[] = []
-    for (let i = 0; i < patternLength; i++) {
-      labels.push(i % 2 === 0 ? String(Math.floor(i / 2) + 1) : '&')
-    }
-    return labels
-  }
-  const subdivLabels = ['', 'e', '&', 'a']
-  const labels: string[] = []
-  for (let i = 0; i < patternLength; i++) {
-    const beat = Math.floor(i / 4) + 1
-    const sub = i % 4
-    labels.push(sub === 0 ? String(beat) : subdivLabels[sub])
-  }
-  return labels
+/** Steps per beat for a pattern whose subdivision is unknown, guessed from its length. */
+function guessStepsPerBeat(patternLength: number): number {
+  if (patternLength <= 4) return 1
+  if (patternLength <= 8) return 2
+  return 4
+}
+
+/** Count labels ("1 & 2 &" or "1 e & a") for each step of a pattern. */
+function beatLabels(patternLength: number, stepsPerBeat: number): string[] {
+  const between = stepsPerBeat === 4 ? ['', 'e', '&', 'a'] : ['', '&']
+  return Array.from({ length: patternLength }, (_, i) =>
+    i % stepsPerBeat === 0 ? String(Math.floor(i / stepsPerBeat) + 1) : between[i % stepsPerBeat],
+  )
 }
 
 
@@ -59,9 +50,12 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
 
   return (
     <>
-      <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3 space-y-3">
+      <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3 space-y-3" data-testid="strum-pattern-card">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold text-smoke-100">Strumming Pattern</div>
+          <div className="text-sm font-semibold text-smoke-100">
+            Strumming Pattern
+            {sectionPatterns.length > 0 && <span className="ml-1.5 text-[10px] font-normal text-smoke-500">from the song&apos;s tab</span>}
+          </div>
           <div className="flex items-center gap-3">
             {hasTutorials && onOpenTutorial && (
               <button
@@ -113,9 +107,11 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
   // play buttons. Lifting playback into a shared provider would add indirection for a
   // single, local coordination concern, so this pattern is intentional.
   const rawPattern = useMemo(() => section.pattern.map((s) => s.direction), [section.pattern])
+  const stepsPerBeat = section.stepsPerBeat ?? guessStepsPerBeat(rawPattern.length)
   // oxlint-disable-next-line react-doctor/no-event-handler
-  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(rawPattern, bpm)
-  const labels = beatLabels(rawPattern.length)
+  const { isPlaying, currentBeatIndex, toggle } = useStrumPlayback(rawPattern, bpm, stepsPerBeat, section.accents)
+  const labels = beatLabels(rawPattern.length, stepsPerBeat)
+  const hasAccents = section.accents?.some(Boolean) ?? false
 
   // Notify parent when playing state changes
   const prevPlaying = useRef(false)
@@ -149,7 +145,12 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
         >
           {isPlaying ? <Square size={10} /> : <Play size={10} className="ml-0.5" />}
         </button>
-        <span className="text-xs text-smoke-400">{section.name}</span>
+        <span className="min-w-0 truncate text-xs text-smoke-400" title={section.name} data-testid="strum-section-name">{section.name}</span>
+        {section.barShare !== undefined && (
+          <span className="shrink-0 text-[10px] text-smoke-600" data-testid="strum-bar-share">
+            {Math.round(section.barShare * 100)}% of bars
+          </span>
+        )}
         <span className="text-[10px] text-smoke-600 ml-auto">{bpm} bpm</span>
       </div>
 
@@ -160,8 +161,9 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
           const isChuck = step.direction === 'chuck'
           const isDown = step.direction === 'down' || isChuck
           const isActive = isPlaying && currentBeatIndex === index
+          const isAccent = section.accents?.[index] ?? false
           const label = labels[index] ?? ''
-          const isBeat = /^\d$/.test(label)
+          const isBeat = /^\d+$/.test(label)
 
           return (
             // Strum steps render in a fixed positional sequence that never reorders,
@@ -169,16 +171,28 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
             // oxlint-disable-next-line react-doctor/no-array-index-key, react-doctor/no-array-index-as-key
             <div key={index}
               className={cn(
-                'flex flex-col items-center min-w-5 transition-all duration-100 rounded-md px-0.5 py-0.5',
+                'flex flex-col items-center min-w-5 transition-[transform,background-color,box-shadow] duration-100 rounded-md px-0.5 py-0.5 motion-reduce:transition-none',
                 isActive
                   ? 'scale-125 bg-flame-400/20 shadow-[0_0_8px_rgba(251,146,60,0.3)]'
                   : 'scale-100',
               )}
+              title={isAccent ? 'Accent: play this stroke harder' : undefined}
+              data-testid="strum-step"
+              data-direction={step.direction}
+              data-accent={isAccent}
             >
+              {hasAccents && (
+                <span
+                  className={cn('text-[10px] font-black leading-none', isAccent ? 'text-flame-300' : 'text-transparent')}
+                  aria-hidden="true"
+                >
+                  &gt;
+                </span>
+              )}
               <div
                 className={cn(
                   'flex flex-col items-center transition-opacity duration-100',
-                  isMiss ? 'opacity-25' : isActive ? 'opacity-100' : 'opacity-60',
+                  isMiss ? 'opacity-25' : isActive || isAccent ? 'opacity-100' : 'opacity-60',
                 )}
               >
                 {isMiss ? (
@@ -219,17 +233,25 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
                 )}
               </div>
 
-              <span className={cn(
-                'text-[10px] mt-0.5 leading-none',
-                isBeat ? 'text-smoke-400 font-medium' : 'text-smoke-600',
-                isActive && 'text-flame-400',
-              )}>
+              <span
+                className={cn(
+                  'text-[10px] mt-0.5 leading-none',
+                  isBeat ? 'text-smoke-400 font-medium' : 'text-smoke-600',
+                  isActive && 'text-flame-400',
+                )}
+                data-testid="strum-step-label"
+              >
                 {label}
               </span>
             </div>
           )
         })}
       </div>
+      {hasAccents && (
+        <p className="mt-1.5 text-[10px] text-smoke-500">
+          <span className="font-black text-flame-300">&gt;</span> marks the snare beats: hit those strokes a little harder.
+        </p>
+      )}
     </div>
   )
 }

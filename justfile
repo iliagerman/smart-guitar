@@ -564,6 +564,7 @@ rebuild-local-db *args="":
 #   just bulk-regenerate                          # all songs, 2 at a time
 #   just bulk-regenerate "--limit 5"              # smoke test on 5 songs
 #   just bulk-regenerate "--targets chords"       # chords only
+#   just bulk-regenerate "--targets tab-rhythm --state-file ../regen_tab_rhythm.jsonl"  # strum patterns + beat emphasis from tabs
 #   just bulk-regenerate "--retry-failed"         # re-attempt failures
 bulk-regenerate *args="":
     cd {{project_dir}}/backend && APP_ENV=local uv run python scripts/bulk_regenerate.py {{args}}

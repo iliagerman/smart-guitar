@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Minus, Music2, Plus, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useMetronome, type MetronomeMode } from '../hooks/use-metronome'
+import { beatEmphases, type BeatEmphasis } from '../lib/beat-emphasis'
 import { resumeMetronomeAudio } from '../lib/metronome-audio'
 import { StrummingPractice } from './StrummingPractice'
 
@@ -10,6 +11,8 @@ interface MetronomePanelProps {
   autoTimeSignature?: readonly [number, number] | null
   /** Detected song beats; while synced to the song, playback clicks land on them. */
   autoBeatTimes?: readonly number[] | null
+  /** Per beat of the bar, how often the song's drum part hits it with the snare (0..1); accents those beats. */
+  autoBeatAccents?: readonly number[] | null
   mode: MetronomeMode
   playbackTime?: number
   playbackPlaying?: boolean
@@ -18,7 +21,7 @@ interface MetronomePanelProps {
 
 interface BeatIndicatorProps {
   beat: number
-  beatsPerBar: number
+  emphases: readonly BeatEmphasis[]
   enabled: boolean
   compact: boolean
 }
@@ -35,6 +38,7 @@ interface MetronomeSettingsProps {
 }
 
 interface PanelViewProps extends MetronomeSettingsProps {
+  emphases: readonly BeatEmphasis[]
   autoBpm?: number | null
   autoTimeSignature?: readonly [number, number] | null
   bpm: number
@@ -65,11 +69,17 @@ function validTimeSignature(value: readonly [number, number] | null | undefined)
   return value
 }
 
-function BeatIndicator({ beat, beatsPerBar, enabled, compact }: BeatIndicatorProps) {
-  const columns = beatsPerBar <= 4 ? 'grid-cols-4' : 'grid-cols-4 sm:grid-cols-8'
+const IDLE_BAR: Record<BeatEmphasis, string> = {
+  downbeat: 'h-2/3 bg-smoke-500/70',
+  accent: 'h-2/3 bg-flame-400/45',
+  normal: 'h-1/2 bg-smoke-700/60',
+}
+
+function BeatIndicator({ beat, emphases, enabled, compact }: BeatIndicatorProps) {
+  const columns = emphases.length <= 4 ? 'grid-cols-4' : 'grid-cols-4 sm:grid-cols-8'
   return (
     <div className={cn('grid gap-1.5 sm:gap-2', columns)} aria-label="Beat indicator">
-      {Array.from({ length: beatsPerBar }, (_, index) => {
+      {emphases.map((emphasis, index) => {
         const active = beat === index && enabled
         return (
           <div
@@ -79,25 +89,33 @@ function BeatIndicator({ beat, beatsPerBar, enabled, compact }: BeatIndicatorPro
               compact ? 'h-8 p-1' : 'h-16 p-2 sm:h-20',
               active
                 ? 'scale-[1.03] border-flame-300 bg-flame-300/18 shadow-[0_0_24px_rgba(250,204,21,0.3)]'
-                : 'border-white/10 bg-white/[0.045]',
+                : emphasis === 'accent' ? 'border-flame-400/30 bg-white/[0.045]' : 'border-white/10 bg-white/[0.045]',
             )}
+            title={emphasis === 'accent' ? 'The snare hits this beat' : undefined}
             data-accented={index === 0}
+            data-emphasis={emphasis}
             data-testid={`metronome-beat-${index}`}
           >
             <div className={cn(
               'w-full rounded-full transition-[height,background-color,box-shadow] duration-100 motion-reduce:transition-none',
-              active
-                ? 'h-full bg-flame-300 shadow-[0_0_20px_rgba(250,204,21,0.5)]'
-                : index === 0 ? 'h-2/3 bg-smoke-500/70' : 'h-1/2 bg-smoke-700/60',
+              active ? 'h-full bg-flame-300 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : IDLE_BAR[emphasis],
             )} />
             {!compact && (
-              <span className={cn('mt-1 font-mono text-[10px]', active ? 'text-flame-200' : 'text-smoke-500')}>{index + 1}</span>
+              <span className={cn('mt-1 font-mono text-[10px]', active ? 'text-flame-200' : emphasis === 'accent' ? 'text-flame-300' : 'text-smoke-500')}>
+                {index + 1}{emphasis === 'accent' ? ' >' : ''}
+              </span>
             )}
           </div>
         )
       })}
     </div>
   )
+}
+
+function accentedBeatsLabel(emphases: readonly BeatEmphasis[]): string | null {
+  const beats = emphases.flatMap((emphasis, index) => (emphasis === 'accent' ? [String(index + 1)] : []))
+  if (beats.length === 0) return null
+  return `The drums hit the snare on beat${beats.length > 1 ? 's' : ''} ${beats.join(' & ')}`
 }
 
 function MetronomeSettings(props: MetronomeSettingsProps) {
@@ -207,7 +225,7 @@ function CompactPanel(props: PanelViewProps) {
     <section className="min-w-0 flex-1" data-testid="metronome-panel">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <BeatIndicator beat={props.beat} beatsPerBar={props.beatsPerBar} enabled={props.enabled} compact />
+          <BeatIndicator beat={props.beat} emphases={props.emphases} enabled={props.enabled} compact />
         </div>
         <CompactTempoControls {...props} />
       </div>
@@ -305,7 +323,10 @@ function FullPanel(props: PanelViewProps) {
     >
       <PanelHeader {...props} />
       <div className="mt-6">
-        <BeatIndicator beat={props.beat} beatsPerBar={props.beatsPerBar} enabled={props.enabled} compact={false} />
+        <BeatIndicator beat={props.beat} emphases={props.emphases} enabled={props.enabled} compact={false} />
+        {accentedBeatsLabel(props.emphases) && (
+          <p className="mt-2 text-center text-xs text-flame-300" data-testid="metronome-accent-summary">{accentedBeatsLabel(props.emphases)}</p>
+        )}
       </div>
       <div className="mt-5 text-center tabular-nums">
         <div className="font-display text-6xl text-smoke-100 sm:text-7xl" data-testid="metronome-bpm">{props.bpm}</div>
@@ -330,7 +351,7 @@ function FullPanel(props: PanelViewProps) {
   )
 }
 
-function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, mode, playbackTime, playbackPlaying }: MetronomePanelProps): PanelViewProps {
+function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, autoBeatAccents, mode, playbackTime, playbackPlaying }: MetronomePanelProps): PanelViewProps {
   const autoMeter = validTimeSignature(autoTimeSignature)
   const initialBpm = clampBpm(autoBpm ?? 120)
   const [manualBpm, setManualBpm] = useState(initialBpm)
@@ -345,7 +366,10 @@ function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, mode, playba
   const beatsPerBar = manualMeterOverride ? manualBeatsPerBar : autoMeter?.[0] ?? manualBeatsPerBar
   const beatUnit = manualMeterOverride ? manualBeatUnit : autoMeter?.[1] ?? manualBeatUnit
   const beatTimes = manualTempoOverride ? null : autoBeatTimes
-  const metronome = useMetronome({ bpm, beatsPerBar, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying, beatTimes })
+  // The song's accents only apply while the meter follows the song.
+  const songAccents = manualMeterOverride ? null : autoBeatAccents ?? null
+  const emphases = useMemo(() => beatEmphases(beatsPerBar, songAccents), [beatsPerBar, songAccents])
+  const metronome = useMetronome({ bpm, beatsPerBar, emphases, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying, beatTimes })
 
   const updateBpm = useCallback((value: number) => {
     setManualTempoOverride(true)
@@ -383,7 +407,7 @@ function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, mode, playba
   const hasManualOverride = (Boolean(autoBpm) && manualTempoOverride) || (Boolean(autoMeter) && manualMeterOverride)
 
   return {
-    autoBpm, autoTimeSignature, bpm, beat: metronome.beat, subdivision: metronome.subdivision, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
+    emphases, autoBpm, autoTimeSignature, bpm, beat: metronome.beat, subdivision: metronome.subdivision, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
     sourceLabel: !autoBpm && !autoMeter ? 'Manual tempo and meter' : hasManualOverride ? 'Manual override' : 'Synced to song rhythm',
     onBpmChange: updateBpm, onEnabledToggle: toggleEnabled, onUseSongTempo: useSongTempo,
     onBeatsPerBarChange: updateBeatsPerBar, onBeatUnitChange: updateBeatUnit,
@@ -391,7 +415,7 @@ function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, mode, playba
   }
 }
 
-/** Metronome with tempo, meter, accented downbeat, and click volume controls. */
+/** Metronome with tempo, meter, song-accented beats, and click volume controls. */
 export function MetronomePanel(props: MetronomePanelProps) {
   const panelState = usePanelState(props)
   return props.compact ? <CompactPanel {...panelState} /> : <FullPanel {...panelState} />

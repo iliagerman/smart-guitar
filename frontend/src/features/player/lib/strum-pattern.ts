@@ -1,4 +1,4 @@
-import type { ChordEntry, RhythmInfo, SongSection, StrumEvent } from '@/types/song'
+import type { ChordEntry, RhythmInfo, StrumEvent, TabRhythm } from '@/types/song'
 
 function directionToSymbol(direction: StrumDirection): StrumSymbol {
   if (direction === 'miss') {
@@ -238,91 +238,21 @@ export function getRepresentativeSongStrumPattern(
 export interface SectionStrumPattern {
   name: string
   pattern: StrumSymbol[]
-  llm_generated?: boolean
+  /** Steps per beat when known (tab patterns); otherwise guessed from the length. */
+  stepsPerBeat?: number
+  /** Which steps land on the snare beats; tab patterns only. */
+  accents?: boolean[]
+  /** Share of the section's strummed bars played exactly like this (0..1). */
+  barShare?: number
 }
 
-/**
- * Normalize a section name to a canonical form for grouping.
- * "Verse 1", "Verse 2" → "Verse"; "Chorus" stays "Chorus".
- */
-function canonicalSectionName(name: string): string {
-  return name.replace(/\s*\d+$/, '').trim()
-}
-
-/**
- * Get the effective strum pattern for a section.
- * Prefers llm_pattern (from Tavily+LLM), falls back to strum_pattern.
- */
-function getEffectivePattern(section: SongSection): StrumDirection[] | null {
-  return section.llm_pattern ?? section.strum_pattern ?? null
-}
-
-function patternToGridSymbols(pattern: StrumDirection[]): StrumSymbol[] {
-  return pattern.map(directionToSymbol)
-}
-
-/**
- * Build section strum patterns from pre-computed strum_pattern on each section.
- * Groups by canonical section name (e.g. "Verse 1" + "Verse 2" → "Verse"),
- * picks the most common pattern per group, and skips non-playable sections.
- */
-export function getSectionStrumPatterns(
-  sections: SongSection[],
-): SectionStrumPattern[] {
-  if (sections.length === 0) return []
-
-  // Skip sections that aren't useful for strumming guidance
-  const skipSections = new Set(['intro', 'outro', 'instrumental', 'solo', 'breakdown', 'post-chorus', 'interlude'])
-
-  // Group sections by canonical name, pick most common pattern
-  const groups = new Map<string, Map<string, { pattern: StrumDirection[]; count: number }>>()
-
-  for (const section of sections) {
-    const pattern = getEffectivePattern(section)
-    if (!pattern || pattern.length < 2) continue
-
-    const canonical = canonicalSectionName(section.name)
-    if (skipSections.has(canonical.toLowerCase())) continue
-
-    const key = pattern.join('')
-    if (!groups.has(canonical)) groups.set(canonical, new Map())
-    const bucket = groups.get(canonical)!
-    const existing = bucket.get(key)
-    if (existing) {
-      existing.count += 1
-    } else {
-      bucket.set(key, { pattern, count: 1 })
-    }
-  }
-
-  const result: SectionStrumPattern[] = []
-  const seenPatterns = new Set<string>()
-
-  for (const [name, bucket] of groups) {
-    // Pick most common pattern for this section type
-    let best: { pattern: StrumDirection[]; count: number } | undefined
-    for (const cur of bucket.values()) {
-      if (!best || cur.count > best.count) best = cur
-    }
-    if (!best) continue
-
-    const symbols = patternToGridSymbols(best.pattern)
-    // Dedup on the rendered arrows: normalization can collapse two source
-    // patterns that share miss positions and length into the same display.
-    const patternKey = symbols.map((s) => s.direction).join('|')
-    if (seenPatterns.has(patternKey)) continue
-    seenPatterns.add(patternKey)
-
-    const isLlm = sections.some(
-      (s) => canonicalSectionName(s.name) === name && s.llm_pattern?.length,
-    )
-
-    result.push({
-      name,
-      pattern: symbols,
-      llm_generated: isLlm || undefined,
-    })
-  }
-
-  return result
+/** Strum patterns notated in the song's tab, one per section, with snare-beat accents. */
+export function getTabStrumPatterns(tabRhythm: TabRhythm): SectionStrumPattern[] {
+  return tabRhythm.strum_patterns.map((tabPattern) => ({
+    name: tabPattern.name,
+    pattern: tabPattern.steps.map((step) => directionToSymbol(step.direction)),
+    stepsPerBeat: tabPattern.subdivision,
+    accents: tabPattern.steps.map((step) => step.accent),
+    barShare: tabPattern.bar_share,
+  }))
 }

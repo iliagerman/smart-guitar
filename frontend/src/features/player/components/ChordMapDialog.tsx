@@ -79,6 +79,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                         className,
                     )}
                     aria-label={iconOnly ? 'Open chord map' : undefined}
+                    data-testid="chord-map-open-button"
                 >
                     {iconOnly ? (
                         <>

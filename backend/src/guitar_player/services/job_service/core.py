@@ -649,12 +649,14 @@ class JobService:
         return (utcnow() - to_aware_utc(attempted_at)).total_seconds()
 
     def _external_strums_has_patterns(self, key: str) -> bool:
-        """True when the stored songsterr sheet actually contains strum sections."""
+        """True when the stored songsterr sheet has strum sections and has been
+        checked for tab strum patterns (``tab_rhythm``, null when the tab had
+        none). Sheets saved before tab patterns existed lack the field."""
         try:
             data = self._storage.read_json(key)
         except Exception:
             return False
-        return isinstance(data, dict) and bool(data.get("sections"))
+        return isinstance(data, dict) and bool(data.get("sections")) and "tab_rhythm" in data
 
     def _sheet_match_is_valid(
         self, key: str, song_artist: str, song_title: str, label: str,
