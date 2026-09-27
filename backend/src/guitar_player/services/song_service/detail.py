@@ -28,6 +28,8 @@ from guitar_player.schemas.song import (
 )
 from guitar_player.storage import StorageBackend
 
+from .beat_grid import BeatGridSource, build_beat_grid
+from .chord_data import load_chord_data
 from .chord_time_snap import build_anchor_times
 from .helpers import (
     CHORD_VARIANT_PREFIX,
@@ -68,10 +70,10 @@ async def build_song_detail(
     stem_types = _build_stem_types(stems)
     t2 = time.perf_counter()
 
-    chord_data = _load_chords(storage, song)
-    autochord_chords = chord_data.get("autochord", [])
-    recommended_capo = chord_data.get("recommended_capo")
-    song_key = chord_data.get("song_key")
+    chord_data = load_chord_data(storage, song)
+    autochord_chords = chord_data.autochord
+    recommended_capo = chord_data.recommended_capo
+    song_key = chord_data.song_key
     t3 = time.perf_counter()
 
     lyrics_data = await _load_all_lyrics(storage, song, song_dao)
@@ -80,13 +82,22 @@ async def build_song_detail(
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
     t5 = time.perf_counter()
     songsterr_data = _load_songsterr_data(storage, song)
+    beat_grid = build_beat_grid(BeatGridSource(
+        detected_beats=chord_data.beat_times,
+        stored_bar_starts=chord_data.bar_starts,
+        guitar_beats=rhythm.beat_times if rhythm else [],
+        chords=autochord_chords,
+        time_signature=songsterr_data["time_signature"],
+        notated_bpm=songsterr_data["source_bpm"],
+    ))
+    bar_starts = beat_grid.bar_starts if beat_grid else []
     t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
     duration = float(song.duration_seconds or 240)
     community_options, community_tabs = _load_community_chord_options(
         storage, song, duration, lyrics_data,
-        autochord_chords, chord_data.get("bar_starts", []),
+        autochord_chords, bar_starts,
     )
     t7 = time.perf_counter()
 
@@ -156,8 +167,9 @@ async def build_song_detail(
         chord_source=primary_source,
         recommended_capo=recommended_capo,
         song_key=song_key,
-        detected_bpm=chord_data.get("detected_bpm"),
-        bar_starts=chord_data.get("bar_starts", []),
+        detected_bpm=beat_grid.bpm if beat_grid else None,
+        bar_starts=bar_starts,
+        beat_times=beat_grid.beat_times if beat_grid else [],
         web_chords_failed=False,
         web_chords_pending=False,
         download_pending=song.download_requested_at is not None,
@@ -193,66 +205,6 @@ def _build_stem_types(stems: StemUrls) -> list[StemType]:
     """
     available = {stem_name for stem_name in STEM_NAMES if getattr(stems, stem_name, None)}
     return [stem for stem in STEM_DEFINITIONS if stem.name in available]
-
-
-def _load_chords(
-    storage: StorageBackend, song: SongRecord,
-) -> dict[str, Any]:
-    """Load autochord chords and chord metadata."""
-    autochord = _read_chord_file(storage, song.chords_key)
-
-    # Gemini chord detection disabled — community chords from UG used instead.
-
-    recommended_capo: int | None = None
-    song_key: str | None = None
-    detected_bpm: float | None = None
-    bar_starts: list[float] = []
-    if song.song_name:
-        meta_key = f"{song.song_name}/chord_meta.json"
-        if storage.file_exists(meta_key):
-            try:
-                meta = storage.read_json(meta_key)
-                if isinstance(meta, dict):
-                    recommended_capo = meta.get("capo") or None
-                    song_key = meta.get("key") or None
-                    detected_bpm = meta.get("bpm") or None
-                    raw_bars = meta.get("bar_starts")
-                    if isinstance(raw_bars, list):
-                        bar_starts = [float(b) for b in raw_bars]
-            except Exception as e:
-                logger.warning("Failed to read chord_meta for %s: %s", song.song_name, e)
-
-    return {
-        "autochord": autochord,
-        "recommended_capo": recommended_capo,
-        "song_key": song_key,
-        "detected_bpm": detected_bpm,
-        "bar_starts": bar_starts,
-    }
-
-
-def _read_chord_file(storage: StorageBackend, key: str | None) -> list[ChordEntry]:
-    if not key or not storage.file_exists(key):
-        return []
-    try:
-        raw = storage.read_json(key)
-        if isinstance(raw, list):
-            return [ChordEntry(**c) for c in raw]
-    except Exception as e:
-        logger.warning("Failed to read chords from %s: %s", key, e)
-    return []
-
-
-def _parse_time_signature(value: str | None) -> tuple[int, int] | None:
-    if not value or "/" not in value:
-        return None
-    left, right = value.split("/", 1)
-    try:
-        return int(left), int(right)
-    except ValueError:
-        return None
-
-
 
 
 async def _load_all_lyrics(

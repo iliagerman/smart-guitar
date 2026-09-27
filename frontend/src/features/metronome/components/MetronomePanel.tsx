@@ -7,6 +7,9 @@ import { StrummingPractice } from './StrummingPractice'
 
 interface MetronomePanelProps {
   autoBpm?: number | null
+  autoTimeSignature?: readonly [number, number] | null
+  /** Detected song beats; while synced to the song, playback clicks land on them. */
+  autoBeatTimes?: readonly number[] | null
   mode: MetronomeMode
   playbackTime?: number
   playbackPlaying?: boolean
@@ -33,6 +36,7 @@ interface MetronomeSettingsProps {
 
 interface PanelViewProps extends MetronomeSettingsProps {
   autoBpm?: number | null
+  autoTimeSignature?: readonly [number, number] | null
   bpm: number
   beat: number
   subdivision: number
@@ -52,6 +56,13 @@ const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible
 function clampBpm(value: number): number {
   if (!Number.isFinite(value)) return 120
   return Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(value)))
+}
+
+function validTimeSignature(value: readonly [number, number] | null | undefined): readonly [number, number] | null {
+  if (!value) return null
+  const [beatsPerBar, beatUnit] = value
+  if (!BEATS_PER_BAR_OPTIONS.includes(beatsPerBar) || !BEAT_UNIT_OPTIONS.includes(beatUnit)) return null
+  return value
 }
 
 function BeatIndicator({ beat, beatsPerBar, enabled, compact }: BeatIndicatorProps) {
@@ -270,8 +281,9 @@ function TempoSlider({ bpm, onBpmChange }: PanelViewProps) {
   )
 }
 
-function SongTempoButton({ autoBpm, onUseSongTempo }: PanelViewProps) {
+function SongTempoButton({ autoBpm, autoTimeSignature, onUseSongTempo }: PanelViewProps) {
   if (!autoBpm) return null
+  const meter = validTimeSignature(autoTimeSignature)
   return (
     <button
       type="button"
@@ -280,7 +292,7 @@ function SongTempoButton({ autoBpm, onUseSongTempo }: PanelViewProps) {
       data-testid="metronome-auto-sync-button"
     >
       <RotateCcw size={16} aria-hidden="true" />
-      Use song tempo ({clampBpm(autoBpm)})
+      Use song rhythm ({clampBpm(autoBpm)} BPM{meter ? ` · ${meter[0]}/${meter[1]}` : ''})
     </button>
   )
 }
@@ -312,31 +324,51 @@ function FullPanel(props: PanelViewProps) {
         enabled={props.enabled}
         subdivision={props.subdivision}
         onBpmChange={props.onBpmChange}
+        onEnabledToggle={props.onEnabledToggle}
       />
     </section>
   )
 }
 
-function usePanelState({ autoBpm, mode, playbackTime, playbackPlaying }: MetronomePanelProps): PanelViewProps {
+function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, mode, playbackTime, playbackPlaying }: MetronomePanelProps): PanelViewProps {
+  const autoMeter = validTimeSignature(autoTimeSignature)
   const initialBpm = clampBpm(autoBpm ?? 120)
   const [manualBpm, setManualBpm] = useState(initialBpm)
-  const [manualOverride, setManualOverride] = useState(!autoBpm)
+  const [manualTempoOverride, setManualTempoOverride] = useState(!autoBpm)
   const [enabled, setEnabled] = useState(mode === 'playback')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [volume, setVolume] = useState(70)
-  const [beatsPerBar, setBeatsPerBar] = useState(4)
-  const [beatUnit, setBeatUnit] = useState(4)
-  const bpm = manualOverride ? manualBpm : clampBpm(autoBpm ?? manualBpm)
-  const metronome = useMetronome({ bpm, beatsPerBar, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying })
+  const [manualBeatsPerBar, setManualBeatsPerBar] = useState(autoMeter?.[0] ?? 4)
+  const [manualBeatUnit, setManualBeatUnit] = useState(autoMeter?.[1] ?? 4)
+  const [manualMeterOverride, setManualMeterOverride] = useState(!autoMeter)
+  const bpm = manualTempoOverride ? manualBpm : clampBpm(autoBpm ?? manualBpm)
+  const beatsPerBar = manualMeterOverride ? manualBeatsPerBar : autoMeter?.[0] ?? manualBeatsPerBar
+  const beatUnit = manualMeterOverride ? manualBeatUnit : autoMeter?.[1] ?? manualBeatUnit
+  const beatTimes = manualTempoOverride ? null : autoBeatTimes
+  const metronome = useMetronome({ bpm, beatsPerBar, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying, beatTimes })
 
   const updateBpm = useCallback((value: number) => {
-    setManualOverride(true)
+    setManualTempoOverride(true)
     setManualBpm(clampBpm(value))
   }, [])
+  const updateBeatsPerBar = useCallback((value: number) => {
+    setManualMeterOverride(true)
+    setManualBeatsPerBar(value)
+  }, [])
+  const updateBeatUnit = useCallback((value: number) => {
+    setManualMeterOverride(true)
+    setManualBeatUnit(value)
+  }, [])
   const useSongTempo = () => {
-    if (!autoBpm) return
-    setManualBpm(clampBpm(autoBpm))
-    setManualOverride(false)
+    if (autoBpm) {
+      setManualBpm(clampBpm(autoBpm))
+      setManualTempoOverride(false)
+    }
+    if (autoMeter) {
+      setManualBeatsPerBar(autoMeter[0])
+      setManualBeatUnit(autoMeter[1])
+      setManualMeterOverride(false)
+    }
   }
   const toggleEnabled = () => {
     if (!enabled && soundEnabled) resumeMetronomeAudio()
@@ -348,11 +380,13 @@ function usePanelState({ autoBpm, mode, playbackTime, playbackPlaying }: Metrono
     if (next) metronome.triggerClick()
   }
 
+  const hasManualOverride = (Boolean(autoBpm) && manualTempoOverride) || (Boolean(autoMeter) && manualMeterOverride)
+
   return {
-    autoBpm, bpm, beat: metronome.beat, subdivision: metronome.subdivision, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
-    sourceLabel: !autoBpm ? 'Manual tempo' : manualOverride ? 'Manual override' : 'Synced to song',
+    autoBpm, autoTimeSignature, bpm, beat: metronome.beat, subdivision: metronome.subdivision, enabled, beatsPerBar, beatUnit, soundEnabled, volume,
+    sourceLabel: !autoBpm && !autoMeter ? 'Manual tempo and meter' : hasManualOverride ? 'Manual override' : 'Synced to song rhythm',
     onBpmChange: updateBpm, onEnabledToggle: toggleEnabled, onUseSongTempo: useSongTempo,
-    onBeatsPerBarChange: setBeatsPerBar, onBeatUnitChange: setBeatUnit,
+    onBeatsPerBarChange: updateBeatsPerBar, onBeatUnitChange: updateBeatUnit,
     onSoundToggle: toggleSound, onVolumeChange: setVolume,
   }
 }

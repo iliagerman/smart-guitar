@@ -121,9 +121,10 @@ export interface SongDetail {
   chord_options: ChordOption[]
   tabs: TabNote[]
   tabs_source?: string | null
-  /** Beat-detected tempo and bar (measure) start times for the bars view. */
+  /** Song beat grid from the audio: tempo, beats (first is a downbeat), and bars in the song's meter. */
   detected_bpm?: number | null
   bar_starts?: number[]
+  beat_times?: number[]
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
   sections: SongSection[]

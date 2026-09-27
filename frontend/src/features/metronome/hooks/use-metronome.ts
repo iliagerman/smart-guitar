@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { playMetronomeClick, resumeMetronomeAudio } from '../lib/metronome-audio'
+import { gridSubdivisionAt, type GridPosition } from '../lib/song-beat-grid'
 
 export type MetronomeMode = 'standalone' | 'playback'
 
@@ -12,6 +13,8 @@ interface UseMetronomeOptions {
   mode: MetronomeMode
   playbackTime?: number
   playbackPlaying?: boolean
+  /** Detected song beats (first is a downbeat); playback clicks follow them instead of a fixed tempo. */
+  beatTimes?: readonly number[] | null
 }
 
 interface MetronomeClockOptions {
@@ -25,6 +28,7 @@ interface MetronomeClockOptions {
 interface PlaybackClockOptions extends MetronomeClockOptions {
   playbackTime: number
   playbackPlaying: boolean
+  beatTimes: readonly number[] | null
 }
 
 interface UseMetronomeResult {
@@ -38,6 +42,11 @@ const LOOKUP_INTERVAL_MS = 25
 function safeBpm(bpm: number): number {
   if (!Number.isFinite(bpm)) return 120
   return Math.max(40, Math.min(240, Math.round(bpm)))
+}
+
+function fixedTempoSubdivisionAt(bpm: number, time: number): GridPosition {
+  const intervalSeconds = 30 / safeBpm(bpm)
+  return { subdivisionNumber: Math.floor(time / intervalSeconds), secondsAfterSubdivision: time % intervalSeconds }
 }
 
 function useStandaloneClock({ bpm, enabled, mode, lastSubdivisionRef, emitSubdivision }: MetronomeClockOptions): void {
@@ -69,13 +78,14 @@ function usePlaybackClock({
   emitSubdivision,
   playbackTime,
   playbackPlaying,
+  beatTimes,
 }: PlaybackClockOptions): void {
   useEffect(() => {
     if (!enabled || mode !== 'playback' || !playbackPlaying) return
 
-    const intervalSeconds = 30 / safeBpm(bpm)
-    const subdivisionNumber = Math.floor(playbackTime / intervalSeconds)
-    const secondsAfterSubdivision = playbackTime % intervalSeconds
+    const position = beatTimes ? gridSubdivisionAt(beatTimes, playbackTime) : fixedTempoSubdivisionAt(bpm, playbackTime)
+    if (!position) return
+    const { subdivisionNumber, secondsAfterSubdivision } = position
     if (lastSubdivisionRef.current === null && secondsAfterSubdivision > LOOKUP_INTERVAL_MS / 1000) {
       lastSubdivisionRef.current = subdivisionNumber
       return
@@ -84,7 +94,7 @@ function usePlaybackClock({
       lastSubdivisionRef.current = subdivisionNumber
       emitSubdivision(subdivisionNumber)
     }
-  }, [bpm, enabled, mode, playbackPlaying, playbackTime, lastSubdivisionRef, emitSubdivision])
+  }, [bpm, beatTimes, enabled, mode, playbackPlaying, playbackTime, lastSubdivisionRef, emitSubdivision])
 }
 
 /** Drives metronome visual beats, strumming subdivisions, and Web Audio clicks. */
@@ -97,6 +107,7 @@ export function useMetronome({
   mode,
   playbackTime = 0,
   playbackPlaying = false,
+  beatTimes = null,
 }: UseMetronomeOptions): UseMetronomeResult {
   const [beat, setBeat] = useState(0)
   const [subdivision, setSubdivision] = useState(0)
@@ -126,7 +137,7 @@ export function useMetronome({
 
   const clockOptions = { bpm, enabled, mode, lastSubdivisionRef, emitSubdivision }
   useStandaloneClock(clockOptions)
-  usePlaybackClock({ ...clockOptions, playbackTime, playbackPlaying })
+  usePlaybackClock({ ...clockOptions, playbackTime, playbackPlaying, beatTimes })
 
   useEffect(() => {
     if (!enabled) lastSubdivisionRef.current = null

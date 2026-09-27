@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2, Play, Pause, Minus, Plus, ChevronsDown } from 'lucide-react'
 
+import { songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
@@ -178,6 +179,7 @@ export function SongContent({
                         barStarts={detail.bar_starts ?? []}
                         duration={detail.song.duration_seconds ?? 0}
                         bpm={detail.detected_bpm}
+                        timeSignature={detail.time_signature ?? null}
                         onSeek={onSeek}
                       />
                     ) : (
@@ -211,7 +213,7 @@ export function SongContent({
                       chords={chordNamesForMap}
                       representativePattern={representativeStrumPattern}
                       sectionPatterns={sectionStrumPatterns}
-                      bpm={detail.source_bpm ?? detail.rhythm?.bpm}
+                      bpm={songTempoBpm(detail) ?? undefined}
                       strumNotes={detail.strum_notes}
                       tutorialUrl={detail.tutorial_url}
                       tutorialLinks={detail.tutorial_links}
@@ -324,6 +326,7 @@ function FullscreenOverlay({
             barStarts={detail.bar_starts ?? []}
             duration={detail.song.duration_seconds ?? 0}
             bpm={detail.detected_bpm}
+            timeSignature={detail.time_signature ?? null}
             onSeek={onSeek}
           />
         ) : (

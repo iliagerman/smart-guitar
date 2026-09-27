@@ -115,8 +115,9 @@ async def test_enhance_regenerates_simplified_variants(client, monkeypatch, tmp_
 
 @pytest.mark.asyncio
 async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
-    """Enhance must persist bpm + bar starts to chord_meta.json (merging any
-    existing meta fields like capo/key) so the player can render bars."""
+    """Enhance must persist bpm, raw beats and bar starts to chord_meta.json
+    (merging any existing meta fields like capo/key) so the player can render
+    bars in the song's own meter."""
     song_dir = tmp_path / "song4"
     song_dir.mkdir()
     chords_path = str(song_dir / "chords.json")
@@ -143,6 +144,7 @@ async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
     assert meta["capo"] == 2
     assert meta["key"] == "G"
     assert meta["bpm"] == 120.0
+    assert meta["beat_times"] == beats
     assert len(meta["bar_starts"]) >= 4
     # Chords change at 1.0/3.0 → bar phase anchors there.
     assert meta["bar_starts"][0] == 1.0

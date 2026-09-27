@@ -18,6 +18,7 @@ import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
 import { BlockingErrorState } from '@/components/shared/BlockingErrorState'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { beatIndexAt, songBeatTimes, songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useSubscriptionStore } from '@/stores/subscription.store'
@@ -70,14 +71,23 @@ function formatStemList(stems: string[]): string {
   return stems.map((stem) => stem.replaceAll('_', ' ')).join(', ')
 }
 
+interface BeatGlowProps {
+  beatTimes: number[] | null
+  bpm: number
+}
+
 /**
  * Full-screen glow pulse keyed to the current beat. Isolated so its
  * per-beat store subscription doesn't re-render the whole page — the
  * selector returns the beat number, so this only re-renders once per beat
  * instead of on every playback time tick.
  */
-function BeatGlow({ bpm }: { bpm: number }) {
-  const beatNumber = usePlaybackStore((s) => Math.floor(s.currentTime / (60 / bpm)))
+function BeatGlow({ beatTimes, bpm }: BeatGlowProps) {
+  // Follows the recording's detected beats; a fixed tempo only when none were detected.
+  const beatNumber = usePlaybackStore((s) => (
+    beatTimes ? beatIndexAt(beatTimes, s.currentTime) : Math.floor(s.currentTime / (60 / bpm))
+  ))
+  if (beatNumber === null) return null
   return <div key={beatNumber} className="pointer-events-none fixed inset-0 z-20 animate-beat-screen-glow" />
 }
 
@@ -722,12 +732,12 @@ export function SongDetailPage() {
 
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
-  const beatBpm = detail.source_bpm ?? detail.rhythm?.bpm ?? null
+  const beatBpm = songTempoBpm(detail)
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#15171c_0%,#090a0d_58%,#050506_100%)] pb-16 lg:pb-0" data-testid="song-detail-page">
       <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
-      {isPlaying && beatBpm ? <BeatGlow bpm={beatBpm} /> : null}
+      {isPlaying && beatBpm ? <BeatGlow beatTimes={songBeatTimes(detail)} bpm={beatBpm} /> : null}
       {/* Background Image */}
       <div className="fixed inset-0 pointer-events-none">
         <div

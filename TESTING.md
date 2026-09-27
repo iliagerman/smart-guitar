@@ -8,3 +8,9 @@ This recipe creates disposable HOME, XDG config/cache and temporary directories,
 `frontend/playwright.capo.config.ts` starts a dedicated loopback Vite server on port 5187, refuses to reuse a running server, blocks service workers, and runs desktop and mobile viewports. The spec uses synthetic auth and song data, mocks API responses, and blocks all non-loopback browser traffic. It never connects to production services.
 
 Checks cover custom frets, chord and slash-bass transposition, voicing diagrams, persisted song preferences, suggested frets, and restoring no capo. `just build-frontend` checks TypeScript and production compilation; `just lint-frontend` checks lint.
+
+# Isolated song metronome checks
+
+Run `just test-song-metronome`. It uses the same sandboxed harness and `frontend/playwright.capo.config.ts` as `just test-capo` (disposable HOME/XDG/TMP, dedicated loopback server on port 5187, synthetic auth and song data, all non-loopback traffic blocked).
+
+Checks cover the song-page metronome tempo coming from the beats detected in the recording, falling back to the tab tempo and meter when no beats were detected, and the Bars view showing the song's meter. The beat-following click timing is covered by `just test-frontend src/features/metronome/lib/song-beat-grid.test.ts`; building the beat grid (bars in the song's meter, double/half tempo correction, older-song fallbacks) is covered by `just test-backend-file tests/test_song_detail_beat_grid.py`.

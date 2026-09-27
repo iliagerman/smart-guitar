@@ -120,7 +120,9 @@ test.describe('Metronome', () => {
     await page.getByTestId('metronome-sound-toggle').click()
     await expect(page.getByTestId('metronome-sound-toggle')).toContainText('Sound on')
 
-    await page.getByTestId('metronome-toggle-button').click()
+    await expect(page.getByTestId('strumming-practice-toggle')).toHaveText('Start practice')
+    await page.getByTestId('strumming-practice-toggle').click()
+    await expect(page.getByTestId('strumming-practice-toggle')).toHaveText('Stop practice')
     await expect(page.getByTestId('metronome-toggle-button')).toHaveText('Stop')
     await expect(page.getByTestId('screen-wake-lock-status')).toContainText('Screen will stay awake')
     await expect.poll(() => page.evaluate(() => (

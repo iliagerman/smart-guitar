@@ -517,8 +517,9 @@ def test_static_chords_placed_by_character_position():
 
 @pytest.mark.asyncio
 async def test_song_detail_serves_bar_grid_from_chord_meta(settings, storage):
-    """bpm + bar_starts from chord_meta.json must reach the detail response
-    so the player can render the measures (bars) view."""
+    """bar_starts from chord_meta.json must reach the detail response so the
+    player can render the measures (bars) view. The tempo is measured from the
+    bars (2.0 s per 4/4 bar = 120 BPM), not taken from the stored estimate."""
     factory = init_db(settings)
     set_storage(storage)
 
@@ -544,7 +545,7 @@ async def test_song_detail_serves_bar_grid_from_chord_meta(settings, storage):
             service = _make_song_service(session, storage)
             detail = await service.get_song_detail(song_id)
 
-        assert detail.detected_bpm == 120.5
+        assert detail.detected_bpm == 120.0
         assert detail.bar_starts == [0.5, 2.5, 4.5, 6.5]
     finally:
         async with factory() as session:

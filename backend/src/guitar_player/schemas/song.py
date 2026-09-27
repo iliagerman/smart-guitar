@@ -172,9 +172,11 @@ class SongDetailResponse(BaseModel):
     ver4_lyrics_source: str | None = None
     tabs: list[TabNote] = []
     tabs_source: str | None = None  # "songsterr" | "detected"
-    # Beat-detected tempo and bar (measure) start times for the bars view.
+    # Song beat grid from the audio: tempo, beats (first is a downbeat), and
+    # bar starts grouped by the song's time signature. Empty without detection.
     detected_bpm: float | None = None
     bar_starts: list[float] = []
+    beat_times: list[float] = []
     strums: list[StrumEvent] = []
     rhythm: RhythmInfo | None = None
     sections: list[SongSection] = []

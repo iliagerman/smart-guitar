@@ -4,6 +4,7 @@ import { Heart, Pause, Pencil, Play, Timer, X } from 'lucide-react'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { MetronomePanel } from '@/features/metronome/components/MetronomePanel'
 import { resumeMetronomeAudio } from '@/features/metronome/lib/metronome-audio'
+import { songBeatTimes, songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
@@ -220,6 +221,8 @@ interface PrimaryControlsProps {
 
 interface MetronomePopupProps {
   autoBpm: number | null
+  autoTimeSignature: readonly [number, number] | null
+  beatTimes: readonly number[] | null
   onTogglePlay: () => void
   onClose: () => void
 }
@@ -229,7 +232,7 @@ interface MetronomePopupProps {
  * rest of the primary controls don't re-render on every playback time update —
  * this only mounts while the metronome is open.
  */
-function MetronomePopup({ autoBpm, onTogglePlay, onClose }: MetronomePopupProps) {
+function MetronomePopup({ autoBpm, autoTimeSignature, beatTimes, onTogglePlay, onClose }: MetronomePopupProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
 
@@ -246,6 +249,8 @@ function MetronomePopup({ autoBpm, onTogglePlay, onClose }: MetronomePopupProps)
         </button>
         <MetronomePanel
           autoBpm={autoBpm}
+          autoTimeSignature={autoTimeSignature}
+          autoBeatTimes={beatTimes}
           mode="playback"
           playbackTime={currentTime}
           playbackPlaying={isPlaying}
@@ -346,7 +351,7 @@ function PrimaryControls({
           chords={chordNamesForMap}
           representativePattern={representativeStrumPattern}
           sectionPatterns={sectionStrumPatterns}
-          bpm={detail.source_bpm ?? detail.rhythm?.bpm}
+          bpm={songTempoBpm(detail) ?? undefined}
           strumNotes={detail.strum_notes}
           tutorialUrl={detail.tutorial_url}
           tutorialLinks={detail.tutorial_links}
@@ -377,7 +382,9 @@ function PrimaryControls({
         </button>
         {showMetronome && (
           <MetronomePopup
-            autoBpm={detail.source_bpm ?? detail.rhythm?.bpm ?? null}
+            autoBpm={songTempoBpm(detail)}
+            autoTimeSignature={detail.time_signature ?? null}
+            beatTimes={songBeatTimes(detail)}
             onTogglePlay={onTogglePlay}
             onClose={() => setShowMetronome(false)}
           />

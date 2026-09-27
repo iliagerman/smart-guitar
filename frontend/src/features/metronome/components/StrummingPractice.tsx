@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Dice5, PencilLine, Trash2 } from 'lucide-react'
+import { Dice5, PencilLine, Play, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import {
   COMMON_STRUMMING_EXERCISES,
@@ -20,6 +20,7 @@ interface StrummingPracticeProps {
   enabled: boolean
   subdivision: number
   onBpmChange: (value: number) => void
+  onEnabledToggle: () => void
 }
 
 interface PatternGridProps {
@@ -86,6 +87,11 @@ interface SelectedExerciseProps {
 
 interface ScreenAwakeStatusProps {
   status: ScreenWakeLockStatus
+}
+
+interface PracticeTransportProps {
+  enabled: boolean
+  onToggle: () => void
 }
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/40'
@@ -362,7 +368,27 @@ function usePracticeState(beatsPerBar: number, beatUnit: number, bpm: number, on
   }
 }
 
-export function StrummingPractice({ bpm, beatsPerBar, beatUnit, enabled, subdivision, onBpmChange }: StrummingPracticeProps) {
+function PracticeTransport({ enabled, onToggle }: PracticeTransportProps) {
+  return (
+    <div className="mt-6 border-t border-white/10 pt-4">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          'inline-flex min-h-12 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border px-5 text-sm font-bold transition-colors motion-reduce:transition-none',
+          enabled ? 'border-rose-400/50 bg-rose-400/10 text-rose-200 hover:border-rose-300' : 'border-flame-300 bg-flame-400 text-charcoal-950 hover:bg-flame-300',
+          focusRing,
+        )}
+        data-testid="strumming-practice-toggle"
+      >
+        {enabled ? <Square size={17} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+        {enabled ? 'Stop practice' : 'Start practice'}
+      </button>
+    </div>
+  )
+}
+
+export function StrummingPractice({ bpm, beatsPerBar, beatUnit, enabled, subdivision, onBpmChange, onEnabledToggle }: StrummingPracticeProps) {
   const practice = usePracticeState(beatsPerBar, beatUnit, bpm, onBpmChange)
   const wakeLockStatus = useScreenWakeLock(enabled)
 
@@ -376,6 +402,7 @@ export function StrummingPractice({ bpm, beatsPerBar, beatUnit, enabled, subdivi
         ? <SelectedExercise exercise={practice.selectedExercise} level={practice.level} enabled={enabled} subdivision={subdivision} onDelete={practice.removeExercise} />
         : <p className="mt-4 text-sm text-smoke-400">No saved or common exercises match this meter. Invent one or compose your own.</p>}
       {practice.composerOpen && <ExerciseComposer beatsPerBar={beatsPerBar} beatUnit={beatUnit} name={practice.draftName} tempo={practice.draftTempo} steps={practice.draftSteps} onNameChange={practice.setDraftName} onTempoChange={practice.setDraftTempo} onPlayToggle={practice.togglePlay} onAccentToggle={practice.toggleAccent} onSave={practice.saveExercise} onClose={practice.closeComposer} />}
+      <PracticeTransport enabled={enabled} onToggle={onEnabledToggle} />
     </section>
   )
 }

@@ -278,9 +278,9 @@ def enhance(request: EnhanceRequest):
         options = generate_simplified_options(chord_results)
         write_simplified_outputs(options, job_dir)
 
-        # Persist the bar grid (bpm + phase-aligned bar starts) so the player
-        # can render measures. Merge into any existing chord_meta.json so
-        # capo/key from other sources are preserved.
+        # Persist the beat grid (bpm, raw beats, phase-aligned 4/4 bar starts).
+        # The backend regroups the raw beats into bars in the song's meter.
+        # Merge into any existing chord_meta.json so capo/key are preserved.
         meta_neighbor = os.path.join(os.path.dirname(request.chords_path), "chord_meta.json")
         meta: dict = {}
         if _storage.file_exists(meta_neighbor):
@@ -293,6 +293,7 @@ def enhance(request: EnhanceRequest):
                 logger.warning("Unreadable chord_meta.json at %s — rewriting", meta_neighbor)
         if beats:
             meta["bpm"] = round(bpm, 2)
+            meta["beat_times"] = [round(b, 3) for b in beats]
             meta["bar_starts"] = compute_bar_starts(beats, chord_results)
         with open(os.path.join(job_dir, "chord_meta.json"), "w") as f:
             json.dump(meta, f, indent=2)

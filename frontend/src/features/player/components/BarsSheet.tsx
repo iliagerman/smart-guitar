@@ -13,6 +13,8 @@ interface BarsSheetProps {
   barStarts: number[]
   duration: number
   bpm?: number | null
+  /** Song meter; bars are grouped by its beats per bar (4/4 when unknown). */
+  timeSignature: [number, number] | null
   onSeek?: (time: number) => void
 }
 
@@ -22,7 +24,7 @@ interface BarsSheetProps {
  * playback. Chord names respect the active display transform (capo/easy)
  * because callers pass the already-transformed chord list.
  */
-export function BarsSheet({ chords, barStarts, duration, bpm, onSeek }: BarsSheetProps) {
+export function BarsSheet({ chords, barStarts, duration, bpm, timeSignature, onSeek }: BarsSheetProps) {
   const showBass = usePlayerPrefsStore((s) => s.showBassNotes)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeBarRef = useRef<HTMLButtonElement>(null)
@@ -67,7 +69,9 @@ export function BarsSheet({ chords, barStarts, duration, bpm, onSeek }: BarsShee
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="bars-sheet">
       {bpm ? (
-        <div className="pb-2 text-xs text-smoke-500">{Math.round(bpm)} BPM · 4/4</div>
+        <div className="pb-2 text-xs text-smoke-500" data-testid="bars-sheet-tempo">
+          {Math.round(bpm)} BPM · {timeSignature ? `${timeSignature[0]}/${timeSignature[1]}` : '4/4'}
+        </div>
       ) : null}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto pr-1" data-song-scroll-container>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

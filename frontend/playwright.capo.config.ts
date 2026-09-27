@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 // Dedicated loopback server, synthetic auth/data, no reused browser profiles.
 export default defineConfig({
   testDir: './src/e2e/specs',
-  testMatch: 'custom-capo.spec.ts',
+  testMatch: ['custom-capo.spec.ts', 'song-metronome.spec.ts'],
   workers: 1,
   timeout: 90_000,
   expect: { timeout: 30_000 },
