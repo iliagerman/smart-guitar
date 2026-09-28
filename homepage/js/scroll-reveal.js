@@ -1,78 +1,29 @@
 /**
- * Scroll-reveal using IntersectionObserver.
- * Handles .reveal (generic) and .hiw-animate (how-it-works staggered).
+ * Scroll-reveal using IntersectionObserver (.reveal -> .visible).
+ * Content is only hidden when the <html> element has the "js" class, and
+ * everything shows at once when the visitor prefers reduced motion.
  */
 (function () {
   "use strict";
 
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var items = document.querySelectorAll(".reveal");
+  if (!items.length) return;
 
-  // --- Generic reveal elements ---
-  var reveals = document.querySelectorAll(".reveal");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  if (reveals.length) {
-    var revealObserver = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("visible");
-            revealObserver.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -20px 0px" }
-    );
+  if (reduce || !("IntersectionObserver" in window)) {
+    Array.prototype.forEach.call(items, function (el) { el.classList.add("visible"); });
+    return;
+  }
 
-    reveals.forEach(function (el) {
-      revealObserver.observe(el);
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("visible");
+        observer.unobserve(entry.target);
+      }
     });
-  }
+  }, { threshold: 0.12, rootMargin: "0px 0px -24px 0px" });
 
-  // --- How It Works: staggered step animation ---
-  var hiwSteps = document.querySelectorAll(".hiw-animate");
-
-  if (hiwSteps.length) {
-    var hiwSection = document.getElementById("how-it-works");
-    if (hiwSection) {
-      var hiwTriggered = false;
-
-      var hiwObserver = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting && !hiwTriggered) {
-              hiwTriggered = true;
-              // Stagger each step with a delay
-              hiwSteps.forEach(function (step, i) {
-                setTimeout(function () {
-                  step.classList.add("visible");
-                }, i * 400);
-              });
-              hiwObserver.unobserve(hiwSection);
-            }
-          });
-        },
-        { threshold: 0.2 }
-      );
-
-      hiwObserver.observe(hiwSection);
-    }
-  }
-
-  // --- Timeline line fill on scroll (kept for backward compat) ---
-  var timelineFill = document.querySelector(".timeline-line-fill");
-  var timeline = document.querySelector(".timeline");
-
-  if (timelineFill && timeline) {
-    function updateTimeline() {
-      var rect = timeline.getBoundingClientRect();
-      var viewH = window.innerHeight;
-      var scrolled = viewH - rect.top;
-      var total = rect.height;
-      var pct = Math.min(Math.max(scrolled / total, 0), 1);
-      timelineFill.style.height = (pct * total) + "px";
-    }
-
-    window.addEventListener("scroll", updateTimeline, { passive: true });
-    updateTimeline();
-  }
+  Array.prototype.forEach.call(items, function (el) { observer.observe(el); });
 })();

@@ -2,9 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Guitar — Hear every instrument. See every chord. Play any song.</title>
-  <meta name="description" content="AI-powered stem separation lets you isolate vocals, guitar, bass, drums, and piano from any song. See chords in real time, learn strumming patterns, and play along." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Smart Guitar — Learn it. Then play it with the band.</title>
+  <meta name="description" content="Pick any song. Smart Guitar takes the guitar out of the real recording and teaches you the part step by step, until you're the guitarist. Free to start, 14-day full trial, no card." />
+  <link rel="canonical" href="https://smart-guitar.com/" />
+  <meta name="theme-color" content="#07060a" />
+
+  <!-- Open Graph / social -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Smart Guitar" />
+  <meta property="og:url" content="https://smart-guitar.com/" />
+  <meta property="og:title" content="Learn it. Then play it with the band. | Smart Guitar" />
+  <meta property="og:description" content="Pick any song. We take the guitar out of the real recording and teach you the part step by step, until you're the guitarist." />
+  <meta property="og:image" content="https://smart-guitar.com/assets/og-image.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Smart Guitar: learn it, then play it with the band. A band row where the guitarist's seat is marked YOU." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Learn it. Then play it with the band. | Smart Guitar" />
+  <meta name="twitter:description" content="Pick any song. We take the guitar out of the real recording and teach you the part step by step, until you're the guitarist." />
+  <meta name="twitter:image" content="https://smart-guitar.com/assets/og-image.jpg" />
+
+  <script>document.documentElement.classList.add('js');</script>
 
   <!-- Meta Pixel Code -->
   <script>
@@ -27,21 +46,42 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" />
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="icon" type="image/png" href="assets/logo-96.png" />
+  <link rel="apple-touch-icon" href="assets/logo-96.png" />
+
+  <!-- Demo stage data (small; the six stems are fetched after load) -->
+  <link rel="preload" href="assets/demo/wonderwall-chords.json" as="fetch" crossorigin />
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/layout.css" />
   <link rel="stylesheet" href="css/components.css" />
-  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body>
 
-  <!-- Skip link -->
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-guitar" viewBox="0 0 24 24"><g transform="rotate(45 12 12.5)"><path d="M8.43 16.31A4 4 0 1 1 15.57 16.31A5.5 5.5 0 1 1 8.43 16.31Z"/><path d="M12 10.5V1.2"/><path d="M10.6 1.2h2.8V-1.6h-2.8z"/><circle cx="12" cy="16" r="1.3"/><path d="M10.2 21.3h3.6"/></g></symbol>
+    <symbol id="i-bass" viewBox="0 0 24 24"><g transform="translate(24 0) scale(-1 1) rotate(45 12 12.5)"><path d="M8.43 16.31A4 4 0 1 1 15.57 16.31A5.5 5.5 0 1 1 8.43 16.31Z"/><path d="M12 10.5V-0.6"/><path d="M10.8-0.6h2.4V-3h-2.4z"/><path d="M10.3 15.3h3.4M10.3 18h3.4"/></g></symbol>
+    <symbol id="i-drum" viewBox="0 0 24 24"><path d="m2 2 8 8"/><path d="m22 2-8 8"/><ellipse cx="12" cy="9" rx="10" ry="5"/><path d="M7 13.4v7.9"/><path d="M12 14v8"/><path d="M17 13.4v7.9"/><path d="M2 9v8a10 5 0 0 0 20 0V9"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 12.5V19M10 12.5V19M14 5v14M18 12.5V19"/><path fill="currentColor" stroke="none" d="M4.8 5h2.4v7.5H4.8zM8.8 5h2.4v7.5H8.8zM16.8 5h2.4v7.5h-2.4z"/></symbol>
+    <symbol id="i-other" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+    <symbol id="i-you" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.8v14.4a1 1 0 0 0 1.52.85l11.6-7.2a1 1 0 0 0 0-1.7L8.52 3.95A1 1 0 0 0 7 4.8Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="5.5" y="4" width="4.5" height="16" rx="1.2"/><rect x="14" y="4" width="4.5" height="16" rx="1.2"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></symbol>
+    <symbol id="i-google" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></symbol>
+  </svg>
+
   <a href="#main" class="skip-link">Skip to content</a>
 
   <!-- ============================== -->
@@ -49,319 +89,385 @@
   <!-- ============================== -->
   <header class="site-nav" role="banner">
     <nav class="nav-inner" aria-label="Primary">
+      <a href="/" class="nav-brand" aria-label="Smart Guitar home">
+        <img src="assets/logo-96.png" alt="" width="36" height="36" />
+        <span class="nav-word">SMART GUITAR</span>
+      </a>
       <ul class="nav-links">
-        <li><a href="#testimonials" class="nav-link">Testimonials</a></li>
-        <li><a href="https://app.smart-guitar.com/login" class="btn btn-ghost btn-nav">Log In</a></li>
-        <li><a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-nav">Sign Up Free</a></li>
+        <li><a href="https://app.smart-guitar.com/login" class="nav-login">Log in</a></li>
+        <li><a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-nav">Start free</a></li>
       </ul>
-
-      <button class="hamburger" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
     </nav>
   </header>
 
-  <!-- Mobile menu -->
-  <div id="mobile-menu" class="mobile-menu" role="dialog" aria-label="Mobile navigation">
-    <a href="#testimonials">Testimonials</a>
-    <a href="https://app.smart-guitar.com/login">Log In</a>
-    <a href="https://app.smart-guitar.com/register" class="fire-text">Sign Up Free</a>
-    <div class="mobile-menu-legal">
-      <a href="/terms.html">Terms</a>
-      <a href="/privacy.html">Privacy</a>
-      <a href="/refund.html">Refunds</a>
-    </div>
-  </div>
-
-  <!-- ============================== -->
-  <!-- MAIN                           -->
-  <!-- ============================== -->
   <main id="main">
 
     <!-- ============================== -->
-    <!-- HERO                           -->
+    <!-- HERO + LIVE DEMO STAGE         -->
     <!-- ============================== -->
     <section class="hero" aria-labelledby="hero-heading">
-      <div class="hero-bg" aria-hidden="true">
-        <video src="assets/guitar.mp4" autoplay muted loop playsinline></video>
-      </div>
-      <div class="hero-glow" aria-hidden="true"></div>
-      <div class="hero-overlay" aria-hidden="true"></div>
+      <div class="container hero-grid">
 
-      <div class="hero-content">
-        <h1 id="hero-heading" class="hero-headline animate-fade-in-up delay-1">
-          <span id="hero-typed" data-texts="HEAR THE GUITARIST. LEARN THE SONG.|ISOLATE ANY INSTRUMENT. PLAY ALONG.|SEE THE CHORDS. FEEL THE RHYTHM.|MUTE THE VOCALS. SING YOUR HEART OUT.|YOUR BAND IS INSIDE EVERY SONG."></span>
-        </h1>
-
-        <p class="hero-subtitle animate-fade-in-up delay-2">
-          AI splits any song into <strong>vocals, guitar, bass, drums, and piano</strong>.
-          See every chord. Follow the strumming pattern. Play like you're in the band.
-        </p>
-
-        <div class="hero-ctas animate-fade-in-up delay-3">
-          <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-lg">Start Playing Free</a>
-          <a href="https://app.smart-guitar.com/login" class="btn btn-ghost btn-lg">Sign In</a>
+        <div class="hero-head">
+          <h1 id="hero-heading">LEARN IT.<br />THEN PLAY IT<br />WITH THE <em class="hl">BAND.</em></h1>
+          <p class="hero-sub">Pick any song. We take the guitar out of the real recording and teach you the part step by step, until you're the guitarist.</p>
+          <ol class="hero-path" aria-label="How a song works">
+            <li><b>HEAR IT</b>guitar alone</li>
+            <li class="arrow" aria-hidden="true">&rarr;</li>
+            <li><b>LEARN IT</b>easy shapes</li>
+            <li class="arrow" aria-hidden="true">&rarr;</li>
+            <li><b>PLAY IT</b>with the band</li>
+          </ol>
         </div>
-      </div>
 
-      <div class="scroll-indicator animate-bounce" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
+        <div class="demo" id="demo" role="region" aria-labelledby="demo-title" data-src="assets/demo/wonderwall-" data-chords="assets/demo/wonderwall-chords.json">
+          <div class="demo-top">
+            <img class="demo-thumb" src="assets/demo/wonderwall.jpg" alt="" width="42" height="42" />
+            <div>
+              <h2 class="demo-title" id="demo-title">Try it now: Wonderwall</h2>
+              <p class="demo-sub" data-demo-sub>Tap the guitarist to take his place</p>
+            </div>
+            <span class="demo-live" aria-hidden="true">LIVE</span>
+          </div>
+
+          <div class="band" role="group" aria-label="The band. Each member is a toggle: pressed means playing." >
+            <button type="button" class="mem" data-stem="vocals" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></span>
+              <span class="mem-name">Vocals</span>
+            </button>
+            <button type="button" class="mem" data-stem="guitar" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon ic-main" aria-hidden="true"><use href="#i-guitar"/></svg><svg class="icon ic-you" aria-hidden="true"><use href="#i-you"/></svg></span>
+              <span class="mem-name">Guitar</span>
+            </button>
+            <button type="button" class="mem" data-stem="drums" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon" aria-hidden="true"><use href="#i-drum"/></svg></span>
+              <span class="mem-name">Drums</span>
+            </button>
+            <button type="button" class="mem" data-stem="bass" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon" aria-hidden="true"><use href="#i-bass"/></svg></span>
+              <span class="mem-name">Bass</span>
+            </button>
+            <button type="button" class="mem" data-stem="piano" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon" aria-hidden="true"><use href="#i-keys"/></svg></span>
+              <span class="mem-name">Keys</span>
+            </button>
+            <button type="button" class="mem" data-stem="other" aria-pressed="true" aria-keyshortcuts="S" aria-describedby="demo-hint">
+              <span class="av"><svg class="icon" aria-hidden="true"><use href="#i-other"/></svg></span>
+              <span class="mem-name">Other</span>
+            </button>
+          </div>
+          <p class="demo-hint" id="demo-hint"><span class="touch-hint">Tap a member to mute them · long-press to solo</span><span class="kbd-hint">Enter mutes · S solos the focused member</span></p>
+
+          <div class="deck">
+            <button type="button" class="play" data-demo-play aria-label="Play the Wonderwall demo">
+              <svg class="icon ic-play" aria-hidden="true"><use href="#i-play"/></svg>
+              <svg class="icon ic-pause" aria-hidden="true"><use href="#i-pause"/></svg>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+            <div class="chord-now">
+              <span class="chord-label">CHORD</span>
+              <span class="chord-name" data-demo-chord>A</span>
+              <div class="chord-meta">
+                <span class="beats" data-demo-beats aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></span>
+                <span class="chord-next">next <b data-demo-next>G</b></span>
+              </div>
+            </div>
+            <div class="shape-tile" data-chord-shape="A" data-demo-shape aria-hidden="true"></div>
+          </div>
+          <div class="progress" aria-hidden="true"><i data-demo-progress></i></div>
+
+          <div class="presets" role="group" aria-label="Quick mixes">
+            <button type="button" class="preset" data-preset="full" aria-pressed="true">Full band</button>
+            <button type="button" class="preset" data-preset="hear" aria-pressed="false">Guitar alone</button>
+            <button type="button" class="preset" data-preset="you" aria-pressed="false">You play guitar</button>
+          </div>
+
+          <p class="demo-meta"><span>Wonderwall · Oasis · easy shapes, capo 2</span><span class="demo-note">Demo clip for illustration</span></p>
+          <p class="sr-only" aria-live="polite" data-demo-status></p>
+        </div>
+
+        <div class="hero-cta">
+          <a href="https://app.smart-guitar.com/register?provider=google" class="btn-google">
+            <span class="g-logo" aria-hidden="true"><svg><use href="#i-google"/></svg></span>
+            Continue with Google
+          </a>
+          <a href="https://app.smart-guitar.com/register" class="email-link">or sign up with email</a>
+          <p class="fine">Free to start · 14-day full trial · then $6/mo or $50/yr · no card</p>
+        </div>
+
       </div>
     </section>
 
     <!-- ============================== -->
-    <!-- FEATURE VIDEO                  -->
+    <!-- HOW IT WORKS — the path        -->
     <!-- ============================== -->
-    <section id="feature-video" class="feature-video-section" aria-labelledby="fv-heading">
+    <section id="how-it-works" class="how" aria-labelledby="how-heading">
       <div class="container">
-        <div class="section-header reveal">
-          <h2 id="fv-heading" class="fire-text">FROM SOLO TO FULL BAND</h2>
-          <p>Smart Guitar turns every song into a full band experience. Watch how it works.</p>
+        <div class="section-head reveal">
+          <span class="eyebrow">How it works</span>
+          <h2 id="how-heading">EVERY SONG IS <em class="hl">A PATH.</em></h2>
+          <p>Four steps from first listen to playing the part with the band. The first two are free, for every song.</p>
         </div>
 
-        <div class="feature-video-player reveal">
-          <div class="feature-video-wrapper">
-            <video
-              id="feature-video-main"
-              src="assets/videos/feature-full.mp4"
-              playsinline
-              preload="auto"
-              aria-label="Smart Guitar feature demonstration: a guitarist goes from playing alone to jamming with a full band"
-            ></video>
-            <button class="video-play-btn" aria-label="Play video">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="white">
-                <polygon points="5,3 19,12 5,21"/>
-              </svg>
-            </button>
+        <ol class="path">
+          <!-- 1 -->
+          <li class="step reveal">
+            <div class="step-top"><span class="step-k" aria-hidden="true">1</span><span class="tag tag--free">FREE</span></div>
+            <h3><span class="sr-only">Step 1: </span>HEAR IT</h3>
+            <p>The guitar alone, band muted. Hear exactly what the guitarist plays, as many times as you need.</p>
+            <div class="step-visual" aria-hidden="true">
+              <div class="mini-band">
+                <span class="mb"><svg class="icon"><use href="#i-mic"/></svg></span>
+                <span class="mb on"><svg class="icon"><use href="#i-guitar"/></svg></span>
+                <span class="mb"><svg class="icon"><use href="#i-drum"/></svg></span>
+                <span class="mb"><svg class="icon"><use href="#i-bass"/></svg></span>
+                <span class="mb"><svg class="icon"><use href="#i-keys"/></svg></span>
+              </div>
+              <span class="visual-label">BACKSTAGE · ONLY THE GUITARIST IS PLAYING</span>
+            </div>
+          </li>
+
+          <!-- 2 -->
+          <li class="step reveal">
+            <div class="step-top"><span class="step-k" aria-hidden="true">2</span><span class="tag tag--free">FREE</span></div>
+            <h3><span class="sr-only">Step 2: </span>LEARN IT</h3>
+            <p>Easy shapes on notebook cards. Loop the verse at 75% until your hands know it.</p>
+            <div class="step-visual" aria-hidden="true">
+              <div class="chord-cards">
+                <div class="cd ok"><b>Em</b><span class="shape" data-chord-shape="Em"></span></div>
+                <div class="cd ok"><b>G</b><span class="shape" data-chord-shape="G"></span></div>
+                <div class="cd ok"><b>C</b><span class="shape" data-chord-shape="C"></span></div>
+                <div class="cd cur"><b>D</b><span class="shape" data-chord-shape="D"></span></div>
+                <div class="cd"><b>A</b><span class="shape" data-chord-shape="A"></span></div>
+              </div>
+              <span class="loop-chip"><svg class="icon"><use href="#i-loop"/></svg>Looping verse 1 · 75%</span>
+            </div>
+          </li>
+
+          <!-- 3 -->
+          <li class="step step--pro reveal">
+            <div class="step-top"><span class="step-k" aria-hidden="true">3</span><span class="tag tag--pro">PRO</span></div>
+            <h3><span class="sr-only">Step 3: </span>PLAY IT WITH THE BAND</h3>
+            <p>The real recording with the guitar taken out. The band plays, and you're on stage as the guitarist.</p>
+            <div class="step-visual" aria-hidden="true">
+              <div class="stage-inset">
+                <div class="mini-band">
+                  <span class="mb"><svg class="icon"><use href="#i-mic"/></svg></span>
+                  <span class="mb you"><svg class="icon"><use href="#i-you"/></svg></span>
+                  <span class="mb"><svg class="icon"><use href="#i-drum"/></svg></span>
+                  <span class="mb"><svg class="icon"><use href="#i-bass"/></svg></span>
+                  <span class="mb"><svg class="icon"><use href="#i-keys"/></svg></span>
+                </div>
+                <span class="visual-label"><b>ON STAGE</b> · GUITAR REMOVED · YOU PLAY</span>
+              </div>
+            </div>
+          </li>
+
+          <!-- 4 -->
+          <li class="step step--pro reveal">
+            <div class="step-top"><span class="step-k" aria-hidden="true">4</span><span class="tag tag--pro">PRO</span></div>
+            <h3><span class="sr-only">Step 4: </span>FULL SPEED + RECORD</h3>
+            <p>Bring it up to 100%, record yourself, and hear your part in the real mix.</p>
+            <div class="step-visual" aria-hidden="true">
+              <div class="stage-inset">
+                <div class="rec-row">
+                  <span class="rec-dot">REC</span>
+                  <svg class="wave" viewBox="0 0 128 30" preserveAspectRatio="none"><rect class="w1" x="0" y="8.8" width="2.4" height="12.4" rx="1.2"/><rect class="w1" x="4" y="4.9" width="2.4" height="20.1" rx="1.2"/><rect class="w1" x="8" y="2.8" width="2.4" height="24.5" rx="1.2"/><rect class="w1" x="12" y="7.3" width="2.4" height="15.3" rx="1.2"/><rect class="w1" x="16" y="11.3" width="2.4" height="7.3" rx="1.2"/><rect class="w1" x="20" y="8.5" width="2.4" height="12.9" rx="1.2"/><rect class="w1" x="24" y="8.8" width="2.4" height="12.3" rx="1.2"/><rect class="w1" x="28" y="10.1" width="2.4" height="9.8" rx="1.2"/><rect class="w1" x="32" y="12" width="2.4" height="6" rx="1.2"/><rect class="w1" x="36" y="11" width="2.4" height="8.1" rx="1.2"/><rect class="w1" x="40" y="10.8" width="2.4" height="8.4" rx="1.2"/><rect class="w1" x="44" y="6.8" width="2.4" height="16.3" rx="1.2"/><rect class="w1" x="48" y="4.2" width="2.4" height="21.5" rx="1.2"/><rect class="w1" x="52" y="5.5" width="2.4" height="19.1" rx="1.2"/><rect class="w1" x="56" y="12.4" width="2.4" height="5.1" rx="1.2"/><rect class="w1" x="60" y="7.5" width="2.4" height="14.9" rx="1.2"/><rect class="w1" x="64" y="4.4" width="2.4" height="21.2" rx="1.2"/><rect class="w1" x="68" y="5.3" width="2.4" height="19.3" rx="1.2"/><rect class="w1" x="72" y="9.9" width="2.4" height="10.2" rx="1.2"/><rect class="w1" x="76" y="11.2" width="2.4" height="7.6" rx="1.2"/><rect class="w2" x="80" y="10.4" width="2.4" height="9.3" rx="1.2"/><rect class="w2" x="84" y="10.2" width="2.4" height="9.6" rx="1.2"/><rect class="w2" x="88" y="5.8" width="2.4" height="18.4" rx="1.2"/><rect class="w2" x="92" y="8" width="2.4" height="14" rx="1.2"/><rect class="w2" x="96" y="12.6" width="2.4" height="4.9" rx="1.2"/><rect class="w2" x="100" y="7.4" width="2.4" height="15.1" rx="1.2"/><rect class="w2" x="104" y="3.8" width="2.4" height="22.5" rx="1.2"/><rect class="w2" x="108" y="3.4" width="2.4" height="23.2" rx="1.2"/><rect class="w2" x="112" y="9.1" width="2.4" height="11.7" rx="1.2"/><rect class="w2" x="116" y="10.6" width="2.4" height="8.9" rx="1.2"/><rect class="w2" x="120" y="8.6" width="2.4" height="12.8" rx="1.2"/><rect class="w2" x="124" y="10.7" width="2.4" height="8.6" rx="1.2"/></svg>
+                  <span class="speed-chip">100%</span>
+                </div>
+                <span class="visual-label">YOUR TAKE · IN THE REAL MIX</span>
+              </div>
+            </div>
+          </li>
+        </ol>
+
+        <p class="path-note reveal">Already know the chords? <a href="https://app.smart-guitar.com/register">Skip straight to the stage &rarr;</a></p>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SETLISTS                       -->
+    <!-- ============================== -->
+    <section id="setlists" aria-labelledby="sets-heading">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Setlists</span>
+          <h2 id="sets-heading">NOT SURE WHERE<br /><em class="hl">TO START?</em></h2>
+          <p>Pick a setlist that matches what your hands can already do.</p>
+        </div>
+
+        <div class="sets">
+          <article class="set set--campfire reveal">
+            <div class="set-art" aria-hidden="true">
+              <svg class="icon big-icon"><use href="#i-flame"/></svg>
+              <span class="set-chip">G</span><span class="set-chip">D</span><span class="set-chip">Em</span><span class="set-chip">C</span>
+            </div>
+            <div class="set-body">
+              <h3>4-CHORD CAMPFIRE</h3>
+              <p>Sing-along classics built on the same four shapes. Learn them once and play song after song.</p>
+              <span class="lvl">EASY</span>
+            </div>
+          </article>
+
+          <article class="set set--first reveal">
+            <div class="set-art" aria-hidden="true">
+              <svg class="icon big-icon"><use href="#i-star"/></svg>
+              <span class="set-chip">Em</span><span class="set-chip">A</span><span class="set-chip">D</span>
+            </div>
+            <div class="set-body">
+              <h3>YOUR FIRST 10 SONGS</h3>
+              <p>Slow tempos, open chords and simple strumming. The songs every new player should start with.</p>
+              <span class="lvl">EASY</span>
+            </div>
+          </article>
+
+          <article class="set set--rock reveal">
+            <div class="set-art" aria-hidden="true">
+              <svg class="icon big-icon"><use href="#i-guitar"/></svg>
+              <span class="set-chip">E5</span><span class="set-chip">A5</span><span class="set-chip">D5</span>
+            </div>
+            <div class="set-body">
+              <h3>BAND ROOM ROCK</h3>
+              <p>Big riffs and bigger choruses. Take the guitarist's seat and play with a full band behind you.</p>
+              <span class="lvl lvl--m">MEDIUM</span>
+            </div>
+          </article>
+
+          <article class="set set--jam reveal">
+            <div class="set-art" aria-hidden="true">
+              <svg class="icon big-icon"><use href="#i-drum"/></svg>
+              <span class="set-chip">Drums</span><span class="set-chip">Bass</span><span class="set-chip">You</span>
+            </div>
+            <div class="set-body">
+              <h3>JAM WITH THE DRUMMER</h3>
+              <p>Just you, the drums and the bass. Lock in with the groove and learn to keep time.</p>
+              <span class="lvl lvl--m">MEDIUM</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== -->
+    <!-- SPEED PROMISE                  -->
+    <!-- ============================== -->
+    <section class="speed" aria-labelledby="speed-heading">
+      <div class="container">
+        <div class="speed-card reveal">
+          <div>
+            <h2 id="speed-heading">1,100+ SONGS READY <em class="hl">INSTANTLY.</em></h2>
+            <p>Add any song from YouTube — ready in about 5 minutes.</p>
+            <p class="speed-small">While it's being prepared, we split the band into separate instruments, find the chords and sync the lyrics.</p>
           </div>
-          <div class="feature-video-scenes">
-            <button class="scene-thumb active" data-time="0" aria-label="Scene 1: Playing alone">
-              <span class="scene-label">Alone</span>
-            </button>
-            <button class="scene-thumb" data-time="6" aria-label="Scene 2: Opens Smart Guitar">
-              <span class="scene-label">Discover</span>
-            </button>
-            <button class="scene-thumb" data-time="10" aria-label="Scene 3: Singer joins">
-              <span class="scene-label">Vocals Join</span>
-            </button>
-            <button class="scene-thumb" data-time="16" aria-label="Scene 4: Drummer appears">
-              <span class="scene-label">Drums In</span>
-            </button>
-            <button class="scene-thumb" data-time="22" aria-label="Scene 5: Full band">
-              <span class="scene-label">Full Band</span>
-            </button>
+          <div class="search-mock" aria-hidden="true">
+            <svg class="icon"><use href="#i-search"/></svg>
+            <span>Add any song or YouTube link</span>
+            <b>~5 min</b>
           </div>
         </div>
       </div>
     </section>
 
     <!-- ============================== -->
-    <!-- HOW IT WORKS                   -->
+    <!-- PRICING                        -->
     <!-- ============================== -->
-    <section id="how-it-works" aria-labelledby="hiw-heading" style="background:var(--charcoal-900);">
+    <section id="pricing" aria-labelledby="pricing-heading">
       <div class="container">
-        <div class="section-header reveal">
-          <h2 id="hiw-heading" class="fire-text">HOW IT WORKS</h2>
-          <p>Three steps. That's it.</p>
+        <div class="section-head reveal">
+          <span class="eyebrow">Pricing</span>
+          <h2 id="pricing-heading">FREE TO LEARN.<br /><em class="hl">PRO TO PLAY.</em></h2>
+          <p>Hear it and Learn it are free for every song. Pro puts you on stage with the band.</p>
         </div>
 
-        <div class="hiw-steps">
-          <!-- Step 1 -->
-          <div class="hiw-step hiw-animate" data-step="1">
-            <div class="hiw-number-wrap">
-              <div class="hiw-number" aria-hidden="true">
-                <span>1</span>
-              </div>
-              <div class="hiw-connector" aria-hidden="true"></div>
-            </div>
-            <div class="hiw-card">
-              <div class="hiw-icon" aria-hidden="true">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                </svg>
-              </div>
-              <h3>Search for Any Song</h3>
-              <p>Type in the artist or title. Our catalog covers everything — millions of songs, from classic rock to today's hits.</p>
-              <div class="hiw-mock-input" aria-hidden="true">
-                <span class="hiw-mock-cursor"></span>
-                <span class="hiw-mock-text">hotel california...</span>
-              </div>
-            </div>
-          </div>
+        <div class="plans">
+          <article class="plan plan--free reveal" aria-labelledby="plan-free">
+            <h3 class="plan-name" id="plan-free">FREE</h3>
+            <p class="plan-lede">Learn any song, at your own pace.</p>
+            <div class="price"><span class="price-v">$0</span><span class="price-p">forever</span></div>
+            <ul class="plan-list">
+              <li>Hear it + Learn it, for every song<small>Guitar alone, easy shapes, loops and slow-down</small></li>
+              <li>Chords &amp; lyrics</li>
+              <li>Tuner &amp; metronome</li>
+            </ul>
+            <a href="https://app.smart-guitar.com/register" class="btn btn-ink btn-block">Start free</a>
+          </article>
 
-          <!-- Step 2 -->
-          <div class="hiw-step hiw-animate" data-step="2">
-            <div class="hiw-number-wrap">
-              <div class="hiw-number" aria-hidden="true">
-                <span>2</span>
-              </div>
-              <div class="hiw-connector" aria-hidden="true"></div>
-            </div>
-            <div class="hiw-card">
-              <div class="hiw-icon" aria-hidden="true">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round">
-                  <path d="M2 12h2l3-7 4 14 4-10 3 6h4"/>
-                </svg>
-              </div>
-              <h3>AI Separates Everything</h3>
-              <p>Our engine isolates every instrument, detects all chords, and syncs lyrics. In seconds, not minutes.</p>
-              <div class="hiw-stems-anim" aria-hidden="true">
-                <div class="hiw-stem-bar" style="--stem-color: var(--fire-400); --stem-delay: 0s; --stem-width: 85%;">
-                  <span>Vocals</span>
-                </div>
-                <div class="hiw-stem-bar" style="--stem-color: var(--flame-400); --stem-delay: 0.15s; --stem-width: 70%;">
-                  <span>Guitar</span>
-                </div>
-                <div class="hiw-stem-bar" style="--stem-color: var(--ember-400); --stem-delay: 0.3s; --stem-width: 60%;">
-                  <span>Bass</span>
-                </div>
-                <div class="hiw-stem-bar" style="--stem-color: var(--smoke-300); --stem-delay: 0.45s; --stem-width: 75%;">
-                  <span>Drums</span>
-                </div>
-                <div class="hiw-stem-bar" style="--stem-color: #a78bfa; --stem-delay: 0.6s; --stem-width: 50%;">
-                  <span>Piano</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 3 -->
-          <div class="hiw-step hiw-animate" data-step="3">
-            <div class="hiw-number-wrap">
-              <div class="hiw-number" aria-hidden="true">
-                <span>3</span>
-              </div>
-            </div>
-            <div class="hiw-card">
-              <div class="hiw-icon" aria-hidden="true">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fire-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-              </div>
-              <h3>Play Your Way</h3>
-              <p>Solo the guitar to hear the riff. Mute vocals and sing along. Follow chords in real time. You decide.</p>
-              <div class="hiw-chords-anim" aria-hidden="true">
-                <div class="hiw-chord" style="--chord-delay: 0s;">Am</div>
-                <div class="hiw-chord" style="--chord-delay: 0.2s;">F</div>
-                <div class="hiw-chord" style="--chord-delay: 0.4s;">C</div>
-                <div class="hiw-chord" style="--chord-delay: 0.6s;">G</div>
-              </div>
-            </div>
-          </div>
+          <article class="plan plan--pro reveal" aria-labelledby="plan-pro">
+            <span class="plan-badge">14-DAY FREE TRIAL</span>
+            <h3 class="plan-name" id="plan-pro">PRO</h3>
+            <p class="plan-lede">Step on stage with the real band.</p>
+            <div class="price"><span class="price-v">$6</span><span class="price-p">/ month</span></div>
+            <p class="price-alt">or $50 / year <span class="save">SAVE 30%</span></p>
+            <ul class="plan-list">
+              <li>Everything in Free</li>
+              <li>Play along with the band<small>Remove or solo any instrument</small></li>
+              <li>Add any song from YouTube</li>
+              <li>Record yourself</li>
+              <li>Chord editing</li>
+            </ul>
+            <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-block">Start your free trial</a>
+          </article>
         </div>
+
+        <p class="plans-note reveal">Every account starts with a 14-day full Pro trial. No card needed.<small>After the trial, Hear it and Learn it stay free for every song. <a href="/refund.html">Refund policy</a></small></p>
       </div>
     </section>
 
     <!-- ============================== -->
     <!-- TESTIMONIALS                   -->
     <!-- ============================== -->
-    <section id="testimonials" aria-labelledby="testimonials-heading" style="background:var(--charcoal-900);">
+    <section id="testimonials" aria-labelledby="testimonials-heading">
       <div class="container">
-        <div class="section-header reveal">
-          <h2 id="testimonials-heading" class="fire-text">REAL PLAYERS. REAL STORIES.</h2>
-          <p>Hear from musicians who transformed their practice with Smart Guitar.</p>
+        <div class="section-head reveal">
+          <span class="eyebrow">Players</span>
+          <h2 id="testimonials-heading">REAL PLAYERS.<br /><em class="hl">REAL STORIES.</em></h2>
+          <p>Hear from musicians who changed how they practise with Smart Guitar.</p>
         </div>
 
-        <div class="testimonials-grid">
-          <!-- Testimonial 1: Strumming guy -->
-          <div class="testimonial-card reveal reveal-delay-1">
-            <div class="testimonial-video-wrap">
-              <video
-                src="assets/videos/testimonial-1.mp4"
-                playsinline
-                preload="auto"
-                aria-label="Testimonial from Jake, a guitar player"
-              ></video>
-              <button class="video-play-btn video-play-btn--sm" aria-label="Play testimonial">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                  <polygon points="5,3 19,12 5,21"/>
-                </svg>
-              </button>
+        <div class="quotes">
+          <figure class="quote reveal">
+            <div class="quote-video testimonial-video-wrap">
+              <video src="assets/videos/testimonial-1.mp4" poster="assets/videos/testimonial-1.jpg" playsinline preload="none" aria-label="Testimonial from Jake, an acoustic guitarist"></video>
+              <button type="button" class="video-play-btn" aria-label="Play Jake's testimonial"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
             </div>
-            <div class="testimonial-content">
-              <p class="testimonial-quote">"I could finally hear exactly what the guitarist was playing. The stem separation is unreal."</p>
-              <div class="testimonial-author">
-                <span class="testimonial-name">Jake M.</span>
-                <span class="testimonial-role">Acoustic guitarist, 3 years</span>
-              </div>
-            </div>
-          </div>
+            <figcaption class="quote-body">
+              <blockquote class="quote-text">"I could finally hear exactly what the guitarist was playing. The stem separation is unreal."</blockquote>
+              <span class="quote-by"><b>JAKE M.</b>Acoustic guitarist, 3 years</span>
+            </figcaption>
+          </figure>
 
-          <!-- Testimonial 2: Stem fan -->
-          <div class="testimonial-card reveal reveal-delay-2">
-            <div class="testimonial-video-wrap">
-              <video
-                src="assets/videos/testimonial-2.mp4"
-                playsinline
-                preload="auto"
-                aria-label="Testimonial from Sarah, a music student"
-              ></video>
-              <button class="video-play-btn video-play-btn--sm" aria-label="Play testimonial">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                  <polygon points="5,3 19,12 5,21"/>
-                </svg>
-              </button>
+          <figure class="quote reveal">
+            <div class="quote-video testimonial-video-wrap">
+              <video src="assets/videos/testimonial-2.mp4" poster="assets/videos/testimonial-2.jpg" playsinline preload="none" aria-label="Testimonial from Sarah, a music student"></video>
+              <button type="button" class="video-play-btn" aria-label="Play Sarah's testimonial"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
             </div>
-            <div class="testimonial-content">
-              <p class="testimonial-quote">"I use it to study song arrangements. Being able to isolate each instrument changed how I understand music."</p>
-              <div class="testimonial-author">
-                <span class="testimonial-name">Sarah K.</span>
-                <span class="testimonial-role">Music student &amp; songwriter</span>
-              </div>
-            </div>
-          </div>
+            <figcaption class="quote-body">
+              <blockquote class="quote-text">"I use it to study song arrangements. Being able to isolate each instrument changed how I understand music."</blockquote>
+              <span class="quote-by"><b>SARAH K.</b>Music student &amp; songwriter</span>
+            </figcaption>
+          </figure>
 
-          <!-- Testimonial 3: Rhythm learner -->
-          <div class="testimonial-card reveal reveal-delay-3">
-            <div class="testimonial-video-wrap">
-              <video
-                src="assets/videos/testimonial-3.mp4"
-                playsinline
-                preload="auto"
-                aria-label="Testimonial from David, an experienced guitarist"
-              ></video>
-              <button class="video-play-btn video-play-btn--sm" aria-label="Play testimonial">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                  <polygon points="5,3 19,12 5,21"/>
-                </svg>
-              </button>
+          <figure class="quote reveal">
+            <div class="quote-video testimonial-video-wrap">
+              <video src="assets/videos/testimonial-3.mp4" poster="assets/videos/testimonial-3.jpg" playsinline preload="none" aria-label="Testimonial from David, an electric guitarist"></video>
+              <button type="button" class="video-play-btn" aria-label="Play David's testimonial"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
             </div>
-            <div class="testimonial-content">
-              <p class="testimonial-quote">"The real-time chords and strumming pattern view helped me nail songs I'd been struggling with for months."</p>
-              <div class="testimonial-author">
-                <span class="testimonial-name">David R.</span>
-                <span class="testimonial-role">Electric guitarist, 15 years</span>
-              </div>
-            </div>
-          </div>
+            <figcaption class="quote-body">
+              <blockquote class="quote-text">"The real-time chords and strumming pattern view helped me nail songs I'd been struggling with for months."</blockquote>
+              <span class="quote-by"><b>DAVID R.</b>Electric guitarist, 15 years</span>
+            </figcaption>
+          </figure>
 
-          <!-- Testimonial 4: Song explorer -->
-          <div class="testimonial-card reveal reveal-delay-1">
-            <div class="testimonial-video-wrap">
-              <video
-                src="assets/videos/testimonial-4.mp4"
-                playsinline
-                preload="auto"
-                aria-label="Testimonial from Maria, an aspiring singer-guitarist"
-              ></video>
-              <button class="video-play-btn video-play-btn--sm" aria-label="Play testimonial">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                  <polygon points="5,3 19,12 5,21"/>
-                </svg>
-              </button>
+          <figure class="quote reveal">
+            <div class="quote-video testimonial-video-wrap">
+              <video src="assets/videos/testimonial-4.mp4" poster="assets/videos/testimonial-4.jpg" playsinline preload="none" aria-label="Testimonial from Maria, a beginner singer-guitarist"></video>
+              <button type="button" class="video-play-btn" aria-label="Play Maria's testimonial"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
             </div>
-            <div class="testimonial-content">
-              <p class="testimonial-quote">"I search for any song I want to learn, and within seconds I'm playing along. It feels like having a private teacher."</p>
-              <div class="testimonial-author">
-                <span class="testimonial-name">Maria L.</span>
-                <span class="testimonial-role">Singer-guitarist, beginner</span>
-              </div>
-            </div>
-          </div>
+            <figcaption class="quote-body">
+              <blockquote class="quote-text">"I used to spend hours searching for tabs. Now I get the chords, the lyrics, everything in sync. It feels like having a private teacher."</blockquote>
+              <span class="quote-by"><b>MARIA L.</b>Singer-guitarist, beginner</span>
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
@@ -369,15 +475,25 @@
     <!-- ============================== -->
     <!-- FINAL CTA                      -->
     <!-- ============================== -->
-    <section class="cta-section" aria-labelledby="cta-heading">
+    <section class="finale" aria-labelledby="finale-heading">
       <div class="container">
-        <h2 id="cta-heading" class="shimmer-text reveal" style="font-size:clamp(1.5rem,5vw,3.5rem);max-width:700px;margin:0 auto 1rem;">
-          STOP WATCHING TUTORIALS.<br/>START PLAYING.
-        </h2>
-        <p class="reveal">Free to try. No credit card required.</p>
-        <a href="https://app.smart-guitar.com/register" class="btn btn-fire btn-lg animate-fire-pulse reveal">
-          Start Playing Now
-        </a>
+        <div class="finale-band reveal" aria-hidden="true">
+          <span class="fb"><svg class="icon"><use href="#i-mic"/></svg></span>
+          <span class="fb"><svg class="icon"><use href="#i-drum"/></svg></span>
+          <span class="fb you"><svg class="icon"><use href="#i-you"/></svg></span>
+          <span class="fb"><svg class="icon"><use href="#i-bass"/></svg></span>
+          <span class="fb"><svg class="icon"><use href="#i-keys"/></svg></span>
+        </div>
+        <h2 id="finale-heading" class="reveal">THE BAND IS<br /><em class="hl">WAITING FOR YOU.</em></h2>
+        <p class="finale-sub reveal">Pick a song tonight. Hear it, learn it, then take the guitarist's seat.</p>
+        <div class="finale-cta reveal">
+          <a href="https://app.smart-guitar.com/register?provider=google" class="btn-google">
+            <span class="g-logo" aria-hidden="true"><svg><use href="#i-google"/></svg></span>
+            Continue with Google
+          </a>
+          <a href="https://app.smart-guitar.com/register" class="email-link">or sign up with email</a>
+          <p class="fine">Free to start · 14-day full trial · then $6/mo or $50/yr · no card</p>
+        </div>
       </div>
     </section>
 
@@ -390,6 +506,7 @@
     <div class="container">
       <div class="footer-inner">
         <div class="footer-logo">
+          <img src="assets/logo-96.png" alt="" width="28" height="28" />
           <span class="fire-text">SMART GUITAR</span>
         </div>
 
@@ -416,21 +533,25 @@
     // Track "ViewContent" when user scrolls to How It Works
     (function() {
       var observed = false;
+      // Fires when half the section is visible, or (on phones, where the
+      // section is taller than the screen) when it fills half the viewport.
       var observer = new IntersectionObserver(function(entries) {
-        if (entries[0].isIntersecting && !observed) {
+        var e = entries[0];
+        if (e.isIntersecting && !observed &&
+            (e.intersectionRatio >= 0.5 || e.intersectionRect.height >= window.innerHeight * 0.5)) {
           observed = true;
           fbq('track', 'ViewContent', { content_name: 'How It Works' });
         }
-      }, { threshold: 0.5 });
+      }, { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5] });
       var section = document.getElementById('how-it-works');
       if (section) observer.observe(section);
     })();
   </script>
 
   <!-- Scripts -->
-  <script src="js/text-type.js"></script>
-  <script src="js/scroll-reveal.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/scroll-reveal.js"></script>
+  <script src="js/demo-stage.js"></script>
   <script src="js/video-player.js"></script>
 
 </body>
