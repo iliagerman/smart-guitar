@@ -27,6 +27,7 @@ from guitar_player.schemas.song import (
     TabNote,
     TabRhythm,
 )
+from guitar_player.services.song_tags import ensure_song_tags
 from guitar_player.storage import StorageBackend
 
 from .beat_grid import BeatGridSource, build_beat_grid
@@ -63,6 +64,7 @@ async def build_song_detail(
     song = await song_dao.get_by_id(song_id)
     if not song:
         raise NotFoundError("Song", str(song_id))
+    song = await ensure_song_tags(song_dao, storage, song)
 
     t1 = time.perf_counter()
     song_resp = SongResponse.model_validate(song)

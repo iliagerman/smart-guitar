@@ -3,7 +3,9 @@
 import re
 from typing import Any
 
-from guitar_player.schemas.song import LyricsSegment, LyricsWord, StemType
+from guitar_player.schemas.records import SongRecord
+from guitar_player.schemas.song import LyricsSegment, LyricsWord, SongResponse, StemType
+from guitar_player.storage import StorageBackend
 
 # Chord variant files produced by the simplifier (name prefix -> filename).
 CHORD_VARIANT_PREFIX = "chords_"
@@ -30,6 +32,14 @@ MAX_SECONDS_PER_WORD = 2.5
 # Floor for very short lines, and the longest any single word may stay
 # highlighted. The 99.9th percentile of genuinely-timed words is 5.85 s.
 MAX_HOLD_SECONDS = 5.0
+
+
+def song_response(storage: StorageBackend, song: SongRecord) -> SongResponse:
+    """A SongResponse with its thumbnail_url resolved."""
+    resp = SongResponse.model_validate(song)
+    if resp.thumbnail_key:
+        resp.thumbnail_url = storage.get_url(resp.thumbnail_key)
+    return resp
 
 
 def to_folder_name(name: str) -> str:

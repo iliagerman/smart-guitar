@@ -34,6 +34,8 @@ from guitar_player.routers import (
     favorites,
     health,
     jobs,
+    practice,
+    setlists,
     songs,
     subscription,
 )
@@ -344,7 +346,10 @@ app.include_router(health.router)
 app.include_router(auth.router)
 
 api_prefix = _settings.app.api_prefix
+# setlists (/songs/setlists) must precede songs so /songs/{song_id} doesn't shadow it.
+app.include_router(setlists.router, prefix=api_prefix)
 app.include_router(songs.router, prefix=api_prefix)
+app.include_router(practice.router, prefix=api_prefix)
 app.include_router(jobs.router, prefix=api_prefix)
 app.include_router(favorites.router, prefix=api_prefix)
 app.include_router(analytics.router, prefix=api_prefix)

@@ -7,10 +7,18 @@ SQLAlchemy model instances.
 """
 
 import uuid
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime, timezone
+from typing import Annotated, Any
 
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel
+
+
+def _as_utc(value: datetime) -> datetime:
+    # Postgres returns aware UTC datetimes; SQLite (the test DB) drops tzinfo.
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+UtcDatetime = Annotated[datetime, AfterValidator(_as_utc)]
 
 
 class SongRecord(BaseModel):
@@ -70,6 +78,14 @@ class SongRecord(BaseModel):
 
     downloaded_by: uuid.UUID | None = None
 
+    # Practice tags
+    difficulty: str | None = None
+    chord_count: int | None = None
+    easy_chords: str | None = None
+    easy_capo: int | None = None
+    tempo_bpm: float | None = None
+    tags_computed_at: datetime | None = None
+
 
 class JobRecord(BaseModel):
     model_config = {"from_attributes": True}
@@ -99,8 +115,11 @@ class UserRecord(BaseModel):
 
     cognito_sub: str
     email: str
-    trial_ends_at: datetime | None = None
+    trial_ends_at: UtcDatetime | None = None
     has_seen_onboarding: bool = False
+    skill_level: str | None = None
+    streak_days: int = 0
+    last_practice_date: date | None = None
 
 
 class FavoriteRecord(BaseModel):
@@ -121,7 +140,7 @@ class SubscriptionRecord(BaseModel):
     model_config = {"from_attributes": True}
 
     id: uuid.UUID
-    created_at: datetime
+    created_at: UtcDatetime
     updated_at: datetime
 
     user_id: uuid.UUID
@@ -130,9 +149,25 @@ class SubscriptionRecord(BaseModel):
     external_customer_id: str
     status: str
     plan_type: str
-    current_period_start: datetime | None = None
-    current_period_end: datetime | None = None
-    canceled_at: datetime | None = None
+    current_period_start: UtcDatetime | None = None
+    current_period_end: UtcDatetime | None = None
+    canceled_at: UtcDatetime | None = None
+
+
+class PracticeProgressRecord(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+    user_id: uuid.UUID
+    song_id: uuid.UUID
+    current_step: int = 1
+    completed_steps: int = 0
+    learned_chords: str = ""
+    stage_progress: float = 0.0
+    last_practiced_at: UtcDatetime
 
 
 class ChordVoteRecord(BaseModel):

@@ -31,6 +31,7 @@ from guitar_player.schemas.admin import (
     AdminDownloadCompleteResponse,
     AdminDropSongsResponse,
     AdminRequiredSongsResponse,
+    AdminRetagResponse,
     AdminSeedPopulateResponse,
     AdminSongResponse,
     SanityCheckResult,
@@ -49,6 +50,7 @@ from guitar_player.services.seed_service import (
     seed_update_metadata,
 )
 from guitar_player.services.song_service import SongService
+from guitar_player.services.song_tags import retag_songs
 from guitar_player.storage import StorageBackend
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,23 @@ async def list_admin_required_songs(
         check_storage=check_storage,
         max_scan=None if max_scan == 0 else max_scan,
     )
+
+
+@router.post("/songs/retag", response_model=AdminRetagResponse)
+async def admin_retag_songs(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    force: bool = Query(False),
+    _: None = Depends(require_admin_token),
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> AdminRetagResponse:
+    """Backfill practice tags (difficulty, easy chords, tempo) from stored chord files.
+
+    Processes one window of songs, oldest first; call again with next_offset
+    until it is null. Only reads storage.
+    """
+    return await retag_songs(session, storage, offset, limit, force)
 
 
 @router.post("/songs/{song_id}/heal", response_model=AdminSongResponse)

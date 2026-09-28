@@ -88,3 +88,14 @@ class AdminDownloadCompleteResponse(BaseModel):
 
     ok: bool = True
     job_id: str
+
+
+class AdminRetagResponse(BaseModel):
+    """One window of POST /admin/songs/retag; next_offset is None when done."""
+
+    processed: int
+    tagged: int
+    skipped: int
+    failed: int
+    next_offset: int | None = None
+    total: int

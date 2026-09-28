@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from guitar_player.schemas.job import ActiveJobInfo
 
@@ -43,8 +43,21 @@ class SongResponse(BaseModel):
     play_count: int = 0
     like_count: int = 0
     created_at: datetime | None = None
+    difficulty: str | None = None
+    chord_count: int | None = None
+    easy_chords: list[str] = []
+    easy_capo: int | None = None
+    tempo_bpm: float | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("easy_chords", mode="before")
+    @classmethod
+    def _split_easy_chords(cls, value: str | list[str] | None) -> list[str]:
+        # Stored as a comma-separated column on the song row.
+        if isinstance(value, str):
+            return [chord for chord in value.split(",") if chord]
+        return value or []
 
 
 class RecommendationsResponse(BaseModel):
@@ -224,6 +237,9 @@ class SongDetailResponse(BaseModel):
     active_job: ActiveJobInfo | None = None
     download_pending: bool = False
     needs_self_heal: bool = False
+    # True when the member is on the free tier and every stem URL except the
+    # guitar was withheld (stem_types still lists them all).
+    stems_locked: bool = False
 
 
 class PlaybackSourceResponse(BaseModel):

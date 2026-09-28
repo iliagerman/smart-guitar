@@ -5,8 +5,15 @@ which payment provider (Paddle, AllPay, etc.) is active.
 """
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel
+
+
+class AccessTier(StrEnum):
+    TRIAL = "trial"  # free trial, full Pro access
+    PRO = "pro"  # paid (or bypass) Pro access
+    FREE = "free"  # signed in without Pro: hear it + learn it
 
 
 class SubscriptionDetail(BaseModel):
@@ -21,7 +28,8 @@ class SubscriptionDetail(BaseModel):
 class SubscriptionStatusResponse(BaseModel):
     """Returned by GET /api/v1/subscription/status."""
 
-    has_access: bool
+    has_access: bool  # Pro access: active trial or paid subscription
+    tier: AccessTier = AccessTier.FREE
     trial_ends_at: datetime | None = None
     trial_active: bool = False
     subscription: SubscriptionDetail | None = None

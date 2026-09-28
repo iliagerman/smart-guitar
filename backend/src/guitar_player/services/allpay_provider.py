@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from guitar_player.config import Settings
 from guitar_player.dao.subscription_dao import SubscriptionDAO
 from guitar_player.dao.user_dao import UserDAO
-from guitar_player.enums import PaymentProvider
+from guitar_player.enums import PaymentProvider, PlanType
 from guitar_player.schemas.records import SubscriptionRecord
 from guitar_player.schemas.subscription import (
     CancelSubscriptionResponse,
@@ -29,6 +29,12 @@ from guitar_player.services.telegram_service import TelegramService
 logger = logging.getLogger(__name__)
 
 PROVIDER = PaymentProvider.ALLPAY
+
+
+def _period_end(plan_type: str, start: datetime) -> datetime:
+    """Monthly renews through AllPay every 30 days; yearly is a one-time year of access."""
+    days = 365 if plan_type == PlanType.YEARLY else 30
+    return start + timedelta(days=days)
 
 
 def _allpay_sign(params: dict, api_key: str) -> str:
@@ -109,7 +115,12 @@ class AllPayProvider:
 
         # If we have an active sub, verify it's still active with AllPay.
         # This detects cancellations made directly in AllPay's dashboard.
-        if sub and sub.provider == PROVIDER.value and sub.status == "active":
+        if (
+            sub
+            and sub.provider == PROVIDER.value
+            and sub.status == "active"
+            and sub.plan_type != PlanType.YEARLY
+        ):
             sub = await self._check_subscription_still_active(sub, now)
 
         # Check for canceled subscription still within paid period
@@ -144,14 +155,24 @@ class AllPayProvider:
                 currency=self._cfg.currency,
                 interval="month",
             ),
-            yearly=None,
+            yearly=PriceDetail(
+                id="allpay_yearly",
+                name="Smart Guitar Pro Yearly",
+                amount=self._cfg.price_yearly_display,
+                currency=self._cfg.currency,
+                interval="year",
+            ),
         )
 
     async def create_checkout(
         self, user_sub: str, user_email: str, plan_type: str
     ) -> CheckoutResponse:
-        """Create an AllPay payment session and return the payment URL."""
+        """Create an AllPay payment session and return the payment URL.
+
+        Monthly is a recurring AllPay subscription; yearly is a one-time payment.
+        """
         user = await self._user_dao.get_or_create(user_sub, user_email)
+        is_yearly = plan_type == PlanType.YEARLY
 
         order_id = str(uuid_mod.uuid4())
 
@@ -166,17 +187,17 @@ class AllPayProvider:
             "add_field_1": f"{user.id}|{user_sub}",
             "items": [
                 {
-                    "name": "Smart Guitar Pro Monthly",
-                    "price": self._cfg.price_monthly_display,
+                    "name": "Smart Guitar Pro Yearly" if is_yearly else "Smart Guitar Pro Monthly",
+                    "price": (
+                        self._cfg.price_yearly_display if is_yearly else self._cfg.price_monthly_display
+                    ),
                     "qty": "1",
                     "vat": "0",
                 }
             ],
-            "subscription": {
-                "start_type": 1,
-                "end_type": 1,
-            },
         }
+        if not is_yearly:
+            params["subscription"] = {"start_type": 1, "end_type": 1}
         params["sign"] = _allpay_sign(params, self._cfg.api_key or "")
 
         async with httpx.AsyncClient() as client:
@@ -205,7 +226,7 @@ class AllPayProvider:
                 external_subscription_id=order_id,
                 external_customer_id=str(user.id),
                 status="pending",
-                plan_type="monthly",
+                plan_type=PlanType.YEARLY.value if is_yearly else PlanType.MONTHLY.value,
             )
 
         return CheckoutResponse(payment_url=payment_url)
@@ -221,19 +242,10 @@ class AllPayProvider:
                 message="No active subscription found."
             )
 
-        params = {
-            "login": self._cfg.login or "",
-            "order_id": sub.external_subscription_id,
-        }
-        params["sign"] = _allpay_sign(params, self._cfg.api_key or "")
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self._cfg.api_base}?show=cancelsubscription&mode=api10",
-                json=params,
-                headers={"Content-Type": "application/json"},
-            )
-            resp.raise_for_status()
+        # A yearly plan is a one-time payment: nothing to stop on AllPay's side,
+        # and access runs until the paid period ends (get_canceled_with_access).
+        if sub.plan_type != PlanType.YEARLY:
+            await self._cancel_allpay_subscription(sub.external_subscription_id)
 
         await self._subscription_dao.update_by_id(
             sub.id,
@@ -245,6 +257,21 @@ class AllPayProvider:
             message="Subscription canceled.",
             effective_date=sub.current_period_end,
         )
+
+    async def _cancel_allpay_subscription(self, order_id: str) -> None:
+        params = {
+            "login": self._cfg.login or "",
+            "order_id": order_id,
+        }
+        params["sign"] = _allpay_sign(params, self._cfg.api_key or "")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self._cfg.api_base}?show=cancelsubscription&mode=api10",
+                json=params,
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
 
     async def _verify_and_activate(
         self, pending: SubscriptionRecord, now: datetime
@@ -279,12 +306,11 @@ class AllPayProvider:
             # AllPay paymentstatus: status 1 = successful
             status = str(data.get("status", ""))
             if status == "1":
-                period_end = now + timedelta(days=30)
                 await self._subscription_dao.update_by_id(
                     pending.id,
                     status="active",
                     current_period_start=now,
-                    current_period_end=period_end,
+                    current_period_end=_period_end(pending.plan_type, now),
                 )
                 return pending
         except Exception:
@@ -402,11 +428,12 @@ class AllPayProvider:
             return
 
         now = datetime.now(timezone.utc)
-        period_end = now + timedelta(days=30)
 
         existing = await self._subscription_dao.get_by_external_id(
             PROVIDER.value, order_id
         )
+        plan_type = existing.plan_type if existing else PlanType.MONTHLY.value
+        period_end = _period_end(plan_type, now)
         if existing:
             await self._subscription_dao.update_by_id(
                 existing.id,
@@ -421,7 +448,7 @@ class AllPayProvider:
                 external_subscription_id=order_id,
                 external_customer_id=str(user.id),
                 status="active",
-                plan_type="monthly",
+                plan_type=plan_type,
                 current_period_start=now,
                 current_period_end=period_end,
             )
@@ -429,7 +456,7 @@ class AllPayProvider:
         await self._telegram.send_event(
             f"<b>New AllPay subscription</b>\n"
             f"Email: {user.email}\n"
-            f"Plan: monthly"
+            f"Plan: {plan_type}"
         )
 
     async def _handle_subscription_canceled(self, order_id: str) -> None:

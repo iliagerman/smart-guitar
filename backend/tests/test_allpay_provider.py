@@ -206,11 +206,15 @@ class TestGetPrices:
         assert result.monthly.currency == "USD"
         assert result.monthly.interval == "month"
 
-    async def test_yearly_is_none(self, mock_session, mock_settings, mock_telegram):
-        """Phase 1 — yearly is not yet available."""
+    async def test_returns_yearly_price(self, mock_session, mock_settings, mock_telegram):
         provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
         result = await provider.get_prices()
-        assert result.yearly is None
+        assert result.yearly is not None
+        assert result.yearly.id == "allpay_yearly"
+        assert result.yearly.name == "Smart Guitar Pro Yearly"
+        assert result.yearly.amount == "50.00"
+        assert result.yearly.currency == "USD"
+        assert result.yearly.interval == "year"
 
 
 # ── Tests: AllPayProvider.get_status ──────────────────────────────
@@ -1075,3 +1079,195 @@ class TestHandleWebhook:
             await provider.handle_webhook(request)
 
         mock_create.assert_called_once()
+
+
+# ── Tests: yearly plan (one-time payment, 365 days of access) ────
+
+
+def _allpay_sub(plan_type: str, **fields) -> MagicMock:
+    sub = MagicMock()
+    sub.id = uuid.uuid4()
+    sub.provider = PaymentProvider.ALLPAY.value
+    sub.status = "active"
+    sub.plan_type = plan_type
+    sub.external_subscription_id = f"order-{plan_type}"
+    sub.created_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    sub.current_period_end = datetime.now(timezone.utc) + timedelta(days=200)
+    sub.canceled_at = None
+    for key, value in fields.items():
+        setattr(sub, key, value)
+    return sub
+
+
+class TestYearlyPlan:
+    async def _checkout(self, provider, mock_user, plan_type: str):
+        response = _make_response(200, {"payment_url": "https://allpay.to/pay/plan"})
+        mock_client = _mock_http_client(response)
+        with (
+            patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "get_by_external_id", return_value=None),
+            patch.object(provider._subscription_dao, "create") as mock_create,
+            patch(
+                "guitar_player.services.allpay_provider.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+        ):
+            await provider.create_checkout("sub-123", "test@example.com", plan_type)
+        return mock_client.post.call_args[1]["json"], mock_create.call_args[1]
+
+    async def test_yearly_checkout_is_a_one_time_payment(
+        self, mock_session, mock_settings, mock_telegram, mock_user
+    ):
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        body, pending = await self._checkout(provider, mock_user, "yearly")
+
+        assert "subscription" not in body
+        assert body["items"] == [
+            {"name": "Smart Guitar Pro Yearly", "price": "50.00", "qty": "1", "vat": "0"}
+        ]
+        assert body["sign"] == _allpay_sign(
+            {k: v for k, v in body.items() if k != "sign"}, "test-api-key"
+        )
+        assert pending["status"] == "pending"
+        assert pending["plan_type"] == "yearly"
+
+    async def test_monthly_checkout_stays_a_recurring_subscription(
+        self, mock_session, mock_settings, mock_telegram, mock_user
+    ):
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        body, pending = await self._checkout(provider, mock_user, "monthly")
+
+        assert body["subscription"] == {"start_type": 1, "end_type": 1}
+        assert body["items"][0]["name"] == "Smart Guitar Pro Monthly"
+        assert body["items"][0]["price"] == "6.00"
+        assert pending["plan_type"] == "monthly"
+
+    @pytest.mark.parametrize(("plan_type", "days"), [("yearly", 365), ("monthly", 30)])
+    async def test_paid_checkout_activates_for_the_plan_period(
+        self, mock_session, mock_settings, mock_telegram, mock_user, plan_type, days
+    ):
+        pending = _allpay_sub(plan_type, status="pending", current_period_end=None)
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        mock_client = _mock_http_client(_make_response(200, {"status": "1"}))
+
+        with (
+            patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=False),
+            patch.object(provider._subscription_dao, "get_active_by_user", return_value=None),
+            patch.object(provider._subscription_dao, "get_pending_by_user", return_value=pending),
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
+            patch(
+                "guitar_player.services.allpay_provider.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
+        ):
+            result = await provider.get_status("sub-123", "test@example.com")
+
+        assert result.has_access is True
+        update = mock_update.call_args[1]
+        assert update["status"] == "active"
+        assert update["current_period_end"] - update["current_period_start"] == timedelta(days=days)
+
+    @pytest.mark.parametrize(("plan_type", "days"), [("yearly", 365), ("monthly", 30)])
+    async def test_payment_webhook_activates_for_the_plan_period(
+        self, mock_session, mock_settings, mock_telegram, mock_user, plan_type, days
+    ):
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        payload = {"status": "1", "order_id": "order-plan", "add_field_1": f"{mock_user.id}|sub-123"}
+        payload["sign"] = _allpay_sign(payload, "test-api-key")
+        request = MagicMock()
+        request.headers = {"content-type": "application/json"}
+        request.json = AsyncMock(return_value=payload)
+
+        with (
+            patch.object(provider._user_dao, "get_by_id", return_value=mock_user),
+            patch.object(
+                provider._subscription_dao, "get_by_external_id",
+                return_value=_allpay_sub(plan_type, status="pending"),
+            ),
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
+        ):
+            await provider.handle_webhook(request)
+
+        update = mock_update.call_args[1]
+        assert update["current_period_end"] - update["current_period_start"] == timedelta(days=days)
+        assert f"Plan: {plan_type}" in mock_telegram.send_event.call_args[0][0]
+
+    async def test_active_yearly_plan_is_not_rechecked_with_allpay(
+        self, mock_session, mock_settings, mock_telegram, mock_user
+    ):
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        with (
+            patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "has_any_subscription", return_value=True),
+            patch.object(
+                provider._subscription_dao, "get_active_by_user", return_value=_allpay_sub("yearly"),
+            ),
+            patch("guitar_player.services.allpay_provider.httpx.AsyncClient") as mock_http_cls,
+        ):
+            result = await provider.get_status("sub-123", "test@example.com")
+
+        mock_http_cls.assert_not_called()
+        assert result.has_access is True
+        assert result.subscription.plan_type == "yearly"
+
+    async def test_canceling_a_yearly_plan_is_local_only(
+        self, mock_session, mock_settings, mock_telegram, mock_user
+    ):
+        yearly = _allpay_sub("yearly")
+        provider = AllPayProvider(mock_session, mock_settings, mock_telegram)
+        with (
+            patch.object(provider._user_dao, "get_or_create", return_value=mock_user),
+            patch.object(provider._subscription_dao, "get_active_by_user", return_value=yearly),
+            patch.object(provider._subscription_dao, "update_by_id") as mock_update,
+            patch("guitar_player.services.allpay_provider.httpx.AsyncClient") as mock_http_cls,
+        ):
+            result = await provider.cancel_subscription("sub-123", "test@example.com")
+
+        mock_http_cls.assert_not_called()
+        assert mock_update.call_args[1]["status"] == "canceled"
+        assert result.effective_date == yearly.current_period_end
+
+
+# ── Tests: subscription access window (real DB) ───────────────────
+
+
+class TestActiveSubscriptionLookup:
+    async def _user_with(self, session, plan_type: str, period_end: datetime):
+        from guitar_player.dao.subscription_dao import SubscriptionDAO
+        from guitar_player.dao.user_dao import UserDAO
+
+        user = await UserDAO(session).get_or_create(f"sub-window-{uuid.uuid4().hex}", "window@test.com")
+        await SubscriptionDAO(session).create(
+            user_id=user.id,
+            provider=PaymentProvider.ALLPAY.value,
+            external_subscription_id=str(uuid.uuid4()),
+            external_customer_id=str(user.id),
+            status="active",
+            plan_type=plan_type,
+            current_period_start=period_end - timedelta(days=30),
+            current_period_end=period_end,
+        )
+        await session.commit()
+        return user
+
+    async def test_yearly_access_ends_with_its_paid_period(self, session_factory):
+        from guitar_player.dao.subscription_dao import SubscriptionDAO
+
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            expired = await self._user_with(session, "yearly", now - timedelta(seconds=1))
+            current = await self._user_with(session, "yearly", now + timedelta(days=1))
+            dao = SubscriptionDAO(session)
+            assert await dao.get_active_by_user(expired.id) is None
+            assert (await dao.get_active_by_user(current.id)).plan_type == "yearly"
+
+    async def test_monthly_access_still_follows_allpay_status(self, session_factory):
+        """Monthly renewals come from AllPay, so a stale period end doesn't revoke access."""
+        from guitar_player.dao.subscription_dao import SubscriptionDAO
+
+        async with session_factory() as session:
+            user = await self._user_with(
+                session, "monthly", datetime.now(timezone.utc) - timedelta(days=2),
+            )
+            assert (await SubscriptionDAO(session).get_active_by_user(user.id)).plan_type == "monthly"

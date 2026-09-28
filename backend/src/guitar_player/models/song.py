@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Uuid
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from guitar_player.models.base import Base, TimestampMixin, UUIDMixin
@@ -116,6 +116,17 @@ class Song(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     static_chords_attempted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Practice tags read from the chord files (see services/song_tags.py).
+    difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    chord_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Comma-separated chords of the easiest version, in order of first appearance.
+    easy_chords: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    easy_capo: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tempo_bpm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tags_computed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

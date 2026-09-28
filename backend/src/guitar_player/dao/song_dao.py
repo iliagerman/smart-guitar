@@ -4,13 +4,17 @@ import uuid
 from datetime import datetime
 from collections.abc import Sequence
 
-from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy import ColumnElement, case, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
 from guitar_player.models.song import Song
 from guitar_player.schemas.records import SongRecord
+
+
+# Songs a member can open and play along with: chords and the guitar stem exist.
+_PLAYABLE = (Song.chords_key.isnot(None), Song.guitar_key.isnot(None))
 
 
 class SongDAO(BaseDAO[Song, SongRecord]):
@@ -375,6 +379,38 @@ class SongDAO(BaseDAO[Song, SongRecord]):
             select(Song)
             .where(*conditions)
             .order_by(Song.like_count.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_record(obj) for obj in result.scalars().all()]
+
+    async def list_by_creation(self, offset: int, limit: int) -> list[SongRecord]:
+        """Songs oldest first (id tiebreak) -- a stable order for batch backfills."""
+        stmt = (
+            select(Song)
+            .order_by(Song.created_at.asc(), Song.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_record(obj) for obj in result.scalars().all()]
+
+    async def count_playable(self, filters: Sequence[ColumnElement[bool]]) -> int:
+        stmt = select(func.count()).select_from(Song).where(*_PLAYABLE, *filters)
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def list_playable(
+        self,
+        filters: Sequence[ColumnElement[bool]],
+        order_by: Sequence[ColumnElement],
+        offset: int,
+        limit: int,
+    ) -> list[SongRecord]:
+        stmt = (
+            select(Song)
+            .where(*_PLAYABLE, *filters)
+            .order_by(*order_by, Song.id.asc())
+            .offset(offset)
             .limit(limit)
         )
         result = await self._session.execute(stmt)

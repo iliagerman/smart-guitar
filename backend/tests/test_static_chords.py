@@ -699,7 +699,7 @@ async def test_song_detail_invalidates_legacy_community_sheet_before_display(
         async with factory() as session:
             detail = await get_song_detail(
                 song_id=song_id,
-                _user=MagicMock(),
+                access=MagicMock(is_pro=True),
                 song_service=_make_song_service(session, storage),
                 job_service=JobService(session, storage),
             )

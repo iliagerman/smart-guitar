@@ -10,8 +10,12 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.auth.admin import require_admin_user
-from guitar_player.auth.schemas import CurrentUser
-from guitar_player.auth.subscription_guard import require_active_subscription
+from guitar_player.auth.schemas import CurrentUser, MemberAccess
+from guitar_player.auth.subscription_guard import (
+    get_member_access,
+    require_active_subscription,
+    subscription_required,
+)
 from guitar_player.database import safe_session
 from guitar_player.dependencies import (
     get_artwork_service,
@@ -53,6 +57,11 @@ from guitar_player.services.analytics_helpers import (
 )
 from guitar_player.services.job_service import JobService
 from guitar_player.services.artwork_service import ArtworkService
+from guitar_player.services.free_tier import (
+    FREE_STEMS,
+    FREE_STREAM_FILES,
+    withhold_pro_stems,
+)
 from guitar_player.services.llm_service import LlmService
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.song_service import SongService
@@ -245,7 +254,7 @@ async def list_songs(
     genre: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    user: CurrentUser = Depends(require_active_subscription),
+    _access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> PaginatedSongsResponse:
     return await song_service.list_songs(query, genre, offset, limit)
@@ -260,7 +269,7 @@ async def top_songs(
     sort: str = Query("favorites", pattern="^(favorites|plays|recent)$"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    user: CurrentUser = Depends(require_active_subscription),
+    _access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> PaginatedSongsResponse:
     return await song_service.list_top_songs(genre, sort, offset, limit)
@@ -270,7 +279,7 @@ async def top_songs(
 async def recent_songs(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    user: CurrentUser = Depends(require_active_subscription),
+    _access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> PaginatedSongsResponse:
     return await song_service.list_recent_songs(offset, limit)
@@ -278,7 +287,7 @@ async def recent_songs(
 
 @router.get("/genres", response_model=GenreListResponse)
 async def list_genres(
-    user: CurrentUser = Depends(require_active_subscription),
+    _access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> GenreListResponse:
     genres = await song_service.list_genres()
@@ -289,7 +298,7 @@ async def list_genres(
 async def record_play(
     song_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> Response:
     song = await song_service.get_song(song_id)
@@ -298,7 +307,7 @@ async def record_play(
         background_tasks,
         event_type="song_played",
         event_category="player",
-        **analytics_identity_from_user(user),
+        **analytics_identity_from_user(access.user),
         song_id=song_id,
         song_title=song.title,
     )
@@ -319,11 +328,12 @@ async def generate_ai_strum_patterns(
 async def submit_feedback(
     song_id: uuid.UUID,
     body: SongFeedbackRequest,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
     telegram: TelegramService = Depends(get_telegram_service),
 ) -> Response:
     """Submit thumbs-up/down feedback for a song. Fire-and-forget to Telegram."""
+    user = access.user
     email = await song_service.resolve_user_email(user.sub, user.email)
     song = await song_service.get_song(song_id)
     emoji = "\U0001f44d" if body.rating == FeedbackRating.thumbs_up else "\U0001f44e"
@@ -365,12 +375,12 @@ async def delete_user_chords(
 async def vote_chord_version(
     song_id: uuid.UUID,
     body: ChordVersionVoteRequest,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> ChordVersionVoteResponse:
     """Submit or update a vote on a user-edited chord version."""
     return await song_service.vote_chord_version(
-        song_id, body.version_key, user.sub, body.vote,
+        song_id, body.version_key, access.user.sub, body.vote,
     )
 
 
@@ -384,11 +394,17 @@ async def get_playback_source(
         None,
         description="Comma-separated stem names. Omit or use full_mix for the original audio.",
     ),
-    _user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
 ) -> PlaybackSourceResponse:
-    """Return a single playable source URL for the requested playback selection."""
-    url = await song_service.resolve_playback_source(song_id, _parse_playback_stems(stems))
+    """Return a single playable source URL for the requested playback selection.
+
+    Free members get the full mix or the guitar stem alone; mixes need Pro.
+    """
+    requested = _parse_playback_stems(stems)
+    if not access.is_pro and not FREE_STEMS.issuperset(requested):
+        raise subscription_required()
+    url = await song_service.resolve_playback_source(song_id, requested)
     return PlaybackSourceResponse(url=url)
 
 
@@ -399,7 +415,7 @@ async def stream_song_file(
         ...,
         description="File type: audio, thumbnail, vocals, guitar, guitar_removed, vocals_guitar",
     ),
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     processing: ProcessingService = Depends(get_processing_service),
     storage: StorageBackend = Depends(get_storage),
     youtube: YoutubeService = Depends(get_youtube_service),
@@ -413,6 +429,8 @@ async def stream_song_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown stem: {stem}",
         )
+    if not access.is_pro and stem not in FREE_STREAM_FILES:
+        raise subscription_required()
 
     storage_key = await _get_stream_storage_key(
         song_id, col_name, storage, youtube, llm, artwork,
@@ -422,7 +440,7 @@ async def stream_song_file(
     if file_missing and stem in _REPROCESSABLE_STEMS:
         return await _handle_missing_stem(
             song_id, stem, col_name, storage_key,
-            processing, storage, user, youtube, llm, artwork,
+            processing, storage, access.user, youtube, llm, artwork,
         )
 
     if file_missing:
@@ -479,7 +497,7 @@ async def _handle_missing_stem(
 async def get_recommendations(
     song_id: uuid.UUID,
     limit: int = Query(10, ge=1, le=30),
-    user: CurrentUser = Depends(require_active_subscription),
+    _access: MemberAccess = Depends(get_member_access),
     recommendation_service: RecommendationService = Depends(get_recommendation_service),
 ) -> RecommendationsResponse:
     """Return similar song recommendations for the given song."""
@@ -489,11 +507,14 @@ async def get_recommendations(
 @router.get("/{song_id}", response_model=SongDetailResponse)
 async def get_song_detail(
     song_id: uuid.UUID,
-    _user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
     job_service: JobService = Depends(get_job_service),
 ) -> SongDetailResponse:
-    """Get song detail after validating optional community chord data."""
+    """Get song detail after validating optional community chord data.
+
+    Free members get every stem URL but the guitar withheld (stems_locked).
+    """
     try:
         await song_service.clear_download_if_audio_ready(song_id)
     except Exception as e:
@@ -518,6 +539,8 @@ async def get_song_detail(
     except Exception as e:
         logger.warning("Failed to fetch active job for %s: %s", song_id, e)
 
+    if not access.is_pro:
+        withhold_pro_stems(detail)
     return detail
 
 
@@ -564,12 +587,13 @@ class SelfHealResponse(BaseModel):
 async def self_heal_song(
     song_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     song_service: SongService = Depends(get_song_service),
     job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
 ) -> SelfHealResponse:
     """Start repair after the client detects missing playback assets."""
+    user = access.user
     await song_service.get_song_record(song_id)
     active = await job_service.get_active_job_for_song(song_id)
     if not active:

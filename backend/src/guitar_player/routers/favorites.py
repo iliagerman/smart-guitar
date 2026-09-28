@@ -4,8 +4,8 @@ import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
-from guitar_player.auth.schemas import CurrentUser
-from guitar_player.auth.subscription_guard import require_active_subscription
+from guitar_player.auth.schemas import MemberAccess
+from guitar_player.auth.subscription_guard import get_member_access
 from guitar_player.dependencies import get_favorite_service
 from guitar_player.schemas.favorite import (
     AddFavoriteRequest,
@@ -29,19 +29,19 @@ router = APIRouter(prefix="/favorites", tags=["favorites"])
 async def add_favorite(
     body: AddFavoriteRequest,
     background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> FavoriteResponse:
     favorite = await favorite_service.add_favorite(
-        user_sub=user.sub,
-        user_email=user.email,
+        user_sub=access.user.sub,
+        user_email=access.user.email,
         song_id=body.song_id,
     )
     track_event(
         background_tasks,
         event_type="favorite_added",
         event_category="songs",
-        **analytics_identity_from_user(user),
+        **analytics_identity_from_user(access.user),
         song_id=body.song_id,
     )
     return favorite
@@ -51,19 +51,19 @@ async def add_favorite(
 async def remove_favorite(
     song_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> None:
     await favorite_service.remove_favorite(
-        user_sub=user.sub,
-        user_email=user.email,
+        user_sub=access.user.sub,
+        user_email=access.user.email,
         song_id=song_id,
     )
     track_event(
         background_tasks,
         event_type="favorite_removed",
         event_category="songs",
-        **analytics_identity_from_user(user),
+        **analytics_identity_from_user(access.user),
         song_id=song_id,
     )
 
@@ -72,10 +72,10 @@ async def remove_favorite(
 async def list_favorites(
     offset: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=1000),
-    user: CurrentUser = Depends(require_active_subscription),
+    access: MemberAccess = Depends(get_member_access),
     favorite_service: FavoriteService = Depends(get_favorite_service),
 ) -> FavoriteListResponse:
     favorites = await favorite_service.list_favorites(
-        user_sub=user.sub, offset=offset, limit=limit
+        user_sub=access.user.sub, offset=offset, limit=limit
     )
     return FavoriteListResponse(favorites=favorites)

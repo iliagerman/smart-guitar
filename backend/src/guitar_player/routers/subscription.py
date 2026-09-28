@@ -12,12 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from guitar_player.auth.admin import require_admin_user
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
-from guitar_player.auth.subscription_guard import _is_bypass_user
+from guitar_player.auth.subscription_guard import _is_bypass_user, local_dev_access
 from guitar_player.config import Settings, get_settings
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.dependencies import get_db, get_payment_provider, get_telegram_service
 from guitar_player.schemas.subscription import (
+    AccessTier,
     CancelSubscriptionResponse,
     CheckoutRequest,
     CheckoutResponse,
@@ -41,6 +42,12 @@ ONBOARDING_SONG_NAME = "rem/losing_my_religion"
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
 
+def _access_tier(sub_status: SubscriptionStatusResponse) -> AccessTier:
+    if not sub_status.has_access:
+        return AccessTier.FREE
+    return AccessTier.TRIAL if sub_status.trial_active else AccessTier.PRO
+
+
 @router.get("/status", response_model=SubscriptionStatusResponse)
 async def get_subscription_status(
     background_tasks: BackgroundTasks,
@@ -54,8 +61,13 @@ async def get_subscription_status(
     is_new = (await user_dao.get_by_cognito_sub(user.sub)) is None
 
     sub_status = await provider.get_status(user.sub, user.email)
-    if not sub_status.has_access and _is_bypass_user(user.email, settings):
+    local_access = local_dev_access(settings)
+    if local_access is not None:
+        sub_status.has_access = local_access
+        sub_status.trial_active = sub_status.trial_active and local_access
+    elif not sub_status.has_access and _is_bypass_user(user.email, settings):
         sub_status.has_access = True
+    sub_status.tier = _access_tier(sub_status)
 
     db_user = await user_dao.get_or_create(user.sub, user.email)
     sub_status.has_seen_onboarding = db_user.has_seen_onboarding

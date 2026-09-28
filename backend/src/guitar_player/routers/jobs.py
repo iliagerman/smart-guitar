@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from guitar_player.auth.dependencies import get_current_user
 from guitar_player.auth.schemas import CurrentUser
+from guitar_player.auth.subscription_guard import require_active_subscription
 from guitar_player.dao.job_dao import JobDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
@@ -30,7 +31,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 async def create_job(
     body: CreateJobRequest,
     background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_active_subscription),
     job_service: JobService = Depends(get_job_service),
     processing: ProcessingService = Depends(get_processing_service),
 ) -> JobResponse:

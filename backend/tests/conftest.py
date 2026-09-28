@@ -137,6 +137,28 @@ def _create_tables():
             Path(db_path).unlink(missing_ok=True)
 
 
+# ── In-process API fixtures ────────────────────────────────────────
+
+
+@pytest.fixture
+async def api(settings, storage):
+    """Routers served in-process over httpx; call ``api.sign_in(user)`` first."""
+    from tests.api_harness import open_harness
+
+    async for harness in open_harness(settings, storage):
+        yield harness
+
+
+@pytest.fixture
+async def song_factory(session_factory, settings):
+    """Creates songs with storage files; removes them after the test."""
+    from tests.api_harness import SongFactory
+
+    factory = SongFactory(session_factory, settings)
+    yield factory
+    await factory.cleanup()
+
+
 # ── Project root & server fixtures ─────────────────────────────────
 
 

@@ -3,10 +3,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
+from guitar_player.enums import PaymentProvider, PlanType
 from guitar_player.models.subscription import Subscription
 from guitar_player.schemas.records import SubscriptionRecord
 
@@ -16,11 +17,22 @@ class SubscriptionDAO(BaseDAO[Subscription, SubscriptionRecord]):
         super().__init__(session, Subscription, SubscriptionRecord)
 
     async def get_active_by_user(self, user_id: uuid.UUID) -> SubscriptionRecord | None:
-        stmt = select(Subscription).where(
-            and_(
+        # AllPay yearly plans are one-time payments with no provider-side
+        # renewal, so they stop granting access once their paid period ends.
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(Subscription)
+            .where(
                 Subscription.user_id == user_id,
                 Subscription.status.in_(["active", "trialing", "past_due"]),
+                or_(
+                    Subscription.provider != PaymentProvider.ALLPAY.value,
+                    Subscription.plan_type != PlanType.YEARLY.value,
+                    Subscription.current_period_end > now,
+                ),
             )
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
         )
         result = await self._session.execute(stmt)
         obj = result.scalar_one_or_none()
