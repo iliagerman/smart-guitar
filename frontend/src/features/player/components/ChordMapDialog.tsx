@@ -71,7 +71,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                     type="button"
                     className={cn(
                         iconOnly
-                            ? 'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl'
+                            ? 'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl'
                             : 'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
                         'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)]',
                         'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
@@ -83,7 +83,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                 >
                     {iconOnly ? (
                         <>
-                            <ChordMapIcon size={30} />
+                            <ChordMapIcon size={22} />
                             <span className="text-[11px] font-medium text-smoke-200">Chords</span>
                         </>
                     ) : (

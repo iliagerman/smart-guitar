@@ -4,14 +4,14 @@ import { CreditCard, Calendar, AlertTriangle } from 'lucide-react'
 import { useSubscription } from '../hooks/use-subscription'
 import { subscriptionApi } from '@/api/subscription.api'
 import { queryKeys } from '@/api/query-keys'
-import { PaywallDialog } from './PaywallDialog'
+import { usePaywallStore } from '@/stores/paywall.store'
 import { cn } from '@/lib/cn'
 import { Skeleton } from '@/components/shared/Skeleton'
 
 export function SubscriptionSection() {
   const { data: status, isLoading } = useSubscription()
   const queryClient = useQueryClient()
-  const [showPaywall, setShowPaywall] = useState(false)
+  const openPaywall = usePaywallStore((s) => s.openPaywall)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   const cancelMutation = useMutation({
@@ -68,7 +68,7 @@ export function SubscriptionSection() {
             </p>
             <button
               type="button"
-              onClick={() => setShowPaywall(true)}
+              onClick={() => openPaywall('upgrade')}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
               data-testid="subscription-subscribe-button"
             >
@@ -152,7 +152,7 @@ export function SubscriptionSection() {
             <p className="text-smoke-400 text-sm">You do not have an active subscription.</p>
             <button
               type="button"
-              onClick={() => setShowPaywall(true)}
+              onClick={() => openPaywall('upgrade')}
               className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
               data-testid="subscription-subscribe-no-trial-button"
             >
@@ -162,11 +162,6 @@ export function SubscriptionSection() {
         )}
       </div>
 
-      <PaywallDialog
-        open={showPaywall}
-        onOpenChange={setShowPaywall}
-        trialEndsAt={status.trial_ends_at}
-      />
     </>
   )
 }

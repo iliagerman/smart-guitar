@@ -1,6 +1,7 @@
 import { api } from '../config/api'
 import type { MessageResponse, PaginatedResponse } from '../types/api'
 import type { ActiveJobInfo, ChordEntry, LyricsSegment, Song, SongDetail, SongSection, SearchResult } from '../types/song'
+import type { Setlist, SkillLevel } from '../types/practice'
 
 interface SaveUserChordsPayload {
   name: string
@@ -55,6 +56,16 @@ export const songsApi = {
   list: (params?: { query?: string; offset?: number; limit?: number }) =>
     api
       .get<PaginatedResponse<Song>>('/api/v1/songs', { params })
+      .then((r) => r.data),
+
+  setlists: (level: SkillLevel | null) =>
+    api
+      .get<{ items: Setlist[] }>('/api/v1/songs/setlists', { params: level ? { level } : undefined })
+      .then((r) => r.data.items),
+
+  setlistSongs: (setlistId: string, params: { skip: number; limit: number }) =>
+    api
+      .get<PaginatedResponse<Song>>(`/api/v1/songs/setlists/${setlistId}`, { params })
       .then((r) => r.data),
 
   recent: (limit = 10) =>

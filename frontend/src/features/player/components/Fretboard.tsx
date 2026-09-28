@@ -68,6 +68,8 @@ const columnCenterPct = (stringIdx: number): number => ((stringIdx + 0.5) / STRI
 interface FretboardProps {
   voicing: ChordVoicing
   className?: string
+  /** Height of one fret row in px; smaller values make a compact diagram. */
+  rowHeight?: number
 }
 
 /**
@@ -75,9 +77,9 @@ interface FretboardProps {
  * the fret grid, finger dots (with finger numbers), and any barres. Absolute fret
  * numbers in the voicing are mapped onto a window starting at `voicing.baseFret`.
  */
-export function Fretboard({ voicing, className }: FretboardProps) {
+export function Fretboard({ voicing, className, rowHeight = ROW_HEIGHT_PX }: FretboardProps) {
   const { rows, showNut, dots, barreMarkers } = useMemo(() => computeLayout(voicing), [voicing])
-  const boardHeight = rows * ROW_HEIGHT_PX
+  const boardHeight = rows * rowHeight
   const rowTopPct = (row: number): number => ((row - 0.5) / rows) * 100
 
   return (
@@ -131,7 +133,7 @@ export function Fretboard({ voicing, className }: FretboardProps) {
                 left: `${left}%`,
                 width: `${right - left}%`,
                 top: `${rowTopPct(barre.row)}%`,
-                height: `${ROW_HEIGHT_PX * 0.66}px`,
+                height: `${rowHeight * 0.66}px`,
                 transform: 'translateY(-50%)',
               }}
             >
@@ -148,8 +150,8 @@ export function Fretboard({ voicing, className }: FretboardProps) {
             style={{
               left: `${columnCenterPct(dot.stringIdx)}%`,
               top: `${rowTopPct(dot.row)}%`,
-              width: `${ROW_HEIGHT_PX * 0.78}px`,
-              height: `${ROW_HEIGHT_PX * 0.78}px`,
+              width: `${rowHeight * 0.78}px`,
+              height: `${rowHeight * 0.78}px`,
               transform: 'translate(-50%, -50%)',
             }}
           >

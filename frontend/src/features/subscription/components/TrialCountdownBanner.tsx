@@ -1,14 +1,14 @@
 import { X } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useSubscription } from '../hooks/use-subscription'
 import { shouldShowTrialCountdown, getTrialDaysRemaining } from '../lib/trial-countdown'
 import { useTrialBannerStore } from '@/stores/trial-banner.store'
-import { ROUTES } from '@/router/routes'
+import { usePaywallStore } from '@/stores/paywall.store'
 
 export function TrialCountdownBanner() {
   const { data: status } = useSubscription()
   const dismissed = useTrialBannerStore((s) => s.dismissed)
   const dismiss = useTrialBannerStore((s) => s.dismiss)
+  const openPaywall = usePaywallStore((s) => s.openPaywall)
 
   const trialEndsAt = status?.trial_ends_at
 
@@ -24,14 +24,15 @@ export function TrialCountdownBanner() {
       data-testid="trial-countdown-banner"
     >
       <span>
-        Your free trial ends in {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} —{' '}
-        <Link
-          to={ROUTES.PROFILE}
+        Your Pro trial ends in {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} —{' '}
+        <button
+          type="button"
+          onClick={() => openPaywall('upgrade')}
           className="font-semibold text-flame-400 hover:text-flame-500 transition-colors"
           data-testid="trial-countdown-banner-subscribe-link"
         >
-          Subscribe
-        </Link>
+          Keep the band
+        </button>
       </span>
       <button
         type="button"

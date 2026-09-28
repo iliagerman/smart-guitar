@@ -19,7 +19,15 @@ export function RegisterPage() {
       />
       <div className="absolute inset-0 bg-charcoal-950/70" />
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center">
-        <div className="w-full max-w-sm flex flex-col items-center gap-8">
+        <div className="w-full max-w-sm flex flex-col items-center gap-6">
+          <div className="text-center">
+            <h1 className="font-display text-5xl leading-[0.92] tracking-wide text-smoke-100">
+              LEARN IT.<br />THEN PLAY IT<br />WITH THE <span className="text-fire-500">BAND.</span>
+            </h1>
+            <p className="mt-3 text-sm text-smoke-300">
+              14-day Pro trial, no card. Hear it and Learn it stay free for every song.
+            </p>
+          </div>
           <RegisterForm />
         </div>
       </div>

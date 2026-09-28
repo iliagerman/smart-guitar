@@ -7,6 +7,7 @@ const NOW = new Date('2026-07-02T00:00:00.000Z')
 function buildStatus(overrides: Partial<SubscriptionStatus>): SubscriptionStatus {
   return {
     has_access: true,
+    tier: 'pro',
     trial_ends_at: null,
     trial_active: false,
     subscription: null,

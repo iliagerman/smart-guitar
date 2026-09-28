@@ -10,6 +10,7 @@ import { ShareDialog } from './ShareDialog'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { cn } from '@/lib/cn'
+import { useProAccess } from '@/features/subscription/hooks/use-pro-access'
 
 type RecordingMode = 'audio' | 'video'
 
@@ -38,6 +39,7 @@ function buildFilename(artist: string, songTitle: string): string {
  * Auto-record uses the store default without showing the picker.
  */
 export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButtonProps) {
+  const { requirePro } = useProAccess()
   const headphonesMode = usePlayerPrefsStore((s) => s.headphonesMode)
   const recordingGuitarGain = usePlayerPrefsStore((s) => s.recordingGuitarGain)
   const recordingBackingGain = usePlayerPrefsStore((s) => s.recordingBackingGain)
@@ -135,6 +137,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
   }, [])
 
   const handleRecordButtonClick = () => {
+    if (!isRecording && !requirePro('record')) return
     if (isRecording) {
       stopRecording(false)
       toast.success('Recording ready')
@@ -175,7 +178,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
             type="button"
             onClick={handleRecordButtonClick}
             className={cn(
-              'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+              'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
               'border shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors',
               'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
               isRecording
@@ -194,7 +197,7 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
               </div>
             ) : (
               <>
-                <Circle size={27} className="fill-current text-red-500 transition-colors" />
+                <Circle size={20} className="fill-current text-red-500 transition-colors" />
                 <span className="text-[11px] font-medium text-smoke-200">Record</span>
               </>
             )}

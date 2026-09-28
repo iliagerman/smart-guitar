@@ -50,6 +50,19 @@
   --color-smoke-400: #a8a29e;
   --color-smoke-500: #78716c;
   --color-smoke-600: #57534e;
+
+  /* Practice "notebook" cards: warm paper with ink text. */
+  --color-paper-50: #f6f1e9;
+  --color-paper-100: #efe7da;
+  --color-paper-200: #e2d8c8;
+  --color-ink-400: #8a8178;
+  --color-ink-600: #57534e;
+  --color-ink-900: #1c1917;
+
+  /* The stage: near-black with a fire spotlight. */
+  --color-stage-950: #07060a;
+  --color-stage-900: #110e15;
+  --color-stage-800: #1b1720;
 }
 
 html,

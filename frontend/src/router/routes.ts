@@ -9,6 +9,7 @@ export const ROUTES = {
   FAVORITES: '/favorites',
   ANALYTICS: '/analytics',
   SONG_DETAIL: '/songs/:songId',
+  SETLIST: '/setlists/:setlistId',
   TUNER: '/tuner',
   METRONOME: '/metronome',
   PROFILE: '/profile',
@@ -18,4 +19,8 @@ export const ROUTES = {
 
 export function songDetailPath(songId: string) {
   return `/songs/${songId}`
+}
+
+export function setlistPath(setlistId: string) {
+  return `/setlists/${setlistId}`
 }

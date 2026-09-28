@@ -849,6 +849,60 @@ admin-seed-populate-dry-run base_url="http://localhost:8002" token="":
             -H "Authorization: Bearer ${token_value}" \
         | python3 -u "${PROJECT_DIR}/scripts/ndjson_progress.py"
 
+# Only reads storage; writes DB columns. Loops the admin retag endpoint `limit`
+# songs at a time (50 keeps each request well under the load balancer timeout)
+# until next_offset is null.
+#
+# Token handling:
+# - If token is provided: uses it.
+# - Otherwise: loads admin.api-key from prod.secrets.yml (smart-guitar.com URLs)
+#   or secrets.yml (anything else).
+#
+# Examples:
+#   just admin-retag-songs                                    # production
+#   just admin-retag-songs "http://localhost:8002"            # local backend
+#   just admin-retag-songs "https://api.smart-guitar.com" "" true   # recompute tagged songs too
+#
+# Backfill song practice tags (difficulty, easy chords, capo, tempo) from stored chord files.
+admin-retag-songs base_url="https://api.smart-guitar.com" token="" force="false" limit="50":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    PROJECT_DIR="{{project_dir}}"
+    token_value="{{token}}"
+
+    if [[ -z "$token_value" ]]; then
+        if [[ "{{base_url}}" == *"smart-guitar.com"* ]]; then
+            secrets_file="${PROJECT_DIR}/prod.secrets.yml"
+        else
+            secrets_file="${PROJECT_DIR}/secrets.yml"
+        fi
+
+        if [[ -f "$secrets_file" ]]; then
+            token_value="$(
+                cd "${PROJECT_DIR}/backend" \
+                    && APP_ENV=local uv run python -c 'import sys, yaml; from pathlib import Path; p=Path(sys.argv[1]); d=yaml.safe_load(p.read_text()) or {}; t=(d.get("admin") or {}).get("api-key"); print(t or "")' \
+                    "$secrets_file"
+            )"
+        fi
+
+        if [[ -z "$token_value" ]]; then
+            echo "admin.api-key not found in ${secrets_file}" >&2
+            exit 1
+        fi
+    fi
+
+    echo "==> Retagging songs via {{base_url}} (force={{force}}) ..."
+    offset=0
+    while [[ -n "$offset" ]]; do
+        resp="$(curl -sS --fail-with-body --max-time 900 -X POST \
+            "{{base_url}}/api/v1/admin/songs/retag?offset=${offset}&limit={{limit}}&force={{force}}" \
+            -H "Authorization: Bearer ${token_value}")"
+        echo "  offset=${offset}: ${resp}"
+        offset="$(printf '%s' "$resp" | python3 -c 'import json, sys; n = json.load(sys.stdin).get("next_offset"); print("" if n is None else n)')"
+    done
+    echo "==> Retag complete."
+
 # Drop a single song by ID, including all storage files.
 #
 # Token handling:
@@ -1347,6 +1401,18 @@ test-song-metronome:
     npx playwright test --config playwright.capo.config.ts song-metronome
 
 # Run frontend unit/integration tests (Vitest). Optionally pass a file or pattern.
+# Isolated practice-path checks: home, setlists, band stage, practice steps, paywall (see TESTING.md).
+test-practice:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sandbox="$(mktemp -d)"
+    trap 'rm -rf "$sandbox"' EXIT
+    export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    export HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" XDG_CACHE_HOME="$sandbox/cache" TMPDIR="$sandbox/tmp"
+    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
+    cd "{{project_dir}}/frontend"
+    npx playwright test --config playwright.capo.config.ts practice-path trial-countdown-banner
+
 test-frontend *args:
     cd {{project_dir}}/frontend && npm run test -- {{args}}
 

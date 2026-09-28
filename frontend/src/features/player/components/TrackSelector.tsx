@@ -36,7 +36,7 @@ export function TrackSelector({
         <button
           type="button"
           className={cn(
-            'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl border bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur transition-colors',
+            'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl border bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur transition-colors',
             isDisabled
               ? 'cursor-not-allowed border-white/10 opacity-50'
               : 'border-white/10 hover:border-flame-400/30 hover:text-flame-400',
@@ -47,7 +47,7 @@ export function TrackSelector({
           data-testid="track-selector"
           disabled={isDisabled}
         >
-          <MixerIcon size={31} />
+          <MixerIcon size={22} />
           <span className="text-[11px] font-medium text-smoke-200">Mixer</span>
         </button>
       </Popover.Trigger>

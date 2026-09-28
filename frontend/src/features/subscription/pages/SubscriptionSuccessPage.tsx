@@ -6,6 +6,7 @@ import { queryKeys } from '@/api/query-keys'
 import { subscriptionApi } from '@/api/subscription.api'
 import { ROUTES } from '@/router/routes'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
+import { trackEvent } from '@/lib/meta-pixel'
 
 export function SubscriptionSuccessPage() {
   const navigate = useNavigate()
@@ -23,7 +24,11 @@ export function SubscriptionSuccessPage() {
       try {
         const status = await subscriptionApi.getStatus()
         if (cancelled) return
-        if (status.has_access) {
+        // Trial users already have access, so wait for the paid plan itself.
+        if (status.subscription?.status === 'active') {
+          const value = status.subscription.plan_type === 'yearly' ? 50 : 6
+          trackEvent('Purchase', { currency: 'USD', value })
+          trackEvent('Subscribe', { currency: 'USD', value, predicted_ltv: value })
           queryClient.invalidateQueries({ queryKey: queryKeys.subscription.all })
           setChecking(false)
           timer = setTimeout(() => navigate(ROUTES.LIBRARY, { replace: true }), 2000)

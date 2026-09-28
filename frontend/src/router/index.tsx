@@ -5,7 +5,6 @@ import { AuthGuard } from '@/features/auth/components/AuthGuard'
 import { SubscriptionGuard } from '@/features/subscription/components/SubscriptionGuard'
 import { AdminGuard } from '@/features/analytics/components/AdminGuard'
 import { SuspenseWrapper } from '@/components/shared/SuspenseWrapper'
-import { OnboardingRedirect } from '@/features/subscription/components/OnboardingRedirect'
 import { ROUTES } from './routes'
 
 const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -16,6 +15,7 @@ const ProfilePage = lazy(() => import('@/features/auth/pages/ProfilePage').then(
 const AnalyticsDashboardPage = lazy(() => import('@/features/analytics/pages/AnalyticsDashboardPage').then(m => ({ default: m.AnalyticsDashboardPage })))
 const SongsPage = lazy(() => import('@/features/songs/pages/SongsPage').then(m => ({ default: m.SongsPage })))
 const FavoritesPage = lazy(() => import('@/features/library/pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
+const SetlistPage = lazy(() => import('@/features/songs/pages/SetlistPage').then(m => ({ default: m.SetlistPage })))
 const SongDetailPage = lazy(() => import('@/features/player/pages/SongDetailPage').then(m => ({ default: m.SongDetailPage })))
 const SubscriptionSuccessPage = lazy(() => import('@/features/subscription/pages/SubscriptionSuccessPage').then(m => ({ default: m.SubscriptionSuccessPage })))
 const SubscriptionFailPage = lazy(() => import('@/features/subscription/pages/SubscriptionFailPage').then(m => ({ default: m.SubscriptionFailPage })))
@@ -38,9 +38,7 @@ export const router = createBrowserRouter([
         element: (
           <AuthGuard>
             <SubscriptionGuard>
-              <OnboardingRedirect>
-                <SuspenseWrapper><SongsPage /></SuspenseWrapper>
-              </OnboardingRedirect>
+              <SuspenseWrapper><SongsPage /></SuspenseWrapper>
             </SubscriptionGuard>
           </AuthGuard>
         ),
@@ -65,6 +63,16 @@ export const router = createBrowserRouter([
             <AdminGuard>
               <SuspenseWrapper><AnalyticsDashboardPage /></SuspenseWrapper>
             </AdminGuard>
+          </AuthGuard>
+        ),
+      },
+      {
+        path: ROUTES.SETLIST,
+        element: (
+          <AuthGuard>
+            <SubscriptionGuard>
+              <SuspenseWrapper><SetlistPage /></SuspenseWrapper>
+            </SubscriptionGuard>
           </AuthGuard>
         ),
       },

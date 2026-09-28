@@ -12,7 +12,16 @@ export interface Song {
   audio_key: string | null
   play_count: number
   created_at: string | null
+  /** Difficulty of the song's easiest chord version, computed from its chords. */
+  difficulty?: SongDifficulty | null
+  chord_count?: number | null
+  /** Shapes of the easiest version in order of first appearance, e.g. ["Em", "G", "D"]. */
+  easy_chords?: string[]
+  easy_capo?: number | null
+  tempo_bpm?: number | null
 }
+
+export type SongDifficulty = 'easy' | 'medium' | 'hard'
 
 export interface SongStems {
   [key: string]: string | null
@@ -167,6 +176,8 @@ export interface SongDetail {
   active_job: ActiveJobInfo | null
   download_pending: boolean
   needs_self_heal: boolean
+  /** True when the backing-band stems were withheld because the user is on the free plan. */
+  stems_locked?: boolean
 }
 
 export interface SearchResult {

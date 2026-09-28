@@ -44,21 +44,36 @@ function splitSongName(songName: string | null | undefined): { artistSlug: strin
   return { artistSlug, songSlug }
 }
 
+/**
+ * True for names that are already written for people ("AC/DC", "Knockin' On
+ * Heaven's Door", Hebrew titles) rather than lowercase storage slugs ("rem",
+ * "you_shook_me").
+ */
+function looksHuman(value: string): boolean {
+  return !value.includes('_') && /[\p{Lu}]|[^\p{Ll}\p{N}\s-]/u.test(value)
+}
+
+/** Title-cases a slug, single lowercase words included ("rem" -> "Rem"). */
+function slugDisplay(slug: string): string {
+  const titled = slugToTitleCase(slug)
+  return /^[a-z]/.test(titled) ? titled.charAt(0).toUpperCase() + titled.slice(1) : titled
+}
+
+function displayName(dbValue: string | null, slug: string): string {
+  const value = (dbValue ?? '').trim()
+  if (value && looksHuman(value)) return value
+  return slugDisplay(slug) || slugToTitleCase(value)
+}
+
 export function displaySongTitle(song: { title: string; song_name: string } | null | undefined): string {
   if (!song) return ''
-  const { songSlug } = splitSongName(song.song_name)
-  return slugToTitleCase(songSlug) || song.title
+  return displayName(song.title, splitSongName(song.song_name).songSlug)
 }
 
 export function displayArtistName(song: { artist: string | null; song_name: string } | null | undefined): string {
   if (!song) return ''
-  const { artistSlug } = splitSongName(song.song_name)
-
-  // Prefer the song_name slug because DB `artist` may be either snake_case or already human.
-  const fromSlug = slugToTitleCase(artistSlug)
-  if (fromSlug) return fromSlug
-
-  return slugToTitleCase(song.artist) || (song.artist ?? '')
+  // DB `artist` may be snake_case or already human; prefer it only when it reads well.
+  return displayName(song.artist, splitSongName(song.song_name).artistSlug)
 }
 
 /**

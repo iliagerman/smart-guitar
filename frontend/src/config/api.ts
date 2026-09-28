@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { env } from './env'
 import { useAuthStore } from '../stores/auth.store'
 import { useSubscriptionStore } from '../stores/subscription.store'
+import { usePaywallStore } from '../stores/paywall.store'
 
 export const api = axios.create({
   baseURL: env.apiBaseUrl,
@@ -45,15 +46,10 @@ api.interceptors.response.use(
       error.response?.status === 403 &&
       error.response?.data?.detail?.error_code === 'SUBSCRIPTION_REQUIRED'
     ) {
-      useSubscriptionStore.getState().setStatus({
-        has_access: false,
-        trial_ends_at: null,
-        trial_active: false,
-        subscription: null,
-        has_seen_onboarding: false,
-        is_admin: false,
-        onboarding_song_id: null,
-      })
+      // The server says this action is Pro-only: reflect the free tier and pitch Pro.
+      const { status, setStatus } = useSubscriptionStore.getState()
+      if (status) setStatus({ ...status, has_access: false, tier: 'free', trial_active: false })
+      usePaywallStore.getState().openPaywall('upgrade')
       return Promise.reject(error)
     }
 

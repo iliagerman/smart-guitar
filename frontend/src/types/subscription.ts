@@ -5,8 +5,12 @@ export interface SubscriptionDetail {
   canceled_at: string | null
 }
 
+export type SubscriptionTier = 'trial' | 'pro' | 'free'
+
 export interface SubscriptionStatus {
+  /** True for Pro access: an active trial or a paid subscription. */
   has_access: boolean
+  tier: SubscriptionTier
   trial_ends_at: string | null
   trial_active: boolean
   subscription: SubscriptionDetail | null

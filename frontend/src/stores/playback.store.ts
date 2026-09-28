@@ -43,6 +43,8 @@ interface PlaybackState {
    * loop end (swapping if it lands before the start), 3rd tap clears the loop.
    */
   tapLoopMarker: (time: number) => void
+  /** Sets both loop points at once (e.g. the practice path looping a verse). */
+  setLoop: (start: number, end: number) => void
   clearLoop: () => void
   reset: () => void
 }
@@ -97,6 +99,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
       set({ loopStart: null, loopEnd: null })
     }
   },
+  setLoop: (start, end) => set({ loopStart: start, loopEnd: end }),
   clearLoop: () => set({ loopStart: null, loopEnd: null }),
   reset: () =>
     set({

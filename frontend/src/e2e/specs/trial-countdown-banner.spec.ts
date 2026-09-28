@@ -8,6 +8,7 @@ function mockSubscriptionStatus(page: Page, overrides: { trial_active: boolean; 
       contentType: 'application/json',
       body: JSON.stringify({
         has_access: true,
+        tier: overrides.trial_active ? 'trial' : 'pro',
         trial_ends_at: overrides.trial_ends_at,
         trial_active: overrides.trial_active,
         subscription: null,
@@ -24,6 +25,9 @@ function daysFromNow(days: number): string {
 }
 
 test.describe('Trial countdown banner', () => {
+  // The banner checks use the desktop sidebar for navigation.
+  test.skip(({ viewport }) => (viewport?.width ?? 1280) < 1024, 'desktop layout only')
+
   test('shows when the trial has 3 or fewer days remaining', async ({ authenticatedPage: page }) => {
     await mockSubscriptionStatus(page, { trial_active: true, trial_ends_at: daysFromNow(2) })
 
@@ -51,13 +55,13 @@ test.describe('Trial countdown banner', () => {
     await expect(page.getByTestId('trial-countdown-banner')).toHaveCount(0)
   })
 
-  test('clicking subscribe navigates to the profile page', async ({ authenticatedPage: page }) => {
+  test('clicking the banner link opens the paywall', async ({ authenticatedPage: page }) => {
     await mockSubscriptionStatus(page, { trial_active: true, trial_ends_at: daysFromNow(1) })
 
     await page.goto('/tuner')
     await page.getByTestId('trial-countdown-banner-subscribe-link').click()
 
-    await expect(page).toHaveURL(/\/profile/)
+    await expect(page.getByTestId('paywall-dialog')).toBeVisible()
   })
 
   test('dismissing the banner hides it for the rest of the session', async ({ authenticatedPage: page }) => {

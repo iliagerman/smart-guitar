@@ -4,6 +4,7 @@ import { songDetailPath } from '@/router/routes'
 import { formatDuration } from '@/lib/format-duration'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import type { Song } from '@/types/song'
+import { DifficultyBadge } from './DifficultyBadge'
 
 interface SongCardProps {
   song: Song
@@ -29,6 +30,17 @@ export function SongCard({ song }: SongCardProps) {
       <div className="flex-1 min-w-0">
         <p className="truncate text-base font-bold tracking-[-0.02em] text-smoke-100">{displaySongTitle(song)}</p>
         <p className="truncate text-sm text-smoke-400">{displayArtistName(song)}</p>
+        {song.difficulty && (
+          <p className="mt-1 flex min-w-0 items-center gap-2">
+            <DifficultyBadge difficulty={song.difficulty} />
+            {(song.easy_chords?.length ?? 0) > 0 && (
+              <span className="truncate font-mono text-[11px] text-smoke-400" dir="ltr">
+                {song.easy_chords?.join(' · ')}
+                {song.easy_capo ? ` · capo ${song.easy_capo}` : ''}
+              </span>
+            )}
+          </p>
+        )}
       </div>
       {(song.duration_seconds ?? 0) > 0 && (
         <span className="shrink-0 font-mono text-sm font-semibold text-flame-300">

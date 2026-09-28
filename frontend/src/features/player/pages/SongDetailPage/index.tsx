@@ -12,7 +12,6 @@ import { resumeTickContext } from '../../lib/count-in-audio'
 import { formatChordWithBass } from '@/lib/chord-colors'
 import { normalizeWords } from '../../lib/normalize-words'
 import { getRepresentativeSongStrumPattern, getTabStrumPatterns } from '../../lib/strum-pattern'
-import { OnboardingTour } from '../../components/OnboardingTour'
 import { LyricsSyncDebug } from '../../components/LyricsSyncDebug'
 import { useRotatingText } from '@/features/search/hooks/use-rotating-text'
 import { BlockingErrorState } from '@/components/shared/BlockingErrorState'
@@ -43,6 +42,8 @@ import { PlayerControls } from './PlayerControls'
 import { SongContent } from './SongContent'
 import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
+import { SongStage } from './SongStage'
+import { useProAccess } from '@/features/subscription/hooks/use-pro-access'
 import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
 import {
   buildSheetVersions,
@@ -216,6 +217,7 @@ export function SongDetailPage() {
   const [showTutorial, setShowTutorial] = useState(false)
   const [showDeleteChordsConfirm, setShowDeleteChordsConfirm] = useState(false)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
+  const { isPro, requirePro } = useProAccess()
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
   const loadingLabel = useRotatingText(
@@ -309,6 +311,13 @@ export function SongDetailPage() {
   // Users adjust per-stem volume in the mixer; there's no on/off selection.
   useEffect(() => {
     if (!detail) return
+    // Free plan: only the guitar stem is available, so the page plays the full
+    // mix and the guitar on its own ("Hear it" / "Learn it") — never a partial band.
+    if (detail.stems_locked) {
+      const guitarOnly = !isFullSong && activeStems.length === 1 && activeStems[0] === 'guitar'
+      if (!isFullSong && !guitarOnly) selectFullSong()
+      return
+    }
     const availableStems = detail.stem_types.flatMap(({ name }) =>
       detail.stems[name] ? [name] : [],
     )
@@ -671,8 +680,19 @@ export function SongDetailPage() {
 
   const handleEnterEditMode = useCallback(() => {
     if (!activeChords.length) return
+    if (!requirePro('edit')) return
     enterEditMode(activeChords, activeLyrics)
-  }, [activeChords, activeLyrics, enterEditMode])
+  }, [activeChords, activeLyrics, enterEditMode, requirePro])
+
+  const handleSetStemVolume = useCallback((stemName: string, volume: number) => {
+    if (!songId) return
+    setStemVolume(stemName, volume)
+    // Read the latest volumes from the store, not the render closure:
+    // "Mute all" fires this once per stem in a single tick, and a stale
+    // closure would make each call clobber the previous stem's volume.
+    const current = usePlayerPrefsStore.getState().songOverrides[songId]?.stemVolumes
+    setSongOverride(songId, 'stemVolumes', { ...current, [stemName]: volume })
+  }, [songId, setStemVolume, setSongOverride])
 
   const handleSaveChords = useCallback(() => {
     if (!songId) return
@@ -758,7 +778,9 @@ export function SongDetailPage() {
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,20,24,0.28)_0%,rgba(8,9,11,0.78)_55%,rgba(6,6,7,0.96)_100%)]" />
         </div>
-        <div className="relative mx-auto flex max-w-7xl flex-col gap-3 p-2.5 pb-2 sm:gap-4 sm:p-4 sm:pb-3">
+        {/* On phones the practice panel can grow tall: cap the top area so the
+            chord sheet always keeps the lower part of the screen. */}
+        <div className="relative mx-auto flex max-h-[56svh] max-w-7xl flex-col gap-3 overflow-y-auto overscroll-contain p-2.5 pb-2 sm:gap-4 sm:p-4 sm:pb-3 lg:max-h-none lg:overflow-visible">
           <SongHeader
             songId={songId!}
             title={headerTitle}
@@ -811,15 +833,22 @@ export function SongDetailPage() {
             onDeleteChords={() => setShowDeleteChordsConfirm(true)}
             onOpenTutorial={() => setShowTutorial(true)}
             getRecordingTap={getRecordingTap}
-            onSetStemVolume={(stemName: string, volume: number) => {
-              setStemVolume(stemName, volume)
-              // Read the latest volumes from the store, not the render closure:
-              // "Mute all" fires this once per stem in a single tick, and a stale
-              // closure would make each call clobber the previous stem's volume.
-              const current = usePlayerPrefsStore.getState().songOverrides[songId!]?.stemVolumes
-              setSongOverride(songId!, 'stemVolumes', { ...current, [stemName]: volume })
-            }}
+            onSetStemVolume={handleSetStemVolume}
             stemVolumes={songOverrides?.stemVolumes}
+            stage={
+              <SongStage
+                songId={songId!}
+                detail={detail}
+                songTitle={headerTitle}
+                displayChords={displayChords}
+                lyrics={activeLyrics}
+                isPro={isPro}
+                stemVolumes={songOverrides?.stemVolumes}
+                isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
+                onSetStemVolume={handleSetStemVolume}
+                onSeek={handleSeek}
+              />
+            }
           />
         </div>
       </div>
@@ -859,8 +888,6 @@ export function SongDetailPage() {
           onClose={() => setShowTutorial(false)}
         />
       )}
-
-      <OnboardingTour />
 
       <ConfirmDialog
         open={showDeleteChordsConfirm}

@@ -1,13 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
 import { Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { songsApi } from '@/api/songs.api'
-import { subscriptionApi } from '@/api/subscription.api'
-import { queryKeys } from '@/api/query-keys'
-import { useSubscriptionStore } from '@/stores/subscription.store'
 import { cn } from '@/lib/cn'
 import { ROUTES } from '@/router/routes'
 
@@ -38,7 +34,6 @@ export function AdminMenu({ songId }: AdminMenuProps) {
   const [loading, setLoading] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (!open) return
@@ -91,28 +86,6 @@ export function AdminMenu({ songId }: AdminMenuProps) {
     }
   }
 
-  const handleResetOnboarding = async () => {
-    setLoading('Reset Onboarding')
-    setOpen(false)
-    try {
-      await subscriptionApi.resetOnboarding()
-      // Reflect the reset in the frontend immediately: the OnboardingTour reads
-      // has_seen_onboarding from the subscription store, so flip it optimistically
-      // (the tour reappears right away on this page) and invalidate the cached
-      // /status query so the next refetch confirms the persisted value.
-      const store = useSubscriptionStore.getState()
-      if (store.status) {
-        store.setStatus({ ...store.status, has_seen_onboarding: false })
-      }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.subscription.status() })
-      toast.success('Onboarding reset — the tour will play now')
-    } catch {
-      toast.error('Failed to reset onboarding')
-    } finally {
-      setLoading(null)
-    }
-  }
-
   return (
     <div ref={menuRef} className="relative">
       <button
@@ -146,16 +119,6 @@ export function AdminMenu({ songId }: AdminMenuProps) {
               {item.label}
             </button>
           ))}
-          <div className="border-t border-charcoal-600 my-1" />
-          <button
-            type="button"
-            onClick={handleResetOnboarding}
-            disabled={!!loading}
-            className="w-full text-left px-3 py-2 text-sm text-smoke-200 hover:bg-charcoal-700 hover:text-flame-400 transition-colors disabled:opacity-50"
-            data-testid="admin-menu-reset-onboarding"
-          >
-            Reset Onboarding Tour
-          </button>
           <div className="border-t border-charcoal-600 my-1" />
           <button
             type="button"

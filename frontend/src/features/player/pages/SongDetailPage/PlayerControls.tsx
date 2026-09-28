@@ -67,6 +67,8 @@ interface PlayerControlsProps {
   onSetStemVolume: (stemName: string, volume: number) => void
   stemVolumes?: Record<string, number>
   getRecordingTap: () => { context: AudioContext; node: GainNode } | null
+  /** Practice path + band stage, shown above the transport. */
+  stage: React.ReactNode
 }
 
 interface AudioStatusBannerProps {
@@ -133,10 +135,12 @@ export function PlayerControls({
   onSetStemVolume,
   stemVolumes,
   getRecordingTap,
+  stage,
 }: PlayerControlsProps) {
   return (
     <div className="flex flex-col gap-3" data-testid="player-controls">
       {showAudioStatus && <AudioStatusBanner message={audioStatusMessage} />}
+      {stage}
       <TransportControls
         onTogglePlay={onTogglePlay}
         onSeek={onSeek}
@@ -299,7 +303,7 @@ function PrimaryControls({
         type="button"
         onClick={onToggleFavorite}
         className={cn(
-          'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+          'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
           'border border-flame-400/25 bg-[#111215] shadow-[0_0_24px_rgba(250,204,21,0.13),0_12px_28px_rgba(0,0,0,0.34)]',
           'hover:border-flame-400/50 hover:bg-flame-400/15 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
@@ -309,7 +313,7 @@ function PrimaryControls({
         aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
       >
         <Heart
-          size={25}
+          size={19}
           className={cn(
             'transition-colors',
             isFavorited ? 'fill-flame-300 text-flame-300 animate-favorite-ignite' : 'text-flame-300',
@@ -317,7 +321,7 @@ function PrimaryControls({
         />
         <span className="text-[11px] font-medium text-smoke-200">Heart</span>
       </button>
-      <Suspense fallback={<div className="h-20 w-full rounded-2xl border border-white/10 bg-[#111215]" aria-hidden="true" />}>
+      <Suspense fallback={<div className="h-14 w-full rounded-2xl border border-white/10 bg-[#111215]" aria-hidden="true" />}>
         <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
       </Suspense>
       <div className="contents" data-tour="chord-edit">
@@ -326,7 +330,7 @@ function PrimaryControls({
             type="button"
             onClick={onEnterEditMode}
             className={cn(
-              'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+              'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
               'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
               'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
               'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
@@ -334,7 +338,7 @@ function PrimaryControls({
             aria-label="Edit chords"
             data-testid="chord-edit-toggle"
           >
-            <Pencil size={23} />
+            <Pencil size={18} />
             <span className="text-[11px] font-medium text-smoke-200">Edit</span>
           </button>
         )}
@@ -370,7 +374,7 @@ function PrimaryControls({
             setShowMetronome((value) => !value)
           }}
           className={cn(
-            'inline-flex h-20 w-full flex-col items-center justify-center gap-1 rounded-2xl',
+            'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
             'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
             'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
             'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
@@ -379,7 +383,7 @@ function PrimaryControls({
           aria-label="Open metronome"
           data-testid="song-metronome-toggle"
         >
-          <Timer size={23} aria-hidden="true" />
+          <Timer size={18} aria-hidden="true" />
           <span className="text-[11px] font-medium text-smoke-200">Metro</span>
         </button>
         {showMetronome && (

@@ -4,6 +4,7 @@ import { SidebarNav } from './SidebarNav'
 import { useEventTracker } from '@/hooks/use-event-tracker'
 import { ROUTES } from '@/router/routes'
 import { TrialCountdownBanner } from '@/features/subscription/components/TrialCountdownBanner'
+import { PaywallDialog } from '@/features/subscription/components/PaywallDialog'
 
 export function AppShell() {
   const location = useLocation()
@@ -30,6 +31,7 @@ export function AppShell() {
             </main>
             <BottomNav />
           </div>
+          <PaywallDialog />
         </div>
       )}
     </div>

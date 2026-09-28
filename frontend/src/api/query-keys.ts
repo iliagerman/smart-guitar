@@ -6,6 +6,13 @@ export const queryKeys = {
     recent: (limit?: number) => ['songs', 'recent', { limit }] as const,
     search: (query: string) => ['songs', 'search', query] as const,
     recommendations: (id: string) => ['songs', 'recommendations', id] as const,
+    setlists: (level: string | null) => ['songs', 'setlists', { level }] as const,
+    setlist: (id: string, offset: number) => ['songs', 'setlist', id, { offset }] as const,
+  },
+  practice: {
+    all: ['practice'] as const,
+    summary: () => ['practice', 'summary'] as const,
+    progress: (songId: string) => ['practice', 'progress', songId] as const,
   },
   jobs: {
     all: ['jobs'] as const,
