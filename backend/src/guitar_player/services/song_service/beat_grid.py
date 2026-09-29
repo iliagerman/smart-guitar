@@ -17,6 +17,11 @@ _BEATS_PER_STORED_BAR = 4
 _DEFAULT_BEATS_PER_BAR = 4
 # A chord change within this distance of a bar start counts as "on" it.
 _ON_BAR_TOLERANCE_S = 0.08
+# Without a tab tempo to check against, a faster detected tempo is almost
+# always the tracker locking onto eighth notes (a 74 BPM ballad detected at
+# 148), so count every other beat. A truly fast song then gets a half-time
+# grid, which still lands on its beats.
+_MAX_UNNOTATED_BPM = 135.0
 
 
 @dataclass(frozen=True)
@@ -36,8 +41,13 @@ class BeatGridSource:
     notated_bpm: float | None  # tab tempo; only picks the tempo octave
 
 
-def build_beat_grid(source: BeatGridSource) -> BeatGrid | None:
-    """Return the song's beat grid, or None when no beats were detected."""
+def build_beat_grid(source: BeatGridSource, *, half_time: bool = True) -> BeatGrid | None:
+    """Return the song's beat grid, or None when no beats were detected.
+
+    ``half_time=False`` keeps a fast tempo as tracked (see _MAX_UNNOTATED_BPM):
+    chord changes were detected on those beats, so chord cleanup and alignment
+    measure against them.
+    """
     beats = _detected_beats(source)
     if beats is None:
         return None
@@ -51,6 +61,8 @@ def build_beat_grid(source: BeatGridSource) -> BeatGrid | None:
             beat_step = 2
         elif ratio < 1 / math.sqrt(2):
             beats = _with_half_beats(beats)
+    elif half_time and _bpm(beats) > _MAX_UNNOTATED_BPM:
+        beat_step = 2
 
     bar_step = beat_step * _beats_per_bar(source.time_signature)
     change_times = [c.start_time for c in source.chords if c.chord != "N"]

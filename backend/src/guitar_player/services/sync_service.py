@@ -65,13 +65,18 @@ def _pretty_name(folder_name: str) -> str:
 
 
 async def ensure_default_user(session: AsyncSession, email: str) -> UserRecord:
-    """Create the default local dev user if it doesn't exist."""
+    """Create the default local dev user if it doesn't exist.
+
+    Looked up by its local sub, not the email: emails aren't unique, and a
+    real sign-in with the same address must not break startup.
+    """
     user_dao = UserDAO(session)
-    user = await user_dao.get_by_email(email)
+    sub = f"local-{email}"
+    user = await user_dao.get_by_cognito_sub(sub)
     if user:
         return user
 
-    user = await user_dao.create(cognito_sub=f"local-{email}", email=email)
+    user = await user_dao.create(cognito_sub=sub, email=email)
     logger.info("Created default local user: %s", email)
     return user
 

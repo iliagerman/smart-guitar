@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from guitar_player.services.popular_songs import ISRAELI_HITS, WORLD_HITS
 from guitar_player.services.setlist_service import SETLISTS
 from tests.api_harness import create_member
 
@@ -77,6 +78,7 @@ async def test_setlist_index_lists_non_empty_setlists_best_fit_first(api, librar
         "description": SETLISTS["campfire"].description,
         "level": "easy",
         "suggested_mode": "play_along",
+        "kind": "setlist",
         "song_count": campfire["song_count"],
         "cover_urls": campfire["cover_urls"],
     }
@@ -165,3 +167,68 @@ async def test_setlist_songs_paginate_like_the_song_list(api, library):
 async def test_unknown_setlist_is_not_found(api, library):
     resp = await api.client.get(f"{SETLISTS_URL}/{uuid.uuid4().hex}")
     assert resp.status_code == 404
+
+
+async def test_songs_with_too_few_detected_shapes_stay_out_of_learning_setlists(api, library, song_factory):
+    """A song tagged from one sustained chord is detection noise, not a first song."""
+    one_chord = await song_factory.create(**_playable(
+        title="One Chord Noise", difficulty="easy", chord_count=1, genre="folk",
+        tempo_bpm=60.0, play_count=1_000_000,
+    ))
+
+    for setlist_id in ("campfire", "first-songs", "slow-pretty"):
+        assert str(one_chord.id) not in await _setlist_ids(api, setlist_id)
+
+
+async def test_hits_chart_lists_known_songs_in_chart_order(api, library, song_factory):
+    """The hits chart follows the curated ranking, not play counts."""
+    third = await song_factory.create(**_playable(
+        song_name=WORLD_HITS[2], title="Hotel California", difficulty="medium", chord_count=6,
+        play_count=900_000,
+    ))
+    first = await song_factory.create(**_playable(
+        song_name=WORLD_HITS[0], title="Wonderwall", difficulty="easy", chord_count=5, play_count=10,
+    ))
+    noise = await song_factory.create(**_playable(
+        song_name=WORLD_HITS[1], title="Knockin' On Heaven's Door", difficulty="easy", chord_count=1,
+    ))
+
+    ids = await _setlist_ids(api, "hits")
+    assert ids == [str(first.id), str(third.id)]  # off-chart and one-chord songs stay out
+    assert str(noise.id) not in ids
+
+    index = (await api.client.get(SETLISTS_URL)).json()["items"]
+    kinds = {item["id"]: item["kind"] for item in index}
+    assert kinds["hits"] == "chart"
+    assert kinds["campfire"] == "setlist"
+
+
+async def test_israeli_classics_chart_ranks_hebrew_hits(api, library, song_factory):
+    second = await song_factory.create(**_playable(
+        song_name=ISRAELI_HITS[1], title="הכוכבים דולקים על אש קטנה", difficulty="medium", chord_count=7,
+    ))
+    first = await song_factory.create(**_playable(
+        song_name=ISRAELI_HITS[0], title="אני ואתה", difficulty="medium", chord_count=6,
+    ))
+
+    assert await _setlist_ids(api, "israeli-hits") == [str(first.id), str(second.id)]
+
+
+async def test_known_songs_lead_every_setlist(api, library, song_factory):
+    """A well-known song outranks a more-played unknown one, even in first songs."""
+    hit = await song_factory.create(**_playable(
+        song_name=WORLD_HITS[6], title="Riptide", difficulty="easy", chord_count=4, genre="folk",
+        tempo_bpm=100.0, play_count=1,
+    ))
+
+    campfire = await _setlist_ids(api, "campfire")
+    assert campfire.index(str(hit.id)) < campfire.index(str(library["campfire_hit"].id))
+    first_songs = await _setlist_ids(api, "first-songs")
+    assert first_songs[0] == str(hit.id)
+
+
+async def test_level_up_takes_seven_shape_songs(api, library, song_factory):
+    seven = await song_factory.create(**_playable(
+        title="Seven Shapes", difficulty="medium", chord_count=7, genre="pop",
+    ))
+    assert str(seven.id) in await _setlist_ids(api, "challenge")

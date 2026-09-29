@@ -21,7 +21,10 @@ from guitar_player.schemas.records import PracticeProgressRecord
 from guitar_player.services.song_service.helpers import song_response
 from guitar_player.storage import StorageBackend
 
-PRACTICE_STEPS = (1, 2, 3, 4)
+# Hear it, learn it, play it with the band. Paths saved before the path had
+# three steps may still carry step 4 (then "full speed"); it is ignored.
+PRACTICE_STEPS = (1, 2, 3)
+LAST_STEP = PRACTICE_STEPS[-1]
 ALL_STEPS_MASK = sum(1 << (step - 1) for step in PRACTICE_STEPS)
 CONTINUE_SONGS_LIMIT = 3
 
@@ -53,7 +56,7 @@ def live_streak(streak: int, last_practice: date | None, today: date) -> int:
 def _to_response(progress: PracticeProgressRecord) -> PracticeProgressResponse:
     return PracticeProgressResponse(
         song_id=progress.song_id,
-        current_step=progress.current_step,
+        current_step=min(progress.current_step, LAST_STEP),
         completed_steps=mask_to_steps(progress.completed_steps),
         learned_chords=[c for c in progress.learned_chords.split(",") if c],
         stage_progress=progress.stage_progress,

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from guitar_player.enums import SkillLevel
 from guitar_player.schemas.song import SongResponse
 
+# The path has three steps; 4 is still accepted from clients built before that.
 PracticeStep = Annotated[int, Field(ge=1, le=4)]
 
 

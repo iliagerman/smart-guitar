@@ -93,6 +93,45 @@ async def test_doubled_detected_tempo_is_halved_to_the_tab_tempo(settings, stora
 
 
 @pytest.mark.asyncio
+async def test_fast_detected_tempo_without_a_tab_is_counted_in_half_time(settings, storage):
+    """A 74 BPM ballad tracked at 148 BPM, with no tab tempo, gets a 74 BPM grid on its bars."""
+    beat = 60 / 148
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 148.0, "beat_times": [0.3 + i * beat for i in range(64)]},
+        # Chords change every 8 tracked beats, starting on the second one.
+        CHORDS: _chord_changes(*(0.3 + (1 + 8 * i) * beat for i in range(6))),
+    })
+
+    assert detail.detected_bpm == pytest.approx(74.0, abs=0.1)
+    assert detail.beat_times[0] == pytest.approx(0.3 + beat, abs=0.001)
+    assert detail.bar_starts[1] - detail.bar_starts[0] == pytest.approx(8 * beat, abs=0.002)
+
+
+@pytest.mark.asyncio
+async def test_half_time_grid_keeps_a_fast_songs_quick_chord_changes(settings, storage):
+    """Chords held two tracked beats at 160 BPM are real changes, not flashes to clean away."""
+    beat = 60 / 160
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 160.0, "beat_times": [i * beat for i in range(40)]},
+        CHORDS: _chord_changes(*(i * 2 * beat for i in range(8))),
+    })
+
+    assert detail.detected_bpm == pytest.approx(80.0, abs=0.1)
+    assert len([c for c in detail.chords if c.chord != "N"]) == 8
+
+
+@pytest.mark.asyncio
+async def test_moderate_detected_tempo_without_a_tab_is_kept(settings, storage):
+    """116 BPM with no tab tempo is left alone."""
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 116.0, "beat_times": [i * 60 / 116 for i in range(32)]},
+        CHORDS: _chord_changes(0.0, 2.07, 4.14),
+    })
+
+    assert detail.detected_bpm == pytest.approx(116.0, abs=0.1)
+
+
+@pytest.mark.asyncio
 async def test_halved_detected_tempo_gets_half_beats(settings, storage):
     """Beat tracking at 60 BPM for a song tabbed at 120 adds the missing beats."""
     detail = await _fetch_detail(settings, storage, {

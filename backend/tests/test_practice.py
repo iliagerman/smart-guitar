@@ -101,10 +101,10 @@ async def test_saving_progress_upserts_and_keeps_the_best_stage_progress(api, me
     assert saved["last_practiced_at"] is not None
 
     resp = await api.client.put(_progress_url(song.id), json=_step_body(
-        current_step=4, completed_steps=[3, 1, 2], learned_chords=["G", "C", "D"], stage_progress=0.3,
+        current_step=3, completed_steps=[3, 1, 2], learned_chords=["G", "C", "D"], stage_progress=0.3,
     ))
     updated = resp.json()
-    assert updated["current_step"] == 4
+    assert updated["current_step"] == 3
     assert updated["completed_steps"] == [1, 2, 3]
     assert updated["learned_chords"] == ["G", "C", "D"]
     assert updated["stage_progress"] == 0.6  # best reached so far
@@ -166,7 +166,7 @@ async def test_continue_songs_are_the_three_latest_unfinished_songs(api, member,
         await api.client.put(_progress_url(song.id), json=_step_body())
     # Finishing every step drops a song from "continue".
     await api.client.put(_progress_url(songs[3].id), json=_step_body(
-        current_step=4, completed_steps=[1, 2, 3, 4],
+        current_step=3, completed_steps=[1, 2, 3],
     ))
 
     continue_songs = (await _summary(api))["continue_songs"]
@@ -187,3 +187,17 @@ async def test_practice_is_per_member(api, member, song_factory, session_factory
     api.sign_in(await create_member(session_factory, pro=True))
     assert (await api.client.get(_progress_url(song.id))).json()["stage_progress"] == 0.0
     assert (await _summary(api))["continue_songs"] == []
+
+
+async def test_the_path_is_three_steps_and_old_four_step_saves_still_finish(api, member, song_factory):
+    """A path saved as four steps (the old "full speed") reads back as the three-step path."""
+    legacy, fresh = await song_factory.create(), await song_factory.create()
+    await api.client.put(_progress_url(fresh.id), json=_step_body())
+    await api.client.put(_progress_url(legacy.id), json=_step_body(
+        current_step=4, completed_steps=[1, 2, 3, 4],
+    ))
+
+    progress = (await api.client.get(_progress_url(legacy.id))).json()
+    assert progress["current_step"] == 3
+    assert progress["completed_steps"] == [1, 2, 3]
+    assert [entry["song"]["id"] for entry in (await _summary(api))["continue_songs"]] == [str(fresh.id)]

@@ -128,10 +128,16 @@ class SongFactory:
         self._song_ids: list[uuid.UUID] = []
 
     async def create(self, files: dict[str, object | bytes] | None = None, **fields: object) -> SongRecord:
-        """Song under a fresh folder; ``files`` maps file names to JSON data or raw bytes."""
-        song_name = f"{self._root}/song_{len(self._song_ids)}"
+        """Song under a fresh folder; ``files`` maps file names to JSON data or raw bytes.
+
+        Pass ``song_name`` to use a real catalog key; such songs get no storage files.
+        """
+        custom_name = fields.pop("song_name", None)
+        assert not (custom_name and files), "songs with a custom song_name get no files"
+        song_name = str(custom_name or f"{self._root}/song_{len(self._song_ids)}")
         folder = self._base / song_name
-        folder.mkdir(parents=True, exist_ok=True)
+        if not custom_name:
+            folder.mkdir(parents=True, exist_ok=True)
         for name, data in (files or {}).items():
             path = folder / name
             if isinstance(data, bytes):

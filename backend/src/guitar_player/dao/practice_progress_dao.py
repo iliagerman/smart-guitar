@@ -29,13 +29,17 @@ class PracticeProgressDAO(BaseDAO[PracticeProgress, PracticeProgressRecord]):
     async def list_recent_unfinished(
         self, user_id: uuid.UUID, all_steps_mask: int, limit: int,
     ) -> list[tuple[PracticeProgressRecord, SongRecord]]:
-        """Most recently practiced songs whose steps aren't all completed."""
+        """Most recently practiced songs whose steps aren't all completed.
+
+        Only the bits in ``all_steps_mask`` count, so a legacy extra step bit
+        doesn't keep a finished song on the "continue" list.
+        """
         stmt = (
             select(PracticeProgress, Song)
             .join(Song, Song.id == PracticeProgress.song_id)
             .where(
                 PracticeProgress.user_id == user_id,
-                PracticeProgress.completed_steps != all_steps_mask,
+                PracticeProgress.completed_steps.op("&")(all_steps_mask) != all_steps_mask,
             )
             .order_by(PracticeProgress.last_practiced_at.desc())
             .limit(limit)

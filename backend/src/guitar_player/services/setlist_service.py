@@ -9,8 +9,9 @@ from guitar_player.dao.song_dao import SongDAO
 from guitar_player.enums import SkillLevel, SongDifficulty
 from guitar_player.exceptions import NotFoundError
 from guitar_player.models.song import Song
-from guitar_player.schemas.setlist import SetlistListResponse, SetlistSummary, SuggestedMode
+from guitar_player.schemas.setlist import SetlistKind, SetlistListResponse, SetlistSummary, SuggestedMode
 from guitar_player.schemas.song import PaginatedSongsResponse
+from guitar_player.services.popular_songs import ALL_HITS, ISRAELI_HITS, WORLD_HITS, chart_rank, is_hit
 from guitar_player.services.song_service.helpers import song_response
 from guitar_player.storage import StorageBackend
 
@@ -21,6 +22,14 @@ _EASY = SongDifficulty.EASY.value
 _MEDIUM = SongDifficulty.MEDIUM.value
 _HARD = SongDifficulty.HARD.value
 
+# Songs whose chord detection found fewer shapes than this are tagging noise
+# (e.g. one sustained chord), not songs to learn or play along to.
+MIN_SHAPES = 3
+_RELIABLE_TAGS = Song.chord_count >= MIN_SHAPES
+
+# Songs people know come first in every setlist, then the most played.
+_POPULAR_FIRST = (chart_rank(ALL_HITS), Song.play_count.desc())
+
 
 @dataclass(frozen=True)
 class SetlistDefinition:
@@ -29,25 +38,45 @@ class SetlistDefinition:
     level: SongDifficulty
     suggested_mode: SuggestedMode
     filters: tuple[ColumnElement[bool], ...]
-    order_by: tuple[ColumnElement, ...] = (Song.play_count.desc(),)
+    order_by: tuple[ColumnElement, ...] = _POPULAR_FIRST
     max_songs: int | None = None
+    kind: SetlistKind = SetlistKind.SETLIST
 
 
 SETLISTS: dict[str, SetlistDefinition] = {
+    "hits": SetlistDefinition(
+        title="The Hits",
+        description="The songs every guitar player wants to play, ready with chords and a band.",
+        level=SongDifficulty.EASY,
+        suggested_mode=SuggestedMode.PLAY_ALONG,
+        filters=(Song.song_name.in_(WORLD_HITS), _RELIABLE_TAGS),
+        order_by=(chart_rank(WORLD_HITS),),
+        kind=SetlistKind.CHART,
+    ),
+    "israeli-hits": SetlistDefinition(
+        title="Israeli Classics",
+        description="The Israeli songbook everyone sings along to around the fire.",
+        level=SongDifficulty.EASY,
+        suggested_mode=SuggestedMode.PLAY_ALONG,
+        filters=(Song.song_name.in_(ISRAELI_HITS), _RELIABLE_TAGS),
+        order_by=(chart_rank(ISRAELI_HITS),),
+        kind=SetlistKind.CHART,
+    ),
     "campfire": SetlistDefinition(
         title="4-Chord Campfire",
         description="Four easy shapes, whole songs. The fastest way to sound like you can play.",
         level=SongDifficulty.EASY,
         suggested_mode=SuggestedMode.PLAY_ALONG,
-        filters=(Song.difficulty == _EASY, Song.chord_count <= 4),
+        filters=(_RELIABLE_TAGS, Song.difficulty == _EASY, Song.chord_count <= 4),
     ),
     "first-songs": SetlistDefinition(
         title="Your First 10 Songs",
         description="Easy shapes and relaxed tempos for your first month on guitar.",
         level=SongDifficulty.EASY,
         suggested_mode=SuggestedMode.LEARN,
-        filters=(Song.difficulty == _EASY,),
-        order_by=(Song.chord_count.asc(), Song.tempo_bpm.asc().nulls_last()),
+        filters=(_RELIABLE_TAGS, Song.difficulty == _EASY),
+        # Well-known songs first, then the fewest shapes and the slowest tempo.
+        order_by=(is_hit(), Song.chord_count.asc(), chart_rank(ALL_HITS), Song.tempo_bpm.asc().nulls_last()),
         max_songs=10,
     ),
     "slow-pretty": SetlistDefinition(
@@ -58,16 +87,18 @@ SETLISTS: dict[str, SetlistDefinition] = {
         filters=(
             Song.genre.in_(["pop", "folk", "acoustic", "soft-rock", "r&b", "country"]),
             Song.tempo_bpm < 100,
+            _RELIABLE_TAGS,
             Song.difficulty.in_([_EASY, _MEDIUM]),
         ),
     ),
     "band-room": SetlistDefinition(
         title="Band Room Rock",
-        description="Kick the guitarist out of real rock records and take his place.",
+        description="Kick the guitarist out of real rock records and play the part yourself.",
         level=SongDifficulty.MEDIUM,
         suggested_mode=SuggestedMode.PLAY_ALONG,
         filters=(
             Song.genre.in_(["rock", "alternative", "punk", "indie", "metal"]),
+            _RELIABLE_TAGS,
             Song.difficulty.in_([_EASY, _MEDIUM]),
         ),
     ),
@@ -98,7 +129,8 @@ SETLISTS: dict[str, SetlistDefinition] = {
         description="More chords, barre shapes and faster changes.",
         level=SongDifficulty.HARD,
         suggested_mode=SuggestedMode.PLAY_ALONG,
-        filters=(Song.difficulty == _HARD,),
+        # Seven shapes is where a song stops being a strum-along.
+        filters=(or_(Song.difficulty == _HARD, Song.chord_count >= 7),),
     ),
 }
 
@@ -134,6 +166,7 @@ class SetlistService:
                 description=setlist.description,
                 level=setlist.level,
                 suggested_mode=setlist.suggested_mode,
+                kind=setlist.kind,
                 song_count=song_count,
                 cover_urls=[self._storage.get_url(song.thumbnail_key) for song in covers],
             ))

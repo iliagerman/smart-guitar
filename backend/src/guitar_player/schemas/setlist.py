@@ -13,12 +13,20 @@ class SuggestedMode(StrEnum):
     LEARN = "learn"
 
 
+class SetlistKind(StrEnum):
+    """A themed setlist, or a chart of the most wanted songs."""
+
+    SETLIST = "setlist"
+    CHART = "chart"
+
+
 class SetlistSummary(BaseModel):
     id: str
     title: str
     description: str
     level: SongDifficulty
     suggested_mode: SuggestedMode
+    kind: SetlistKind = SetlistKind.SETLIST
     song_count: int
     cover_urls: list[str] = []
 

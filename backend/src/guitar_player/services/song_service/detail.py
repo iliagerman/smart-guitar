@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -51,6 +52,19 @@ from .sheet_alignment import (
 
 logger = logging.getLogger(__name__)
 
+# A Songsterr/strum lookup reports "pending" only this long after it started.
+# Past that nothing is in flight: the song simply has no pattern yet, so the
+# client stops showing a spinner (and stops polling for one).
+STRUM_FETCH_PENDING_SECONDS = 120
+
+
+def _strum_fetch_in_flight(attempted_at: datetime | None) -> bool:
+    if attempted_at is None:
+        return False
+    if attempted_at.tzinfo is None:
+        attempted_at = attempted_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - attempted_at).total_seconds() < STRUM_FETCH_PENDING_SECONDS
+
 
 async def build_song_detail(
     song_id: uuid.UUID,
@@ -86,31 +100,36 @@ async def build_song_detail(
     tabs, tabs_source, tab_strums, rhythm = await _load_tabs_and_strums(storage, song, song_dao)
     t5 = time.perf_counter()
     songsterr_data = _load_songsterr_data(storage, song)
-    beat_grid = build_beat_grid(BeatGridSource(
+    grid_source = BeatGridSource(
         detected_beats=chord_data.beat_times,
         stored_bar_starts=chord_data.bar_starts,
         guitar_beats=rhythm.beat_times if rhythm else [],
         chords=autochord_chords,
         time_signature=songsterr_data["time_signature"],
         notated_bpm=songsterr_data["source_bpm"],
-    ))
-    bar_starts = beat_grid.bar_starts if beat_grid else []
+    )
+    # The player's grid may read a fast tempo in half time; the chords were
+    # detected on the beats as tracked, so they are cleaned and aligned on those.
+    beat_grid = build_beat_grid(grid_source)
+    tracked_grid = build_beat_grid(grid_source, half_time=False)
     grid_beats = beat_grid.beat_times if beat_grid else []
-    autochord_chords = clean_detected_chords(autochord_chords, grid_beats)
+    tracked_bars = tracked_grid.bar_starts if tracked_grid else []
+    tracked_beats = tracked_grid.beat_times if tracked_grid else []
+    autochord_chords = clean_detected_chords(autochord_chords, tracked_beats)
     t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
     duration = float(song.duration_seconds or 240)
     community_options, community_tabs = _load_community_chord_options(
         storage, song, duration, lyrics_data,
-        autochord_chords, bar_starts,
+        autochord_chords, tracked_bars,
     )
     t7 = time.perf_counter()
 
     chord_options = await _assemble_chord_options(
         storage, song, song_id, chord_vote_dao,
         autochord_chords, recommended_capo, lyrics_data,
-        community_options, grid_beats,
+        community_options, tracked_beats,
     )
     t8 = time.perf_counter()
 
@@ -175,7 +194,7 @@ async def build_song_detail(
         recommended_capo=recommended_capo,
         song_key=song_key,
         detected_bpm=beat_grid.bpm if beat_grid else None,
-        bar_starts=bar_starts,
+        bar_starts=beat_grid.bar_starts if beat_grid else [],
         beat_times=grid_beats,
         web_chords_failed=False,
         web_chords_pending=False,
@@ -314,7 +333,12 @@ def _load_songsterr_data(storage: StorageBackend, song: SongRecord) -> dict[str,
         result["songsterr_status"] = "unavailable"
 
     external_strums_key = song.external_strums_key
-    if external_strums_key and storage.file_exists(external_strums_key):
+    has_strums_file = bool(external_strums_key and storage.file_exists(external_strums_key))
+    if result["songsterr_status"] is None and not has_strums_file and not _strum_fetch_in_flight(
+        song.external_strums_attempted_at,
+    ):
+        result["songsterr_status"] = "unavailable"
+    if has_strums_file:
         result["songsterr_status"] = "ready"
         try:
             raw = storage.read_json(external_strums_key)
