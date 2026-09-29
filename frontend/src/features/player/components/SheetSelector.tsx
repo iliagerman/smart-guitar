@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { Music2, Sparkles, Trash2 } from 'lucide-react'
+import { SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -8,6 +8,7 @@ import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import type { ChordOption, ChordEntry } from '@/types/song'
 
+import { dockPillClass, dockPopoverClass } from '../lib/dock-button'
 import { getSheetVersionDescription, getSheetVersionLabel } from '../lib/sheet-versions'
 
 interface SheetSelectorProps {
@@ -29,8 +30,8 @@ interface SheetViewOption {
 }
 
 /**
- * Unified sheet control for source selection (Auto/AI/Custom) and display mode
- * (Chords/Easy/Capo/Tabs). This replaces the separate V1/V2 toggle and view pill.
+ * The sheet's settings: how the chords are shown (Chords/Easy/Capo/Bars/Tabs),
+ * a custom capo, and the chord source (also on the sheet's source tabs).
  */
 export function SheetSelector({
   versions,
@@ -95,37 +96,34 @@ export function SheetSelector({
       <Popover.Trigger asChild>
         <button
           type="button"
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
-            'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-            'hover:border-flame-400/30 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-          )}
+          className={dockPillClass(open, 'h-9 px-3 text-xs max-sm:px-2.5')}
           title={`Sheet: ${currentLabel}`}
-          aria-label={`Sheet selector: ${currentLabel}`}
+          aria-label={`Sheet settings: ${currentLabel}`}
           data-tour="version-toggle"
           data-testid="sheet-selector-trigger"
         >
-          <Music2 size={16} className="text-smoke-300" aria-hidden="true" />
-          <span className="truncate">{currentLabel}</span>
+          <SlidersHorizontal size={15} aria-hidden="true" />
+          <span className="truncate max-sm:hidden">{currentView.label}</span>
           {upgrading && (
-            <Sparkles size={14} className="text-flame-400 animate-pulse" aria-label="Updating AI chords" />
+            <Sparkles size={14} className="animate-pulse max-sm:hidden" aria-label="Updating AI chords" />
           )}
         </button>
       </Popover.Trigger>
 
       <Popover.Portal>
         <Popover.Content
-          side="top"
+          side="bottom"
           sideOffset={8}
-          align="start"
+          align="end"
+          collisionPadding={12}
           className={cn(
-            'w-72 max-h-[70dvh] overflow-y-scroll overscroll-contain touch-pan-y rounded-xl border border-charcoal-600 bg-charcoal-800 shadow-xl z-50',
+            'w-72 max-h-[70dvh] overflow-y-auto overscroll-contain touch-pan-y',
+            dockPopoverClass,
             'animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           )}
         >
           <div className="p-2" data-testid="sheet-selector-popover">
-            <SectionTitle title="Sheet source" />
+            <SectionTitle title="Chord source" />
             <div className="space-y-1">
               {versions.map((version, index) => {
                 const label = getSheetVersionLabel(version, index)
@@ -139,16 +137,16 @@ export function SheetSelector({
                       setOpen(false)
                     }}
                     className={cn(
-                      'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+                      'flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-flame-400/15 text-flame-400'
-                        : 'text-smoke-200 hover:bg-charcoal-700 hover:text-smoke-100',
+                        ? 'bg-fire-500/15 text-fire-200'
+                        : 'text-smoke-200 hover:bg-white/[0.06] hover:text-smoke-50',
                     )}
                     data-testid={`sheet-selector-source-${index}`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">{label}</div>
-                      <div className={cn('text-xs', isSelected ? 'text-flame-200/85' : 'text-smoke-500')}>
+                      <div className={cn('text-xs', isSelected ? 'text-fire-200/80' : 'text-smoke-500')}>
                         {getSheetVersionDescription(version)}
                       </div>
                     </div>
@@ -158,7 +156,7 @@ export function SheetSelector({
               })}
             </div>
 
-            <div className="mx-3 my-2 h-px bg-charcoal-600" />
+            <div className="mx-3 my-2 h-px bg-white/10" />
 
             <SectionTitle title="Display" />
             <div className="space-y-1">
@@ -173,10 +171,10 @@ export function SheetSelector({
                     type="button"
                     onClick={option.apply}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                      'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
                       isSelected
-                        ? 'bg-flame-400/15 text-flame-400'
-                        : 'text-smoke-200 hover:bg-charcoal-700 hover:text-smoke-100',
+                        ? 'bg-fire-500/15 text-fire-200'
+                        : 'text-smoke-200 hover:bg-white/[0.06] hover:text-smoke-50',
                     )}
                     data-testid={`sheet-selector-view-${option.key}`}
                   >
@@ -194,7 +192,7 @@ export function SheetSelector({
                 data-testid="custom-capo-fret"
                 value={chordDisplayMode === 'capo' ? `capo-${chordCapoFret}` : ''}
                 onChange={(event) => viewOptions.find((option) => option.key === event.target.value)?.apply()}
-                className="min-h-11 w-full rounded-lg border border-charcoal-600 bg-charcoal-700 px-3 text-smoke-100 focus:outline-none focus:ring-2 focus:ring-flame-400/40"
+                className="min-h-11 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 text-smoke-100 focus:outline-none focus:ring-2 focus:ring-flame-400/50"
               >
                 <option value="" disabled>Select fret</option>
                 {viewOptions.filter((option) => option.key.startsWith('capo-')).map((option) => (
@@ -209,7 +207,7 @@ export function SheetSelector({
 
             {currentIsOwned && onDeleteCurrentVersion && (
               <>
-                <div className="mx-3 my-2 h-px bg-charcoal-600" />
+                <div className="mx-3 my-2 h-px bg-white/10" />
                 <button
                   type="button"
                   onClick={() => {
@@ -217,7 +215,7 @@ export function SheetSelector({
                     onDeleteCurrentVersion()
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                    'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors',
                     'text-red-300 hover:bg-red-500/10 hover:text-red-200',
                   )}
                   aria-label="Delete your custom sheet"

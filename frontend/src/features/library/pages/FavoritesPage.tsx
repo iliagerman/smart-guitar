@@ -24,7 +24,7 @@ export function FavoritesPage() {
     <div className="relative h-full flex flex-col overflow-hidden" data-testid="favorites-page">
       <PageBackground />
       <div className="shrink-0">
-        <PageHeader title="Favorites" icon={<Heart size={24} />} subtitle="Songs you love">
+        <PageHeader title="Favorites" eyebrow="Your crate" icon={<Heart size={24} />} subtitle="The songs you keep coming back to">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <FilterInput value={search} onChange={setSearch} placeholder="Filter favorites..." />
             {!!favorites?.length && <FavoritesSortControl />}

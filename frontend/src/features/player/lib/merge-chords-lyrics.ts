@@ -31,6 +31,13 @@ const URL_PATTERN = /^https?:\/\//
 const SEGMENT_TOLERANCE_S = 0.3
 
 /**
+ * A chord shorter than this that lands just before a line, only to be replaced
+ * as the singing starts, is a detection blip at the transition — shown, it
+ * would sit crammed against the line's first chord ("Em G").
+ */
+const MIN_PICKUP_S = 1.0
+
+/**
  * Filter out garbage lyrics segments (URLs, empty text, etc.)
  */
 function isValidLyricsSegment(segment: LyricsSegment): boolean {
@@ -158,6 +165,11 @@ export function mergeChordLyrics(
       }
     }
 
+    // A blip carried in only to be replaced on the first word isn't a real change.
+    if (carryInChordIndex >= 0 && isPickupBlip(chords[carryInChordIndex], chords, words)) {
+      carryInChordIndex = -1
+    }
+
     for (let ci = 0; ci < chords.length; ci++) {
       if (assignedChordIndices.has(ci)) continue
       const chord = chords[ci]
@@ -231,26 +243,29 @@ export function mergeChordLyrics(
     }
     for (const [gap, gapChords] of chordsByGap.entries()) {
       if (gapChords.length < 3 && validLyrics.length > 0) {
-        // Attach to adjacent lyric line
-        const targetSegmentIndex = gap < validLyrics.length ? gap : gap - 1
-        const targetLine = lineBySegmentIndex.get(targetSegmentIndex)
-
-        if (targetLine) {
-          for (const chord of gapChords) {
-            targetLine.chords.push({
-              chord: chord.chord,
-              start_time: chord.start_time,
-              end_time: chord.end_time,
-              bass: chord.bass,
-              charOffset: 0, // reassigned by assignChordColumns below
-            })
-          }
-          // Re-lay out the whole line so the merged-in chords stay in time order
-          // and don't collide with the line's own chords.
-          assignChordColumns(targetLine.chords, targetLine.words)
-          // IMPORTANT: do NOT expand lyric line time bounds based on chords.
-          // Highlight sync should be driven strictly by lyrics.json timestamps.
+        // Attach each chord to the lyric line it is closest to in time: a change
+        // right after a line ends belongs on that line's last word (where it is
+        // played), not bunched with the next line's first chord.
+        const touched = new Set<ChordSheetLine>()
+        for (const chord of gapChords) {
+          const targetIndex = nearestLineForGapChord(chord.start_time, gap, validLyrics)
+          const targetLine = lineBySegmentIndex.get(targetIndex)
+          if (!targetLine) continue
+          if (targetIndex === gap && isPickupBlip(chord, chords, targetLine.words)) continue
+          targetLine.chords.push({
+            chord: chord.chord,
+            start_time: chord.start_time,
+            end_time: chord.end_time,
+            bass: chord.bass,
+            charOffset: 0, // reassigned by assignChordColumns below
+          })
+          touched.add(targetLine)
         }
+        // Re-lay out each line so the merged-in chords stay in time order and
+        // don't collide with the line's own chords.
+        // IMPORTANT: do NOT expand lyric line time bounds based on chords.
+        // Highlight sync should be driven strictly by lyrics.json timestamps.
+        for (const line of touched) assignChordColumns(line.chords, line.words)
       } else {
         // Create instrumental line
         const groupStart = gapChords[0].start_time
@@ -282,6 +297,29 @@ export function mergeChordLyrics(
   lines.sort((a, b) => a.startTime - b.startTime)
 
   return lines
+}
+
+/**
+ * True for a short chord just before a line whose successor already starts by
+ * the end of the line's first word — both would print over that first word.
+ */
+function isPickupBlip(chord: ChordEntry, chords: ChordEntry[], words: LyricsWord[]): boolean {
+  if (chord.end_time - chord.start_time >= MIN_PICKUP_S || words.length === 0) return false
+  const next = chords.find((c) => c.chord !== 'N' && c.start_time > chord.start_time)
+  return !!next && next.start_time < words[0].end
+}
+
+/**
+ * Segment index of the lyric line a chord in gap `gap` (between segments
+ * gap-1 and gap) sits closest to: the end of the line before, or the start of
+ * the line after. Ties go to the line before.
+ */
+function nearestLineForGapChord(time: number, gap: number, lyrics: LyricsSegment[]): number {
+  const before = gap - 1 >= 0 ? lyrics[gap - 1] : undefined
+  const after = gap < lyrics.length ? lyrics[gap] : undefined
+  if (!before) return gap
+  if (!after) return gap - 1
+  return time - before.end <= after.start - time ? gap - 1 : gap
 }
 
 function findGap(time: number, lyrics: LyricsSegment[]): number {

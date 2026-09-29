@@ -11,6 +11,7 @@ import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { cn } from '@/lib/cn'
 import { useProAccess } from '@/features/subscription/hooks/use-pro-access'
+import { toolButtonClass } from '../lib/tool-button'
 
 type RecordingMode = 'audio' | 'video'
 
@@ -171,20 +172,13 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
   const filename = buildFilename(artist, songTitle) + (useVideo ? `.${videoExtension}` : '.mp3')
 
   return (
-    <div data-tour="record" className="min-w-0">
+    <div data-tour="record" className="shrink-0">
       <Popover.Root open={showModeSelector && !isRecording} onOpenChange={setShowModeSelector}>
         <Popover.Trigger asChild>
           <button
             type="button"
             onClick={handleRecordButtonClick}
-            className={cn(
-              'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
-              'border shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors',
-              'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-              isRecording
-                ? 'border-red-500 bg-red-600/20 hover:border-red-400'
-                : 'border-white/10 bg-[#111215] hover:border-flame-400/30',
-            )}
+            className={toolButtonClass(false, isRecording ? 'bg-red-600/20 text-red-300 ring-1 ring-red-500/60' : undefined)}
             aria-label={isRecording ? 'Stop recording' : 'Start recording'}
             data-testid="record-button"
           >
@@ -197,8 +191,8 @@ export function RecordButton({ songTitle, artist, getRecordingTap }: RecordButto
               </div>
             ) : (
               <>
-                <Circle size={20} className="fill-current text-red-500 transition-colors" />
-                <span className="text-[11px] font-medium text-smoke-200">Record</span>
+                <Circle size={17} className="fill-current text-red-500 transition-colors" />
+                <span>Record</span>
               </>
             )}
           </button>

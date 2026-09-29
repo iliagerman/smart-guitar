@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ChordMap } from './ChordMap'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
+import { toolButtonClass } from '../lib/tool-button'
 
 interface ChordMapIconProps {
     size?: number
@@ -40,6 +41,7 @@ function ChordMapIcon({ size = 48, className }: ChordMapIconProps) {
 interface ChordMapDialogProps {
     chords: string[]
     representativePattern?: StrumSymbol[]
+    beatsPerBar?: number
     sectionPatterns?: SectionStrumPattern[]
     bpm?: number
     strumNotes?: string | null
@@ -51,7 +53,7 @@ interface ChordMapDialogProps {
     onOpenTutorial?: () => void
 }
 
-export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, strumLoading, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
+export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, strumLoading, beatsPerBar, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
     const [open, setOpen] = useState(false)
 
     // ChordMap itself will return null when there are no usable chords.
@@ -71,11 +73,13 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                     type="button"
                     className={cn(
                         iconOnly
-                            ? 'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl'
-                            : 'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
-                        'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)]',
-                        'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
-                        'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+                            ? toolButtonClass()
+                            : cn(
+                                'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
+                                'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)]',
+                                'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
+                                'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
+                            ),
                         className,
                     )}
                     aria-label={iconOnly ? 'Open chord map' : undefined}
@@ -83,8 +87,8 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                 >
                     {iconOnly ? (
                         <>
-                            <ChordMapIcon size={22} />
-                            <span className="text-[11px] font-medium text-smoke-200">Chords</span>
+                            <ChordMapIcon size={20} className="text-fire-400" />
+                            <span>Chords</span>
                         </>
                     ) : (
                         'Chord Map'
@@ -113,7 +117,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                     </div>
 
                     <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} tutorialLinks={tutorialLinks} strumLoading={strumLoading} showHeader={false} onOpenTutorial={handleOpenTutorial} />
+                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} tutorialLinks={tutorialLinks} strumLoading={strumLoading} beatsPerBar={beatsPerBar} showHeader={false} onOpenTutorial={handleOpenTutorial} />
                     </div>
                 </Dialog.Content>
             </Dialog.Portal>

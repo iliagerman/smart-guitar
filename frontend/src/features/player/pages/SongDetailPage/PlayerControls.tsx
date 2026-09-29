@@ -1,12 +1,12 @@
-import { lazy, Suspense, useState } from 'react'
-import { Heart, Pause, Pencil, Play, Timer, X } from 'lucide-react'
+import { lazy, Suspense, type ReactNode } from 'react'
+import { ArrowDownUp, Pencil, Timer } from 'lucide-react'
 
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
-import { MetronomePanel } from '@/features/metronome/components/MetronomePanel'
 import { resumeMetronomeAudio } from '@/features/metronome/lib/metronome-audio'
-import { songBeatTimes, songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
-import { cn } from '@/lib/cn'
+import { songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { useSongViewStore } from '@/stores/song-view.store'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
 import type { SongDetail, ChordOption } from '@/types/song'
 import { useChordEditStore } from '@/stores/chord-edit.store'
@@ -26,6 +26,8 @@ import { TrackSelector } from '../../components/TrackSelector'
 import { TransportControls } from '../../components/TransportControls'
 import type { LyricsSourceOption } from '../../lib/lyrics-sources'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
+import { dockPillClass } from '../../lib/dock-button'
+import { toolButtonClass } from '../../lib/tool-button'
 
 // Recording pulls in the mp3-encoder bundle; load it only when the controls
 // actually mount instead of shipping it in the core player chunk.
@@ -35,47 +37,71 @@ const RecordButton = lazy(() =>
 
 interface PlayerControlsProps {
   songId: string
-  detail: SongDetail
-  headerTitle: string
-  headerArtist: string
-  hasChords: boolean
+  isPlaybackDisabled?: boolean
+  hasSyncedLyrics: boolean
+  /** While playing on a phone: these replace the settings toggle next to the seek bar. */
+  focusControls?: ReactNode
+  onTogglePlay: () => void
+  onSeek: (time: number) => void
+}
+
+interface SheetPickersProps {
   hasTabs: boolean
   hasBars: boolean
-  isFavorited: boolean
-  showAudioStatus: boolean
-  audioStatusMessage?: string
-  isPlaybackDisabled?: boolean
   sheetVersions: ChordOption[]
   activeChords: { chord: string; start_time: number; end_time: number }[]
   selectedVersionIndex: number
   availableLyricsSources: LyricsSourceOption[]
   selectedLyricsSource: LyricsSourceMode
-  chordNamesForMap: string[]
-  representativeStrumPattern: StrumSymbol[]
-  sectionStrumPatterns: SectionStrumPattern[]
   userEmail: string | null
   chordsUpgrading: boolean
-  hasSyncedLyrics: boolean
-  onTogglePlay: () => void
-  onSeek: (time: number) => void
-  onToggleFavorite: () => void
-  onEnterEditMode: () => void
   onSetVersionIndex: (idx: number) => void
   onSetLyricsSource: (mode: LyricsSourceMode) => void
   onDeleteChords: () => void
-  onOpenTutorial: () => void
-  onSetStemVolume: (stemName: string, volume: number) => void
-  stemVolumes?: Record<string, number>
-  getRecordingTap: () => { context: AudioContext; node: GainNode } | null
-  /** Practice path + band stage, shown above the transport. */
-  stage: React.ReactNode
+}
+
+/** The sheet's settings (view, capo, chord source) and the lyrics source, at the end of the song tools. */
+export function SheetPickers({
+  hasTabs,
+  hasBars,
+  sheetVersions,
+  activeChords,
+  selectedVersionIndex,
+  availableLyricsSources,
+  selectedLyricsSource,
+  userEmail,
+  chordsUpgrading,
+  onSetVersionIndex,
+  onSetLyricsSource,
+  onDeleteChords,
+}: SheetPickersProps) {
+  return (
+    <>
+      <SheetSelector
+        versions={sheetVersions}
+        selectedVersionIndex={selectedVersionIndex}
+        activeChords={activeChords}
+        hasTabs={hasTabs}
+        hasBars={hasBars}
+        currentUserEmail={userEmail ?? undefined}
+        upgrading={chordsUpgrading}
+        onSelectVersionIndex={onSetVersionIndex}
+        onDeleteCurrentVersion={onDeleteChords}
+      />
+      <LyricsSourceSelector
+        options={availableLyricsSources}
+        selected={selectedLyricsSource}
+        onSelect={onSetLyricsSource}
+      />
+    </>
+  )
 }
 
 interface AudioStatusBannerProps {
   message?: string
 }
 
-function AudioStatusBanner({ message }: AudioStatusBannerProps) {
+export function AudioStatusBanner({ message }: AudioStatusBannerProps) {
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const isFullSong = usePlaybackStore((s) => s.isFullSong)
 
@@ -95,106 +121,37 @@ function AudioStatusBanner({ message }: AudioStatusBannerProps) {
 }
 
 /**
- * Renders the transport controls with primary action buttons and the simplified
- * sheet/lyrics controls used for source switching on mobile.
+ * The player dock: seek bar, transport, and the speed/loop/count-in and
+ * display settings. The sheet's own pickers live on the sheet (SheetBar).
  */
-// Composition component that threads distinct, independent player features down to the
-// transport controls; the boolean flags are domain state, not stackable variants.
-// oxlint-disable-next-line react-doctor/no-many-boolean-props
 export function PlayerControls({
   songId,
-  detail,
-  headerTitle,
-  headerArtist,
-  hasChords,
-  hasTabs,
-  hasBars,
-  isFavorited,
-  showAudioStatus,
-  audioStatusMessage,
   isPlaybackDisabled = false,
-  sheetVersions,
-  activeChords,
-  selectedVersionIndex,
-  availableLyricsSources,
-  selectedLyricsSource,
-  chordNamesForMap,
-  representativeStrumPattern,
-  sectionStrumPatterns,
-  userEmail,
-  chordsUpgrading,
   hasSyncedLyrics,
+  focusControls,
   onTogglePlay,
   onSeek,
-  onToggleFavorite,
-  onEnterEditMode,
-  onSetVersionIndex,
-  onSetLyricsSource,
-  onDeleteChords,
-  onOpenTutorial,
-  onSetStemVolume,
-  stemVolumes,
-  getRecordingTap,
-  stage,
 }: PlayerControlsProps) {
   return (
-    <div className="flex flex-col gap-3" data-testid="player-controls">
-      {showAudioStatus && <AudioStatusBanner message={audioStatusMessage} />}
-      {stage}
+    <div data-testid="player-controls">
       <TransportControls
         onTogglePlay={onTogglePlay}
         onSeek={onSeek}
         isPlaybackDisabled={isPlaybackDisabled}
-        primaryControls={
-          <PrimaryControls
-            songId={songId}
-            detail={detail}
-            headerTitle={headerTitle}
-            headerArtist={headerArtist}
-            hasChords={hasChords}
-            isFavorited={isFavorited}
-            isStemSelectionDisabled={isPlaybackDisabled}
-            chordNamesForMap={chordNamesForMap}
-            representativeStrumPattern={representativeStrumPattern}
-            sectionStrumPatterns={sectionStrumPatterns}
-            onToggleFavorite={onToggleFavorite}
-            onTogglePlay={onTogglePlay}
-            onEnterEditMode={onEnterEditMode}
-            onOpenTutorial={onOpenTutorial}
-            onSetStemVolume={onSetStemVolume}
-            stemVolumes={stemVolumes}
-            getRecordingTap={getRecordingTap}
-          />
-        }
-        pinnedControls={
+        focusControls={focusControls}
+        quickControls={
           <>
-            <SheetSelector
-              versions={sheetVersions}
-              selectedVersionIndex={selectedVersionIndex}
-              activeChords={activeChords}
-              hasTabs={hasTabs}
-              hasBars={hasBars}
-              currentUserEmail={userEmail ?? undefined}
-              upgrading={chordsUpgrading}
-              onSelectVersionIndex={onSetVersionIndex}
-              onDeleteCurrentVersion={onDeleteChords}
-            />
-            <LyricsSourceSelector
-              options={availableLyricsSources}
-              selected={selectedLyricsSource}
-              onSelect={onSetLyricsSource}
-            />
+            <PlaybackSpeedSelector />
+            <ABLoopControl />
+            <CountInToggle />
           </>
         }
         secondaryControls={
           <>
             <ChordDisplayControls />
             <HighlightToggle />
-            <PlaybackSpeedSelector />
             <LyricsSyncControl songId={songId} />
             <ScrollModeControl />
-            <CountInToggle />
-            <ABLoopControl />
             <SkipInstrumentalsToggle disabled={!hasSyncedLyrics} />
           </>
         }
@@ -203,91 +160,78 @@ export function PlayerControls({
   )
 }
 
-interface PrimaryControlsProps {
-  songId: string
+/** While playing on a phone or tablet: show or hide the strumming pattern and the metronome. */
+export function FocusToggles() {
+  const showStrum = usePlayerPrefsStore((s) => s.focusShowStrum)
+  const toggleStrum = usePlayerPrefsStore((s) => s.toggleFocusShowStrum)
+  const metronomeOpen = useSongViewStore((s) => s.metronomeOpen)
+  const toggleMetronome = useSongViewStore((s) => s.toggleMetronome)
+  const toggleClass = (on: boolean) => dockPillClass(on, 'size-9 justify-center gap-0 px-0')
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" data-testid="focus-toggles">
+      <button
+        type="button"
+        onClick={toggleStrum}
+        className={toggleClass(showStrum)}
+        aria-label={showStrum ? 'Hide the strumming pattern' : 'Show the strumming pattern'}
+        aria-pressed={showStrum}
+        data-testid="focus-strum-toggle"
+      >
+        <ArrowDownUp size={16} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (!metronomeOpen) resumeMetronomeAudio()
+          toggleMetronome()
+        }}
+        className={toggleClass(metronomeOpen)}
+        aria-label={metronomeOpen ? 'Hide the metronome' : 'Show the metronome'}
+        aria-pressed={metronomeOpen}
+        data-testid="focus-metronome-toggle"
+      >
+        <Timer size={16} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
+/** The song's tools — record, edit, mixer, chord map, metronome — with the sheet pickers at the end. */
+export function PlayerTools({ trailing, ...props }: PrimaryControlsProps & { trailing?: ReactNode }) {
+  return (
+    <div className="flex w-full items-center gap-0.5" data-testid="player-tools">
+      <PrimaryControls {...props} />
+      {trailing && <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">{trailing}</div>}
+    </div>
+  )
+}
+
+export interface PrimaryControlsProps {
   detail: SongDetail
   headerTitle: string
   headerArtist: string
   hasChords: boolean
-  isFavorited: boolean
   isStemSelectionDisabled?: boolean
   chordNamesForMap: string[]
   representativeStrumPattern: StrumSymbol[]
   sectionStrumPatterns: SectionStrumPattern[]
-  onToggleFavorite: () => void
   onEnterEditMode: () => void
   onOpenTutorial: () => void
   onSetStemVolume: (stemName: string, volume: number) => void
   stemVolumes?: Record<string, number>
   getRecordingTap: () => { context: AudioContext; node: GainNode } | null
-  onTogglePlay: () => void
-}
-
-interface MetronomePopupProps {
-  autoBpm: number | null
-  autoTimeSignature: readonly [number, number] | null
-  beatTimes: readonly number[] | null
-  beatAccents: readonly number[] | null
-  onTogglePlay: () => void
-  onClose: () => void
-}
-
-/**
- * Floating metronome panel. Owns the per-tick `currentTime` subscription so the
- * rest of the primary controls don't re-render on every playback time update —
- * this only mounts while the metronome is open.
- */
-function MetronomePopup({ autoBpm, autoTimeSignature, beatTimes, beatAccents, onTogglePlay, onClose }: MetronomePopupProps) {
-  const currentTime = usePlaybackStore((s) => s.currentTime)
-  const isPlaying = usePlaybackStore((s) => s.isPlaying)
-
-  return (
-    <div className="fixed inset-x-2 top-2 z-50 rounded-[1.5rem] border border-white/10 bg-black/92 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:inset-x-4 sm:top-4">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onTogglePlay}
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-flame-300 text-charcoal-950 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition-colors hover:bg-flame-400"
-          aria-label={isPlaying ? 'Pause song' : 'Start song'}
-        >
-          {isPlaying ? <Pause size={19} aria-hidden="true" /> : <Play size={19} aria-hidden="true" />}
-        </button>
-        <MetronomePanel
-          autoBpm={autoBpm}
-          autoTimeSignature={autoTimeSignature}
-          autoBeatTimes={beatTimes}
-          autoBeatAccents={beatAccents}
-          mode="playback"
-          playbackTime={currentTime}
-          playbackPlaying={isPlaying}
-          compact
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/10 text-smoke-200 transition-colors hover:bg-white/15"
-          aria-label="Close metronome"
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  )
 }
 
 function PrimaryControls({
-  songId,
   detail,
   headerTitle,
   headerArtist,
   hasChords,
-  isFavorited,
   isStemSelectionDisabled = false,
   chordNamesForMap,
   representativeStrumPattern,
   sectionStrumPatterns,
-  onToggleFavorite,
-  onTogglePlay,
   onEnterEditMode,
   onOpenTutorial,
   onSetStemVolume,
@@ -295,33 +239,12 @@ function PrimaryControls({
   getRecordingTap,
 }: PrimaryControlsProps) {
   const isEditMode = useChordEditStore((s) => s.isEditMode)
-  const [showMetronome, setShowMetronome] = useState(false)
+  const showMetronome = useSongViewStore((s) => s.metronomeOpen)
+  const toggleMetronome = useSongViewStore((s) => s.toggleMetronome)
 
   return (
     <>
-      <button
-        type="button"
-        onClick={onToggleFavorite}
-        className={cn(
-          'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
-          'border border-flame-400/25 bg-[#111215] shadow-[0_0_24px_rgba(250,204,21,0.13),0_12px_28px_rgba(0,0,0,0.34)]',
-          'hover:border-flame-400/50 hover:bg-flame-400/15 transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-        )}
-        data-tour="favorite"
-        data-testid={`favorite-toggle-${songId}`}
-        aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-      >
-        <Heart
-          size={19}
-          className={cn(
-            'transition-colors',
-            isFavorited ? 'fill-flame-300 text-flame-300 animate-favorite-ignite' : 'text-flame-300',
-          )}
-        />
-        <span className="text-[11px] font-medium text-smoke-200">Heart</span>
-      </button>
-      <Suspense fallback={<div className="h-14 w-full rounded-2xl border border-white/10 bg-[#111215]" aria-hidden="true" />}>
+      <Suspense fallback={<div className="h-12 w-[3.4rem] rounded-xl" aria-hidden="true" />}>
         <RecordButton songTitle={headerTitle} artist={headerArtist} getRecordingTap={getRecordingTap} />
       </Suspense>
       <div className="contents" data-tour="chord-edit">
@@ -329,17 +252,12 @@ function PrimaryControls({
           <button
             type="button"
             onClick={onEnterEditMode}
-            className={cn(
-              'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
-              'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
-              'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
-              'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-            )}
+            className={toolButtonClass()}
             aria-label="Edit chords"
             data-testid="chord-edit-toggle"
           >
-            <Pencil size={18} />
-            <span className="text-[11px] font-medium text-smoke-200">Edit</span>
+            <Pencil size={18} className="text-fire-400" />
+            <span>Edit</span>
           </button>
         )}
       </div>
@@ -362,41 +280,25 @@ function PrimaryControls({
           tutorialUrl={detail.tutorial_url}
           tutorialLinks={detail.tutorial_links}
           strumLoading={!detail.songsterr_status}
+          beatsPerBar={detail.time_signature?.[0]}
           iconOnly
           onOpenTutorial={onOpenTutorial}
         />
       </div>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            if (!showMetronome) resumeMetronomeAudio()
-            setShowMetronome((value) => !value)
-          }}
-          className={cn(
-            'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl',
-            'border border-white/10 bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur',
-            'hover:border-flame-400/30 hover:text-flame-400 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-            showMetronome && 'border-flame-400/40 text-flame-400 bg-flame-400/10',
-          )}
-          aria-label="Open metronome"
-          data-testid="song-metronome-toggle"
-        >
-          <Timer size={18} aria-hidden="true" />
-          <span className="text-[11px] font-medium text-smoke-200">Metro</span>
-        </button>
-        {showMetronome && (
-          <MetronomePopup
-            autoBpm={songTempoBpm(detail)}
-            autoTimeSignature={detail.time_signature ?? null}
-            beatTimes={songBeatTimes(detail)}
-            beatAccents={detail.tab_rhythm?.beat_accents ?? null}
-            onTogglePlay={onTogglePlay}
-            onClose={() => setShowMetronome(false)}
-          />
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          if (!showMetronome) resumeMetronomeAudio()
+          toggleMetronome()
+        }}
+        className={toolButtonClass(showMetronome)}
+        aria-label={showMetronome ? 'Close metronome' : 'Open metronome'}
+        aria-pressed={showMetronome}
+        data-testid="song-metronome-toggle"
+      >
+        <Timer size={18} className="text-fire-400" aria-hidden="true" />
+        <span>Metro</span>
+      </button>
     </>
   )
 }

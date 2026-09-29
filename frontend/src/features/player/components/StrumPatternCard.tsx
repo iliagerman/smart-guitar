@@ -3,23 +3,9 @@ import { ExternalLink, Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import type { SectionStrumPattern } from '../lib/strum-pattern'
+import { STRUM_SEARCH_MS, beatLabels, guessStepsPerBeat, starterPattern } from '../lib/strum-display'
+import { useBoundedLoading } from '../hooks/use-bounded-loading'
 import { useStrumPlayback } from '../hooks/use-strum-playback'
-
-/** Steps per beat for a pattern whose subdivision is unknown, guessed from its length. */
-function guessStepsPerBeat(patternLength: number): number {
-  if (patternLength <= 4) return 1
-  if (patternLength <= 8) return 2
-  return 4
-}
-
-/** Count labels ("1 & 2 &" or "1 e & a") for each step of a pattern. */
-function beatLabels(patternLength: number, stepsPerBeat: number): string[] {
-  const between = stepsPerBeat === 4 ? ['', 'e', '&', 'a'] : ['', '&']
-  return Array.from({ length: patternLength }, (_, i) =>
-    i % stepsPerBeat === 0 ? String(Math.floor(i / stepsPerBeat) + 1) : between[i % stepsPerBeat],
-  )
-}
-
 
 interface StrumPatternCardProps {
   sectionPatterns: SectionStrumPattern[]
@@ -28,6 +14,8 @@ interface StrumPatternCardProps {
   tutorialUrl?: string | null
   tutorialLinks?: { url: string; title: string }[]
   loading?: boolean
+  /** The song's meter; picks the starter pattern for songs without a tab pattern. */
+  beatsPerBar?: number
   onOpenTutorial?: () => void
 }
 
@@ -38,23 +26,24 @@ interface SectionPatternProps {
   onPlayingChange?: (playing: boolean) => void
 }
 
-export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading, onOpenTutorial }: StrumPatternCardProps) {
+export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading = false, beatsPerBar = 4, onOpenTutorial }: StrumPatternCardProps) {
   const hasTutorials = (tutorialLinks && tutorialLinks.length > 0) || !!tutorialUrl
   const [playingSection, setPlayingSection] = useState<string | null>(null)
+  // The pattern lookup can take a while (or never land); don't spin forever.
+  const searching = useBoundedLoading(loading && sectionPatterns.length === 0, STRUM_SEARCH_MS)
 
-  // Render whenever there are strum patterns OR tutorial links. The "Learn to play"
-  // button lives inside this card, so returning null when patterns are empty would
-  // also hide the YouTube tutorial links for songs that have a tutorial but no
-  // generated strumming (e.g. Songsterr returned 0 sections).
-  if (sectionPatterns.length === 0 && !loading && !hasTutorials) return null
+  const starter = sectionPatterns.length === 0 ? starterPattern(beatsPerBar) : null
 
   return (
     <>
-      <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3 space-y-3" data-testid="strum-pattern-card">
+      <div className="rounded-2xl border border-white/[0.07] bg-stage-950/65 p-3 space-y-3 shadow-[0_12px_30px_rgba(0,0,0,0.35)]" data-testid="strum-pattern-card">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-smoke-100">
             Strumming Pattern
             {sectionPatterns.length > 0 && <span className="ml-1.5 text-[10px] font-normal text-smoke-500">from the song&apos;s tab</span>}
+            {starter && !searching && (
+              <span className="ml-1.5 rounded-full bg-fire-500/15 px-1.5 py-0.5 text-[10px] font-bold text-fire-300">starter</span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {hasTutorials && onOpenTutorial && (
@@ -72,10 +61,17 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
           </div>
         </div>
 
-        {loading && sectionPatterns.length === 0 ? (
+        {searching ? (
           <div className="flex items-center gap-2 py-3 justify-center text-smoke-500 text-xs">
             <Loader2 size={14} className="animate-spin" />
-            Loading strumming patterns…
+            Looking for the strumming pattern…
+          </div>
+        ) : starter ? (
+          <div className="space-y-2" data-testid="strum-starter">
+            <p className="text-[11px] leading-relaxed text-smoke-400" data-testid="strum-pattern-none">
+              This song&apos;s tab has no strumming yet. This pattern fits most songs in {beatsPerBar === 6 ? '6/8' : `${beatsPerBar}/4`}: try it slowly, then with the band.
+            </p>
+            <SectionPattern section={starter} bpm={bpm} />
           </div>
         ) : (
           sectionPatterns.map((sp) => (
@@ -90,7 +86,7 @@ export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl
         )}
 
         {strumNotes && (
-          <div className="text-[11px] text-smoke-500 leading-relaxed border-t border-charcoal-700 pt-2">
+          <div className="text-[11px] text-smoke-500 leading-relaxed border-t border-white/10 pt-2">
             {strumNotes}
           </div>
         )}
@@ -136,8 +132,8 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
             isPlaying
               ? 'bg-flame-400/30 text-flame-300 hover:bg-flame-400/40'
               : disabled
-                ? 'bg-charcoal-800 text-smoke-600 cursor-not-allowed'
-                : 'bg-charcoal-700 text-smoke-300 hover:bg-charcoal-600 hover:text-smoke-100',
+                ? 'bg-white/[0.04] text-smoke-600 cursor-not-allowed'
+                : 'bg-fire-500/15 text-fire-200 hover:bg-fire-500/25',
           )}
           title={isPlaying ? 'Stop' : disabled ? 'Stop current pattern first' : 'Play pattern'}
           aria-label={isPlaying ? 'Stop pattern' : 'Play pattern'}

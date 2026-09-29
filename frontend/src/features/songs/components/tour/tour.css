@@ -1,0 +1,649 @@
+/* The night tour: one backdrop that becomes each setlist's world as you scroll.
+   Only the active scene animates; everything is static with reduced motion. */
+
+.tour-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #07060a;
+  contain: strict;
+}
+
+.world-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 1.1s ease;
+}
+
+.world-scene[data-active='true'] {
+  opacity: 1;
+}
+
+.world-scene:not([data-active='true']) *,
+.world-scene:not([data-active='true'])::before,
+.world-scene:not([data-active='true'])::after {
+  animation-play-state: paused !important;
+}
+
+.tour-backdrop[data-still] *,
+.tour-backdrop[data-still] *::before,
+.tour-backdrop[data-still] *::after {
+  animation: none !important;
+}
+
+/* A soft vignette keeps text readable over every world. */
+.tour-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(4, 3, 6, 0.72) 100%);
+  pointer-events: none;
+}
+
+/* ---------- Backstage: two follow-spots and haze ---------- */
+.scene-backstage {
+  background:
+    radial-gradient(70% 45% at 50% -8%, rgba(249, 115, 22, 0.42), transparent 70%),
+    radial-gradient(60% 40% at 50% 110%, rgba(250, 204, 21, 0.1), transparent 70%),
+    #07060a;
+}
+
+.spot {
+  position: absolute;
+  top: -12%;
+  width: 46vw;
+  max-width: 620px;
+  height: 125%;
+  background: linear-gradient(to bottom, rgba(253, 224, 71, 0.2), rgba(249, 115, 22, 0.05) 55%, transparent 85%);
+  clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+  transform-origin: 50% 0;
+  filter: blur(6px);
+  mix-blend-mode: screen;
+}
+
+.spot-left {
+  left: 4%;
+  animation: spot-sway 11s ease-in-out infinite alternate;
+}
+
+.spot-right {
+  right: 4%;
+  animation: spot-sway 13s ease-in-out -4s infinite alternate-reverse;
+}
+
+@keyframes spot-sway {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(14deg); }
+}
+
+/* ---------- Stadium: gold beams over a crowd holding up lights ---------- */
+.scene-arena {
+  background:
+    radial-gradient(70% 38% at 50% -6%, rgba(251, 191, 36, 0.32), transparent 70%),
+    radial-gradient(90% 40% at 50% 104%, rgba(249, 115, 22, 0.28), transparent 72%),
+    linear-gradient(#0a0610, #120a08 70%, #1a0d05);
+}
+
+.beam {
+  position: absolute;
+  top: -8%;
+  width: 11vmin;
+  height: 120%;
+  transform-origin: 50% 0;
+  background: linear-gradient(to bottom, rgba(255, 221, 140, 0.34), rgba(255, 190, 90, 0.08) 55%, transparent 88%);
+  clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%);
+  filter: blur(4px);
+  mix-blend-mode: screen;
+  animation: beam-sweep var(--d) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes beam-sweep {
+  from { transform: rotate(var(--from)); }
+  to { transform: rotate(var(--to)); }
+}
+
+.lighter {
+  position: absolute;
+  left: var(--x);
+  bottom: var(--y);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: #fff1c2;
+  box-shadow: 0 0 10px 3px rgba(255, 206, 110, 0.55);
+  animation: lighter-sway var(--d) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes lighter-sway {
+  from { transform: translate(-6px, 0); opacity: 0.45; }
+  to { transform: translate(6px, -4px); opacity: 1; }
+}
+
+/* Heads and shoulders in silhouette, two rows deep. */
+.crowd {
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  bottom: 0;
+  background-repeat: repeat-x;
+  background-position: bottom;
+}
+
+.crowd-back {
+  height: 16%;
+  background-image: radial-gradient(circle at 50% 100%, #0d0806 58%, transparent 60%);
+  background-size: 38px 44px;
+  opacity: 0.9;
+  animation: crowd-bounce 1s ease-in-out infinite alternate;
+}
+
+.crowd-front {
+  height: 11%;
+  background-image: radial-gradient(circle at 50% 100%, #050304 60%, transparent 62%);
+  background-size: 58px 62px;
+  background-position: 21px bottom;
+  animation: crowd-bounce 1s ease-in-out -0.5s infinite alternate;
+}
+
+@keyframes crowd-bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(5px); }
+}
+
+/* ---------- Campfire: a glowing fire line and rising embers ---------- */
+.scene-campfire {
+  background:
+    radial-gradient(75% 50% at 50% 108%, rgba(255, 110, 30, 0.62), rgba(150, 40, 8, 0.32) 45%, transparent 72%),
+    linear-gradient(#070302, #170804 60%, #2a0d04);
+}
+
+.scene-campfire::before {
+  content: '';
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: -18%;
+  height: 45%;
+  background: radial-gradient(closest-side, rgba(255, 170, 60, 0.55), transparent);
+  animation: fire-flicker 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes fire-flicker {
+  0% { opacity: 0.65; transform: scale(1, 0.95); }
+  40% { opacity: 0.9; transform: scale(1.04, 1.05); }
+  100% { opacity: 0.75; transform: scale(0.98, 1); }
+}
+
+.ember {
+  position: absolute;
+  bottom: -2%;
+  left: var(--x);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: #ffb35c;
+  box-shadow: 0 0 10px 2px rgba(255, 120, 30, 0.8);
+  opacity: 0;
+  animation: ember-rise var(--d) linear var(--delay) infinite;
+}
+
+@keyframes ember-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate(var(--drift), -85vh); opacity: 0; }
+}
+
+/* ---------- Sunrise: first light over the horizon, drifting notes ---------- */
+.scene-sunrise {
+  background: linear-gradient(to top, #6e3246 0%, #3b1f4d 38%, #150d27 72%, #0a0714);
+}
+
+.sun {
+  position: absolute;
+  left: 50%;
+  bottom: -26vmin;
+  width: 70vmin;
+  height: 70vmin;
+  margin-left: -35vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd29a 0%, #ff9d76 38%, rgba(255, 111, 145, 0.35) 62%, transparent 72%);
+  animation: sun-rise 14s ease-in-out infinite alternate;
+}
+
+@keyframes sun-rise {
+  from { transform: translateY(6vmin); }
+  to { transform: translateY(-3vmin); }
+}
+
+.note {
+  position: absolute;
+  bottom: 8%;
+  left: var(--x);
+  font-size: var(--s);
+  color: rgba(255, 214, 190, 0.55);
+  animation: note-float var(--d) ease-in-out var(--delay) infinite;
+  opacity: 0;
+}
+
+@keyframes note-float {
+  0% { transform: translate(0, 0) rotate(-8deg); opacity: 0; }
+  20% { opacity: 0.8; }
+  100% { transform: translate(var(--drift), -60vh) rotate(12deg); opacity: 0; }
+}
+
+/* ---------- Moonlit: a moon, twinkling stars, one shooting star ---------- */
+.scene-moonlit {
+  background:
+    radial-gradient(45% 40% at 82% 12%, rgba(195, 201, 255, 0.22), transparent 70%),
+    linear-gradient(#05071a, #0d1233 60%, #161c45);
+}
+
+.moon {
+  position: absolute;
+  top: 9%;
+  right: 12%;
+  width: 16vmin;
+  height: 16vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fbfaff, #d9dcff 55%, #aab1ef);
+  box-shadow: 0 0 60px 18px rgba(195, 201, 255, 0.25);
+}
+
+.star {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: #fff;
+  animation: twinkle var(--d) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes twinkle {
+  from { opacity: 0.15; }
+  to { opacity: 0.95; }
+}
+
+.shooting-star {
+  position: absolute;
+  top: 18%;
+  left: 10%;
+  width: 18vmin;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), transparent);
+  opacity: 0;
+  transform: rotate(18deg);
+  animation: shoot 9s ease-in 3s infinite;
+}
+
+@keyframes shoot {
+  0%, 88% { opacity: 0; transform: translate(0, 0) rotate(18deg); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translate(45vw, 16vh) rotate(18deg); }
+}
+
+/* ---------- Neon club: magenta haze and sweeping lasers ---------- */
+.scene-neon {
+  background:
+    radial-gradient(60% 45% at 20% 100%, rgba(225, 29, 143, 0.4), transparent 70%),
+    radial-gradient(60% 45% at 80% 100%, rgba(109, 40, 217, 0.45), transparent 70%),
+    #0a0412;
+  animation: club-haze 4s ease-in-out infinite alternate;
+}
+
+@keyframes club-haze {
+  from { filter: saturate(1) brightness(0.95); }
+  to { filter: saturate(1.25) brightness(1.1); }
+}
+
+.laser {
+  position: absolute;
+  bottom: -4%;
+  width: 3px;
+  height: 150vh;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top, rgba(244, 114, 208, 0.95), rgba(244, 114, 208, 0.15) 60%, transparent);
+  box-shadow: 0 0 12px rgba(244, 114, 208, 0.8);
+  animation: laser-sweep var(--d) ease-in-out var(--delay) infinite alternate;
+}
+
+.laser.violet {
+  background: linear-gradient(to top, rgba(167, 139, 250, 0.95), rgba(167, 139, 250, 0.12) 60%, transparent);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.8);
+}
+
+@keyframes laser-sweep {
+  from { transform: rotate(var(--from)); }
+  to { transform: rotate(var(--to)); }
+}
+
+/* ---------- Rehearsal room: rings on the beat (120 BPM) ---------- */
+.scene-pulse {
+  background: radial-gradient(55% 55% at 50% 55%, rgba(239, 35, 60, 0.3), transparent 70%), #0d0205;
+}
+
+.scene-pulse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(40% 40% at 50% 55%, rgba(255, 85, 102, 0.28), transparent 70%);
+  animation: kick 0.5s ease-out infinite;
+}
+
+@keyframes kick {
+  0% { opacity: 1; }
+  60%, 100% { opacity: 0.2; }
+}
+
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 60vmin;
+  height: 60vmin;
+  margin: -30vmin 0 0 -30vmin;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 85, 102, 0.7);
+  opacity: 0;
+  animation: ring-out 2s cubic-bezier(0.2, 0.6, 0.3, 1) var(--delay) infinite;
+}
+
+@keyframes ring-out {
+  0% { transform: scale(0.15); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* ---------- On the beach: a low sun over rolling waves ---------- */
+.scene-sea {
+  background: linear-gradient(#071f2a, #0b3440 50%, #0f4a4f);
+}
+
+.sea-sun {
+  position: absolute;
+  top: 10%;
+  right: 12%;
+  width: 20vmin;
+  height: 20vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe6b3, #f4c77a 55%, rgba(244, 199, 122, 0) 72%);
+  box-shadow: 0 0 80px 30px rgba(244, 217, 166, 0.14);
+  opacity: 0.85;
+}
+
+.wave {
+  position: absolute;
+  left: 0;
+  bottom: var(--bottom);
+  width: 200%;
+  height: var(--h);
+  animation: wave-roll var(--d) linear infinite;
+}
+
+.wave svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+@keyframes wave-roll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ---------- Main stage: synthwave sun and a grid flying at you ---------- */
+.scene-synth {
+  background: linear-gradient(#070418 0%, #1b0a36 52%, #3a0f4a 58%, #0a0620 100%);
+}
+
+.synth-sun {
+  position: absolute;
+  right: 10%;
+  top: 20%;
+  width: 34vmin;
+  height: 34vmin;
+  border-radius: 50%;
+  background: linear-gradient(#ffe36e, #ff7ab6 60%, #b44cff);
+  -webkit-mask: linear-gradient(#000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 67%, #000 67% 75%, transparent 75% 77%, #000 77%);
+  mask: linear-gradient(#000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 67%, #000 67% 75%, transparent 75% 77%, #000 77%);
+  filter: drop-shadow(0 0 40px rgba(255, 122, 182, 0.5));
+}
+
+.synth-grid {
+  position: absolute;
+  left: -50%;
+  right: -50%;
+  bottom: -10%;
+  height: 52%;
+  background-image:
+    linear-gradient(rgba(106, 232, 255, 0.55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(106, 232, 255, 0.55) 2px, transparent 2px);
+  background-size: 64px 64px;
+  transform: perspective(260px) rotateX(62deg);
+  transform-origin: 50% 0;
+  animation: grid-fly 1.4s linear infinite;
+  -webkit-mask: linear-gradient(transparent, #000 35%);
+  mask: linear-gradient(transparent, #000 35%);
+}
+
+@keyframes grid-fly {
+  from { background-position: 0 0; }
+  to { background-position: 0 64px; }
+}
+
+/* ---------- Stops: reveal on arrival, venue word drifting past ---------- */
+.world-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.8s ease var(--reveal-delay, 0s), transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) var(--reveal-delay, 0s);
+}
+
+[data-inview='true'] .world-reveal {
+  opacity: 1;
+  transform: none;
+}
+
+.world-ghost {
+  position: absolute;
+  top: 6%;
+  left: 0;
+  white-space: nowrap;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(6.5rem, 21vw, 19rem);
+  line-height: 0.8;
+  letter-spacing: 0.02em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--accent-ghost);
+  pointer-events: none;
+  user-select: none;
+  transform: translateX(-4vw);
+}
+
+@supports (animation-timeline: view()) {
+  .world-ghost {
+    animation: ghost-drift linear both;
+    animation-timeline: view();
+  }
+
+  @keyframes ghost-drift {
+    from { transform: translateX(12vw); }
+    to { transform: translateX(-38vw); }
+  }
+}
+
+/* Album covers enter one after another. */
+.album-card {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s ease;
+}
+
+.album-card:hover,
+.album-card:focus-visible {
+  transform: translateY(-6px) rotate(-1.2deg);
+}
+
+.album-strip {
+  scrollbar-width: none;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 3%, #000 94%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 3%, #000 94%, transparent);
+}
+
+.album-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- The hits: chart positions in outline, a moving wall of covers ---------- */
+.hit-rank {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(8.5rem, 20vw, 12.5rem);
+  line-height: 0.74;
+  letter-spacing: -0.04em;
+  color: rgba(7, 6, 10, 0.55);
+  -webkit-text-stroke: 2px rgba(251, 191, 36, 0.75);
+  text-shadow: 0 0 34px rgba(251, 191, 36, 0.25);
+  transition: -webkit-text-stroke-color 0.3s ease, text-shadow 0.3s ease;
+  user-select: none;
+  /* Sit on the cover's baseline, clear of the title lines below it. */
+  padding-bottom: 3.6rem;
+}
+
+.hit-cover {
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.4s ease;
+}
+
+.hit-card:hover .hit-cover,
+.hit-card:focus-visible .hit-cover {
+  transform: translateY(-8px) rotate(1.5deg) scale(1.03);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(251, 191, 36, 0.35);
+}
+
+.hit-card:hover .hit-rank,
+.hit-card:focus-visible .hit-rank {
+  -webkit-text-stroke-color: #fde68a;
+  text-shadow: 0 0 44px rgba(251, 191, 36, 0.55);
+}
+
+.hits-marquee {
+  overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.hits-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 70s linear infinite;
+}
+
+.hits-marquee[data-reverse='true'] .hits-marquee-track {
+  animation-direction: reverse;
+  animation-duration: 80s;
+}
+
+.hits-marquee:hover .hits-marquee-track,
+.hits-marquee:focus-within .hits-marquee-track,
+[data-inview='false'] .hits-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.hits-tile {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: transform 0.3s ease;
+}
+
+.hits-tile:hover,
+.hits-tile:focus-visible {
+  transform: scale(1.08);
+  z-index: 1;
+}
+
+/* ---------- Setlist page: the first records fanned out ---------- */
+.setlist-fan-card {
+  margin-left: -5.5rem;
+  transform: translate(var(--fan-x), var(--fan-y)) rotate(var(--fan-r));
+  animation: fan-out 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transition: transform 0.35s ease;
+}
+
+@keyframes fan-out {
+  from { transform: translate(0, 30px) rotate(0); opacity: 0; }
+}
+
+/* ---------- The record: next song on a spinning vinyl ---------- */
+.record-disc {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 36%, rgba(255, 255, 255, 0.04) 36.5%, transparent 37.5%),
+    conic-gradient(from 30deg, rgba(255, 255, 255, 0.1), transparent 12%, transparent 45%, rgba(255, 255, 255, 0.08) 55%, transparent 68%),
+    repeating-radial-gradient(circle, #0c0b0e 0 2px, #17151b 2px 3.2px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 70px rgba(249, 115, 22, 0.18);
+  animation: record-spin 6s linear infinite;
+}
+
+@keyframes record-spin {
+  to { transform: rotate(360deg); }
+}
+
+.tonearm {
+  transform-origin: 85% 8%;
+  animation: tonearm-settle 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes tonearm-settle {
+  from { transform: rotate(-24deg); }
+  to { transform: rotate(0); }
+}
+
+/* Keep phones cool: fewer particles on small screens. */
+@media (max-width: 640px) {
+  .ember:nth-child(n + 10),
+  .lighter:nth-child(n + 36),
+  .beam:nth-child(n + 4),
+  .star:nth-child(n + 22),
+  .note:nth-child(n + 6),
+  .laser:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-scene,
+  .world-scene *,
+  .world-scene::before,
+  .world-scene::after,
+  .world-ghost,
+  .record-disc,
+  .tonearm,
+  .setlist-fan-card,
+  .hits-marquee-track {
+    animation: none !important;
+  }
+
+  .hits-marquee {
+    overflow-x: auto;
+  }
+
+  .world-scene {
+    transition: none;
+  }
+
+  .ember,
+  .note,
+  .shooting-star {
+    display: none;
+  }
+
+  .world-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

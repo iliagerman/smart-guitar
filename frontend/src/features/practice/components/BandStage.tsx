@@ -68,22 +68,22 @@ function Member({ stem, live, isYou, locked, available, disabled, onTap, onSolo 
           onSolo()
         }
       }}
-      className="group flex w-14 shrink-0 select-none flex-col items-center gap-1 text-[10px] font-medium text-smoke-300 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+      className="group flex w-12 shrink-0 select-none flex-col items-center gap-0.5 text-[10px] font-medium text-smoke-300 sm:w-14 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
       aria-label={`${stem.label}: ${locked ? 'Pro — tap to unlock the band' : state}. Long-press or press S to solo.`}
       data-testid={`band-member-${stem.name}`}
       data-state={isYou ? 'you' : live ? 'live' : 'muted'}
     >
       <span
         className={cn(
-          'relative grid size-11 place-items-center rounded-full border-2 transition-[border-color,box-shadow,opacity] group-focus-visible:ring-2 group-focus-visible:ring-flame-400/70',
+          'relative grid size-9 place-items-center rounded-full border-2 sm:size-10 transition-[border-color,box-shadow,opacity,transform] group-hover:scale-105 group-focus-visible:ring-2 group-focus-visible:ring-flame-400/70',
           isYou
             ? 'border-dashed border-flame-400 bg-flame-400/10 text-xs font-black text-flame-300'
             : live
-              ? 'border-fire-500 bg-stage-800 text-smoke-100 shadow-[0_0_0_4px_rgba(249,115,22,0.16),0_0_16px_rgba(249,115,22,0.4)]'
+              ? 'border-fire-500 bg-stage-800 text-smoke-100 shadow-[0_0_0_3px_rgba(249,115,22,0.12)] sm:shadow-[0_0_0_4px_rgba(249,115,22,0.16),0_0_16px_rgba(249,115,22,0.4)]'
               : 'border-[#3b3342] bg-stage-800 text-smoke-500 opacity-60',
         )}
       >
-        {isYou ? 'YOU' : <StemIcon stem={stem.name} size={20} />}
+        {isYou ? 'YOU' : <StemIcon stem={stem.name} size={18} />}
         {locked && (
           <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-ink-900 text-flame-300 ring-1 ring-flame-400/40">
             <Lock size={9} aria-hidden="true" />
@@ -126,7 +126,7 @@ export function BandStage({
 
   return (
     <div
-      className="rounded-[1.4rem] border border-fire-500/25 bg-[linear-gradient(180deg,rgba(249,115,22,0.14),rgba(255,255,255,0.02))] px-2 pb-2 pt-2.5"
+      className="flex flex-col justify-center rounded-[1.4rem] border border-fire-500/20 bg-[linear-gradient(180deg,rgba(249,115,22,0.12),rgba(255,255,255,0.02))] px-2 pb-1.5 pt-2 max-sm:py-1.5"
       data-testid="band-stage"
     >
       <div className="flex justify-around gap-1 overflow-x-auto">
@@ -164,7 +164,7 @@ export function BandStage({
           )
         })}
       </div>
-      <p className="mt-1 text-center text-[10.5px] text-smoke-400">{hint}</p>
+      <p className="mt-0.5 hidden text-center text-[10px] text-smoke-500 sm:block">{hint}</p>
     </div>
   )
 }

@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
     },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon-32.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Smart Guitar',
         short_name: 'SmartGuitar',

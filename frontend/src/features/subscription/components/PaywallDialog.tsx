@@ -18,7 +18,7 @@ import type { PriceDetail } from '@/types/subscription'
 type PlanType = 'monthly' | 'yearly'
 
 const PITCH: Record<PaywallReason, string> = {
-  stage: 'Step 3 takes the guitar out of the real recording so you play the part yourself, with the band behind you.',
+  stage: 'Take the guitar out of the real recording and play the part yourself, with the band behind you.',
   band_member: 'Remove or solo any instrument in the real recording and take the guitarist’s seat.',
   add_song: 'Add any song from YouTube. We pull the band apart and write out the chords in about 5 minutes.',
   record: 'Record yourself playing with the band and hear how you sound in the real mix.',
@@ -43,8 +43,8 @@ function perMonth(price: PriceDetail): string {
 
 /**
  * "The band is waiting" paywall. Opened through the paywall store with the
- * reason the user hit it; free users can always close it and keep using the
- * free steps (Hear it + Learn it).
+ * reason the user hit it; free users can always close it and keep playing
+ * along with the full song.
  */
 export function PaywallDialog() {
   const reason = usePaywallStore((s) => s.reason)
@@ -136,17 +136,19 @@ export function PaywallDialog() {
                 <span>{song ? song.title.toUpperCase() : 'YOUR PROGRESS'}</span>
                 {summary && summary.streak_days > 0 && <span>🔥 {summary.streak_days}-day streak</span>}
               </div>
-              <div className={cn('mt-2 grid gap-2 text-center', song ? 'grid-cols-3' : 'grid-cols-2')}>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-center">
                 {song && (
                   <div>
                     <b className="block font-serif text-2xl font-extrabold">{song.learnedChords}</b>
                     <span className="text-[10px] text-ink-600">shapes learned</span>
                   </div>
                 )}
-                <div>
-                  <b className="block font-serif text-2xl font-extrabold">{song ? `${song.completedSteps}/4` : inProgress}</b>
-                  <span className="text-[10px] text-ink-600">{song ? 'steps done' : 'songs in progress'}</span>
-                </div>
+                {!song && (
+                  <div>
+                    <b className="block font-serif text-2xl font-extrabold">{inProgress}</b>
+                    <span className="text-[10px] text-ink-600">songs in progress</span>
+                  </div>
+                )}
                 <div>
                   <b className="block font-serif text-2xl font-extrabold">{summary?.streak_days ?? 0}</b>
                   <span className="text-[10px] text-ink-600">day streak</span>

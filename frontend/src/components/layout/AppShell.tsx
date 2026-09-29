@@ -14,7 +14,7 @@ export function AppShell() {
   const isAuthPage = authPaths.includes(location.pathname)
 
   return (
-    <div className="h-[var(--vv-height)] overflow-hidden bg-charcoal-950">
+    <div className="h-[var(--vv-height)] overflow-hidden bg-stage-950">
       {isAuthPage ? (
         <main className="min-h-[var(--vv-height)]">
           <Outlet />

@@ -22,30 +22,30 @@ const chordColorMapLight: Record<string, string> = {
 }
 
 const chordColorMapDark: Record<string, string> = {
-  'C': 'text-[#55c878]',
-  'C#': 'text-[#55c878]',
-  'Db': 'text-[#55c878]',
-  'D': 'text-[#55c878]',
-  'D#': 'text-[#55c878]',
-  'Eb': 'text-[#55c878]',
-  'E': 'text-[#55c878]',
-  'F': 'text-[#55c878]',
-  'F#': 'text-[#55c878]',
-  'Gb': 'text-[#55c878]',
-  'G': 'text-[#55c878]',
-  'G#': 'text-[#55c878]',
-  'Ab': 'text-[#55c878]',
-  'A': 'text-[#55c878]',
-  'A#': 'text-[#55c878]',
-  'Bb': 'text-[#55c878]',
-  'B': 'text-[#55c878]',
+  'C': 'text-flame-300',
+  'C#': 'text-flame-300',
+  'Db': 'text-flame-300',
+  'D': 'text-flame-300',
+  'D#': 'text-flame-300',
+  'Eb': 'text-flame-300',
+  'E': 'text-flame-300',
+  'F': 'text-flame-300',
+  'F#': 'text-flame-300',
+  'Gb': 'text-flame-300',
+  'G': 'text-flame-300',
+  'G#': 'text-flame-300',
+  'Ab': 'text-flame-300',
+  'A': 'text-flame-300',
+  'A#': 'text-flame-300',
+  'Bb': 'text-flame-300',
+  'B': 'text-flame-300',
   'N': 'text-smoke-500',
 }
 
 export function getChordColor(chord: string, variant: 'light' | 'dark' = 'light'): string {
   const root = getChordRootNote(chord, { preferSharps: true })
   const map = variant === 'light' ? chordColorMapLight : chordColorMapDark
-  return map[root] || (variant === 'light' ? 'text-emerald-700' : 'text-[#55c878]')
+  return map[root] || (variant === 'light' ? 'text-emerald-700' : 'text-flame-300')
 }
 
 /**

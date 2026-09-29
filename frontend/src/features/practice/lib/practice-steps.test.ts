@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { completeStep, emptyProgress, firstVerseLoop, songShapes, toggleLearnedChord } from './practice-steps'
+import { completeStep, emptyProgress, firstVerseLoop, isPathComplete, songShapes, toggleLearnedChord } from './practice-steps'
 
 describe('completeStep', () => {
   it('marks the step done and moves to the next unfinished step', () => {
@@ -9,15 +9,17 @@ describe('completeStep', () => {
   })
 
   it('skips steps that are already done', () => {
-    const next = completeStep({ ...emptyProgress('s'), completed_steps: [3] }, 2)
-    expect(next.completed_steps).toEqual([2, 3])
-    expect(next.current_step).toBe(4)
+    const next = completeStep({ ...emptyProgress('s'), completed_steps: [3] }, 1)
+    expect(next.completed_steps).toEqual([1, 3])
+    expect(next.current_step).toBe(2)
   })
 
   it('stays on the last step once the song is complete', () => {
-    const next = completeStep({ ...emptyProgress('s'), completed_steps: [1, 2, 3], current_step: 4 }, 4)
-    expect(next.completed_steps).toEqual([1, 2, 3, 4])
-    expect(next.current_step).toBe(4)
+    const done = completeStep({ ...emptyProgress('s'), completed_steps: [1, 2], current_step: 3 }, 3)
+    expect(done.completed_steps).toEqual([1, 2, 3])
+    expect(done.current_step).toBe(3)
+    expect(isPathComplete(done)).toBe(true)
+    expect(isPathComplete({ completed_steps: [1, 2] })).toBe(false)
   })
 })
 

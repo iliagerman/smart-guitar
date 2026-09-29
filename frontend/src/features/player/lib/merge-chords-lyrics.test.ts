@@ -91,6 +91,66 @@ describe('mergeChordLyrics chord layout', () => {
   })
 })
 
+describe('mergeChordLyrics chords between lines', () => {
+  // Knockin' on Heaven's Door: the change to C lands just after "door", while
+  // the next line opens on G (already sounding when singing starts).
+  const words = (start: number, list: string[]): LyricsWord[] =>
+    list.map((word, i) => ({ word, start: start + i * 0.5, end: start + i * 0.5 + 0.4 }))
+  const lyrics = [
+    seg(50, 53, "Feel I'm knocking on heaven's door", words(50, ['Feel', "I'm", 'knocking', 'on', "heaven's", 'door'])),
+    seg(57, 60, 'Knock knock knocking on heaven door', words(57, ['Knock', 'knock', 'knocking', 'on', 'heaven', 'door'])),
+  ]
+  const chords: ChordEntry[] = [
+    { start_time: 49.7, end_time: 51, chord: 'G' },
+    { start_time: 51, end_time: 53.1, chord: 'D' },
+    { start_time: 53.1, end_time: 56.1, chord: 'C' }, // right after line 1 ends
+    { start_time: 56.1, end_time: 58, chord: 'G' }, // pickup into line 2
+    { start_time: 58, end_time: 60.1, chord: 'D' },
+  ]
+
+  it('puts a change that follows a line on that line, over its last word', () => {
+    const [first, second] = mergeChordLyrics(chords, lyrics)
+    expect(first.chords.map((c) => c.chord)).toEqual(['G', 'D', 'C'])
+    const doorOffset = first.text.lastIndexOf('door')
+    expect(first.chords[2].charOffset).toBe(doorOffset)
+    expect(second.chords.map((c) => c.chord)).toEqual(['G', 'D'])
+  })
+
+  it('keeps a real pickup chord at the start of the next line', () => {
+    const pickup: ChordEntry[] = [
+      ...chords.slice(0, 2),
+      { start_time: 55.2, end_time: 57.3, chord: 'Em' }, // closer to line 2, held into it
+      { start_time: 57.3, end_time: 58, chord: 'G' },
+      { start_time: 58, end_time: 60.1, chord: 'D' },
+    ]
+    const [, second] = mergeChordLyrics(pickup, lyrics)
+    expect(second.chords.map((c) => c.chord)).toEqual(['Em', 'G', 'D'])
+    expect(second.chords[0].charOffset).toBe(0)
+  })
+
+  it('drops a sub-second blip that would print against the line\'s first chord', () => {
+    const blip: ChordEntry[] = [
+      ...chords.slice(0, 2),
+      { start_time: 56.3, end_time: 56.9, chord: 'Em' }, // 0.6s, replaced as singing starts
+      { start_time: 56.9, end_time: 58, chord: 'G' },
+      { start_time: 58, end_time: 60.1, chord: 'D' },
+    ]
+    const [, second] = mergeChordLyrics(blip, lyrics)
+    expect(second.chords.map((c) => c.chord)).toEqual(['G', 'D'])
+  })
+
+  it('drops a sub-second blip still sounding as the line starts', () => {
+    const blip: ChordEntry[] = [
+      ...chords.slice(0, 2),
+      { start_time: 56.4, end_time: 57.2, chord: 'D' }, // held 0.2s into the first word
+      { start_time: 57.2, end_time: 58, chord: 'G' },
+      { start_time: 58, end_time: 60.1, chord: 'D' },
+    ]
+    const [, second] = mergeChordLyrics(blip, lyrics)
+    expect(second.chords.map((c) => c.chord)).toEqual(['G', 'D'])
+  })
+})
+
 describe('findActiveChordIndex', () => {
   const chords = [
     { start_time: 0, end_time: 1 },

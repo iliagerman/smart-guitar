@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn'
 import { isAppleMobileSafariLike } from '@/lib/device'
 import { type StemType } from '@/types/song'
 import { MixerIcon, StemIcon } from './StemIcons'
+import { toolButtonClass } from '../lib/tool-button'
 
 interface TrackSelectorProps {
   onSetStemVolume: (stemName: string, volume: number) => void
@@ -35,20 +36,14 @@ export function TrackSelector({
       <Popover.Trigger asChild>
         <button
           type="button"
-          className={cn(
-            'inline-flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-2xl border bg-[#111215] text-flame-300 shadow-[0_12px_28px_rgba(0,0,0,0.34)] backdrop-blur transition-colors',
-            isDisabled
-              ? 'cursor-not-allowed border-white/10 opacity-50'
-              : 'border-white/10 hover:border-flame-400/30 hover:text-flame-400',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-          )}
+          className={toolButtonClass()}
           title="Stem mixer"
           aria-label="Open stem mixer"
           data-testid="track-selector"
           disabled={isDisabled}
         >
-          <MixerIcon size={22} />
-          <span className="text-[11px] font-medium text-smoke-200">Mixer</span>
+          <MixerIcon size={20} className="text-fire-400" />
+          <span>Mixer</span>
         </button>
       </Popover.Trigger>
 

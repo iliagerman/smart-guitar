@@ -94,7 +94,7 @@ export function RecordingSettingsSection() {
   const setRecordingBackingGain = usePlayerPrefsStore((s) => s.setRecordingBackingGain)
 
   return (
-    <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600">
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
       <h2 className="text-lg font-semibold text-smoke-100 mb-4 flex items-center gap-2">
         <Mic size={20} />
         Recording

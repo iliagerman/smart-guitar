@@ -28,7 +28,7 @@ export function StringSelector({
           className={cn(
             'px-3 py-2 rounded-xl text-sm font-semibold border transition-colors',
             selectedString === null
-              ? 'bg-flame-400/15 border-flame-400/40 text-flame-400'
+              ? 'bg-fire-500/15 border-fire-500/50 text-fire-300'
               : 'border-charcoal-700 text-smoke-500 hover:border-charcoal-600 hover:text-smoke-300'
           )}
           aria-label="Auto-detect string"
@@ -51,9 +51,9 @@ export function StringSelector({
               className={cn(
                 'w-11 h-11 rounded-xl text-sm font-semibold border transition-colors',
                 isSelected
-                  ? 'bg-flame-400/15 border-flame-400/40 text-flame-400'
+                  ? 'bg-fire-500/15 border-fire-500/50 text-fire-300'
                   : isDetected
-                    ? 'bg-flame-400/10 border-flame-400/20 text-smoke-200'
+                    ? 'bg-fire-500/10 border-fire-500/25 text-smoke-200'
                     : 'border-charcoal-700 text-smoke-500 hover:border-charcoal-600 hover:text-smoke-300'
               )}
               aria-label={`Select string ${str.stringNumber} (${str.note})`}

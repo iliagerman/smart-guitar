@@ -8,6 +8,13 @@ import { usePaywallStore } from '@/stores/paywall.store'
 import { cn } from '@/lib/cn'
 import { Skeleton } from '@/components/shared/Skeleton'
 
+const PRO_PERKS = [
+  'Mute or solo any instrument: drums, bass, vocals, keys',
+  'Add any song from YouTube',
+  'Record yourself playing along',
+  'AI strumming patterns and chord editing',
+]
+
 export function SubscriptionSection() {
   const { data: status, isLoading } = useSubscription()
   const queryClient = useQueryClient()
@@ -24,7 +31,7 @@ export function SubscriptionSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600 space-y-4">
+      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl space-y-4">
         <Skeleton className="h-6 w-32 rounded" />
         <Skeleton className="h-4 w-48 rounded" />
       </div>
@@ -47,17 +54,18 @@ export function SubscriptionSection() {
 
   return (
     <>
-      <div className="bg-charcoal-800 rounded-xl p-6 border border-charcoal-600">
-        <h2 className="text-lg font-semibold text-smoke-100 mb-4 flex items-center gap-2">
-          <CreditCard size={20} />
+      <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-fire-500/20 blur-3xl" aria-hidden="true" />
+        <h2 className="relative mb-4 flex items-center gap-2 text-lg font-semibold text-smoke-100">
+          <CreditCard size={20} className="text-fire-400" />
           Subscription
         </h2>
 
         {trialActive && !sub && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-400 text-xs font-medium">
-                FREE TRIAL
+              <span className="rounded-full bg-fire-500/15 px-2.5 py-1 text-xs font-bold tracking-wide text-fire-300">
+                PRO TRIAL
               </span>
             </div>
             <p className="text-smoke-400 text-sm">
@@ -66,13 +74,21 @@ export function SubscriptionSection() {
                 {formatDate(status.trial_ends_at)}
               </span>
             </p>
+            <ul className="grid gap-1.5 text-sm text-smoke-300">
+              {PRO_PERKS.map((perk) => (
+                <li key={perk} className="flex items-center gap-2">
+                  <span className="grid size-4 place-items-center rounded-full bg-fire-500/20 text-[10px] text-fire-300" aria-hidden="true">✓</span>
+                  {perk}
+                </li>
+              ))}
+            </ul>
             <button
               type="button"
               onClick={() => openPaywall('upgrade')}
-              className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
+              className="w-full rounded-full bg-fire-500 py-3 font-extrabold text-white shadow-[0_14px_34px_rgba(249,115,22,0.35)] transition-colors hover:bg-fire-600"
               data-testid="subscription-subscribe-button"
             >
-              Subscribe Now
+              Keep the whole band: go Pro
             </button>
           </div>
         )}
@@ -149,14 +165,22 @@ export function SubscriptionSection() {
 
         {!trialActive && !sub && (
           <div className="space-y-3">
-            <p className="text-smoke-400 text-sm">You do not have an active subscription.</p>
+            <p className="text-smoke-400 text-sm">You’re on the free plan: every song in the library with chords, lyrics, the full mix and the guitar track.</p>
+            <ul className="grid gap-1.5 text-sm text-smoke-300">
+              {PRO_PERKS.map((perk) => (
+                <li key={perk} className="flex items-center gap-2">
+                  <span className="grid size-4 place-items-center rounded-full bg-fire-500/20 text-[10px] text-fire-300" aria-hidden="true">✓</span>
+                  {perk}
+                </li>
+              ))}
+            </ul>
             <button
               type="button"
               onClick={() => openPaywall('upgrade')}
-              className="w-full py-2.5 bg-flame-500 text-white rounded-lg font-medium hover:bg-flame-600 transition-colors"
+              className="w-full rounded-full bg-fire-500 py-3 font-extrabold text-white shadow-[0_14px_34px_rgba(249,115,22,0.35)] transition-colors hover:bg-fire-600"
               data-testid="subscription-subscribe-no-trial-button"
             >
-              Subscribe Now
+              Bring the whole band: go Pro
             </button>
           </div>
         )}

@@ -8,6 +8,11 @@ import { Pagination } from '@/components/shared/Pagination'
 import { getScrollableParent } from '@/lib/scroll'
 import { useFavoritesSortStore } from '@/stores/favorites-sort.store'
 import { Heart, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { songDetailPath } from '@/router/routes'
+import { displayArtistName, displaySongTitle } from '@/lib/format-song'
+import { useHits } from '@/features/songs/hooks/use-hits'
+import { Cover } from '@/features/songs/components/tour/HitsSection'
 
 const PAGE_SIZE = 20
 
@@ -66,15 +71,7 @@ function FavoritesListInner({ query }: FavoritesListProps) {
     )
   }
 
-  if (!favorites?.length) {
-    return (
-      <EmptyState
-        icon={<Heart size={48} />}
-        title="No favorites yet"
-        description="Heart your favorite songs to see them here"
-      />
-    )
-  }
+  if (!favorites?.length) return <EmptyCrate />
 
   if (query && !page.length) {
     return (
@@ -94,6 +91,36 @@ function FavoritesListInner({ query }: FavoritesListProps) {
         )}
       </div>
       <Pagination offset={offset} limit={PAGE_SIZE} total={total} onPageChange={handlePageChange} />
+    </div>
+  )
+}
+
+/** Nothing saved yet: say how to fill the crate and offer hits to start with. */
+function EmptyCrate() {
+  const { data } = useHits()
+  const picks = data?.items?.slice(0, 8) ?? []
+  return (
+    <div className="py-6 text-center" data-testid="favorites-empty">
+      <div className="mx-auto grid size-16 place-items-center rounded-full bg-fire-500/15 text-fire-400 shadow-[0_0_40px_rgba(249,115,22,0.25)]">
+        <Heart size={30} className="animate-heartbeat motion-reduce:animate-none" aria-hidden="true" />
+      </div>
+      <h2 className="mt-5 font-display text-4xl tracking-wide text-smoke-100">YOUR CRATE IS EMPTY</h2>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-smoke-400">
+        Tap the heart on any song and it lands here, ready for tonight. Start with one everybody knows:
+      </p>
+      {picks.length > 0 && (
+        <div className="mx-auto mt-8 grid max-w-3xl grid-cols-2 gap-4 text-left sm:grid-cols-4">
+          {picks.map((song) => (
+            <Link key={song.id} to={songDetailPath(song.id)} className="album-card group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70">
+              <span className="block aspect-square overflow-hidden rounded-2xl bg-stage-800 shadow-[0_18px_40px_rgba(0,0,0,0.5)] ring-1 ring-white/10">
+                <Cover song={song} />
+              </span>
+              <span className="mt-2 block truncate text-sm font-bold text-smoke-100" dir="auto">{displaySongTitle(song)}</span>
+              <span className="block truncate text-xs text-smoke-400" dir="auto">{displayArtistName(song)}</span>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

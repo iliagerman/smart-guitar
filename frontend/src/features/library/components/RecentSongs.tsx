@@ -5,6 +5,7 @@ import { songDetailPath } from '@/router/routes'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import type { Song } from '@/types/song'
+import { FlameLogo } from '@/components/shared/FlameLogo'
 
 interface RecentSongCardProps {
   song: Song
@@ -24,7 +25,7 @@ function RecentSongCard({ song }: RecentSongCardProps) {
         {thumbnailUrl && !imgFailed ? (
           <img src={thumbnailUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgFailed(true)} />
         ) : (
-          <video src="/guitar.mp4" autoPlay loop muted playsInline tabIndex={-1} aria-hidden="true" className="absolute inset-0 w-full h-full object-cover" />
+          <FlameLogo className="absolute inset-0 m-auto size-20" />
         )}
       </div>
       <p className="text-smoke-100 text-xs font-medium truncate">{displaySongTitle(song)}</p>

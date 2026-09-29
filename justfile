@@ -1343,6 +1343,11 @@ build-frontend:
 deploy-all:
     bash "{{project_dir}}/scripts/deploy/all.sh"
 
+# Build the landing page 3D worlds (homepage/world/src -> homepage/js/world.min.js)
+build-homepage:
+    npm --prefix "{{project_dir}}/homepage/world" ci --silent
+    npm --prefix "{{project_dir}}/homepage/world" run build
+
 # Deploy homepage (landing page) to S3, invalidate CloudFront, and tag git
 deploy-homepage:
     bash "{{project_dir}}/scripts/deploy/homepage.sh"
@@ -1411,7 +1416,7 @@ test-practice:
     export HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" XDG_CACHE_HOME="$sandbox/cache" TMPDIR="$sandbox/tmp"
     mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
     cd "{{project_dir}}/frontend"
-    npx playwright test --config playwright.capo.config.ts practice-path trial-countdown-banner
+    npx playwright test --config playwright.capo.config.ts practice-path trial-countdown-banner favorites-sort
 
 test-frontend *args:
     cd {{project_dir}}/frontend && npm run test -- {{args}}

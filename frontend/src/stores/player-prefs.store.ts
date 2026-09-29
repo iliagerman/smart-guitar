@@ -42,6 +42,10 @@ export interface PlayerPrefsState {
   showStrums: boolean
   /** Show slash bass notes on chords (e.g. C/G) when detected. */
   showBassNotes: boolean
+  /** Count the beats to hold each chord ("1 2 3 4") under its name in the sheet. */
+  showBeatCounts: boolean
+  /** While playing on a phone or tablet: keep the strumming pattern above the sheet. */
+  focusShowStrum: boolean
   /** Lyrics sync offset in milliseconds. Positive = lyrics delayed (for when
    *  highlights appear too early). Negative = lyrics advanced. */
   lyricsOffsetMs: number
@@ -88,6 +92,8 @@ export interface PlayerPrefsState {
   toggleShowStrums: () => void
   setShowBassNotes: (show: boolean) => void
   toggleShowBassNotes: () => void
+  toggleShowBeatCounts: () => void
+  toggleFocusShowStrum: () => void
   setLyricsOffsetMs: (ms: number | ((prev: number) => number)) => void
   setAutoScrollSpeed: (pxPerSec: number | ((prev: number) => number)) => void
   setLyricsMode: (mode: LyricsHighlightMode) => void
@@ -113,6 +119,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       transposeSemitones: 0,
       showStrums: true,
       showBassNotes: true,
+      showBeatCounts: true,
+      focusShowStrum: true,
       lyricsOffsetMs: 0,
       autoScrollSpeed: 60,
       lyricsMode: 'highlight' as LyricsHighlightMode,
@@ -156,6 +164,8 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
       toggleShowStrums: () => set({ showStrums: !get().showStrums }),
       setShowBassNotes: (show) => set({ showBassNotes: !!show }),
       toggleShowBassNotes: () => set({ showBassNotes: !get().showBassNotes }),
+      toggleShowBeatCounts: () => set({ showBeatCounts: !get().showBeatCounts }),
+      toggleFocusShowStrum: () => set({ focusShowStrum: !get().focusShowStrum }),
       setLyricsOffsetMs: (ms) =>
         set((state) => ({
           lyricsOffsetMs: clampInt(
@@ -310,9 +320,19 @@ export const usePlayerPrefsStore = create<PlayerPrefsState>()(
           state.skipInstrumentals = false
         }
 
+        // v18 → v19: beat counts under the chords (default on).
+        if (state && state.showBeatCounts === undefined) {
+          state.showBeatCounts = true
+        }
+
+        // v19 → v20: strumming pattern shown while playing (default on).
+        if (state && state.focusShowStrum === undefined) {
+          state.focusShowStrum = true
+        }
+
         return state as unknown as PlayerPrefsState
       },
-      version: 18,
+      version: 20,
     }
   )
 )

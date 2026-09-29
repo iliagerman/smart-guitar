@@ -1,8 +1,8 @@
 import { Gauge } from 'lucide-react'
 
-import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { dockPillClass } from '../lib/dock-button'
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5] as const
 
@@ -29,12 +29,7 @@ export function PlaybackSpeedSelector() {
   return (
     <button
       type="button"
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
-        'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-        'hover:border-flame-400/30 transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-      )}
+      className={dockPillClass(playbackRate !== 1)}
       onClick={cycleNext}
       title={`Speed: ${formatSpeed(playbackRate)}. Click to cycle.`}
       aria-label={`Playback speed: ${formatSpeed(playbackRate)}`}

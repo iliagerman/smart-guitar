@@ -32,8 +32,8 @@ export function ChordDiagram({ chord }: ChordDiagramProps) {
     const label = bass ? `${root}/${bass}` : root
 
     return (
-        <div className="rounded-lg border border-charcoal-700 bg-charcoal-900/40 p-3" aria-label={`${label} chord diagram`}>
-            <div className="mb-2 text-sm font-semibold text-smoke-100" dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+        <div className="rounded-2xl border border-white/[0.07] bg-stage-950/65 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.35)]" aria-label={`${label} chord diagram`}>
+            <div className="mb-2 font-mono text-lg font-bold leading-none text-flame-300" dir="ltr" style={{ unicodeBidi: 'isolate' }}>
                 {label}
             </div>
             <Fretboard voicing={voicing} />
@@ -64,6 +64,8 @@ interface ChordMapProps {
     tutorialUrl?: string | null
     tutorialLinks?: TutorialLink[]
     strumLoading?: boolean
+    /** The song's meter, for the starter strum pattern. */
+    beatsPerBar?: number
     showHeader?: boolean
     songKey?: string | null
     className?: string
@@ -81,6 +83,7 @@ export function ChordMap({
     tutorialUrl,
     tutorialLinks,
     strumLoading,
+    beatsPerBar,
     showHeader = true,
     songKey,
     className,
@@ -108,10 +111,10 @@ export function ChordMap({
             {showHeader && (
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-smoke-200">Chord Map</h3>
+                        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.26em] text-fire-300">Chord map</h3>
                         {songKey && (
                             <span
-                                className="bg-emerald-400/20 text-emerald-400 text-xs px-1.5 py-0.5 rounded"
+                                className="rounded-full bg-fire-500/15 px-2 py-0.5 text-xs font-semibold text-fire-300"
                                 data-testid="chord-key-badge"
                             >
                                 Key: {songKey}
@@ -130,6 +133,7 @@ export function ChordMap({
                     tutorialUrl={tutorialUrl}
                     tutorialLinks={tutorialLinks}
                     loading={strumLoading}
+                    beatsPerBar={beatsPerBar}
                     onOpenTutorial={onOpenTutorial}
                 />
             </div>

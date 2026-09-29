@@ -15,11 +15,8 @@ interface ChordSheetLineProps {
   activeChordIndex: number
   selectedChordIndex: number | null | undefined
   globalChordIndexMap: Map<object, number>
-  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
-  lookAheadWordIndex: number
   activeLineRef: React.RefObject<HTMLDivElement | null>
   activeWordRef: React.RefObject<HTMLDivElement | null>
-  lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onChordClick: (time: number, globalIndex: number) => void
   onWordClick: (time: number) => void
   onChordRename?: (globalIndex: number, newName: string) => void
@@ -86,10 +83,8 @@ function ChordSheetLineImpl({
   activeChordIndex,
   selectedChordIndex,
   globalChordIndexMap,
-  lookAheadWordIndex,
   activeLineRef,
   activeWordRef,
-  lookAheadWordRef,
   onChordClick,
   onWordClick,
   onChordRename,
@@ -135,9 +130,7 @@ function ChordSheetLineImpl({
           activeChordIndex={activeChordIndex}
           selectedChordIndex={selectedChordIndex}
           globalChordIndexMap={globalChordIndexMap}
-          lookAheadWordIndex={lookAheadWordIndex}
           activeWordRef={activeWordRef}
-          lookAheadWordRef={lookAheadWordRef}
           onChordClick={onChordClick}
           onWordClick={onWordClick}
           onChordRename={onChordRename}
@@ -155,7 +148,7 @@ function ChordSheetLineImpl({
 }
 
 /**
- * Memoized: the parent already narrows active/look-ahead state to this
+ * Memoized: the parent already narrows active state to this
  * specific line (see ChordSheet.tsx), so an unrelated line's props stay
  * referentially identical while playback advances elsewhere, and this skips
  * re-rendering entirely.
@@ -209,10 +202,7 @@ interface LyricsContentProps {
   activeChordIndex: number
   selectedChordIndex: number | null | undefined
   globalChordIndexMap: Map<object, number>
-  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
-  lookAheadWordIndex: number
   activeWordRef: React.RefObject<HTMLDivElement | null>
-  lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onChordClick: (time: number, globalIndex: number) => void
   onWordClick: (time: number) => void
   onChordRename?: (globalIndex: number, newName: string) => void
@@ -249,9 +239,7 @@ function LyricsContent(props: LyricsContentProps) {
           activeWordIndex={props.activeWordIndex}
           activeChordIndex={props.activeChordIndex}
           globalChordIndexMap={props.globalChordIndexMap}
-          lookAheadWordIndex={props.lookAheadWordIndex}
           activeWordRef={props.activeWordRef}
-          lookAheadWordRef={props.lookAheadWordRef}
           onWordClick={props.onWordClick}
           onWordDragOver={props.onWordDragOver}
           onWordDrop={props.onWordDrop}
@@ -285,10 +273,7 @@ interface WordsWithChordsProps {
   activeWordIndex: number
   activeChordIndex: number
   globalChordIndexMap: Map<object, number>
-  /** Already narrowed by the parent to -1 when the look-ahead word isn't on this line. */
-  lookAheadWordIndex: number
   activeWordRef: React.RefObject<HTMLDivElement | null>
-  lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onWordClick: (time: number) => void
   onWordDragOver?: (e: React.DragEvent<HTMLSpanElement>) => void
   onWordDrop: (wordStartTime: number) => (e: React.DragEvent<HTMLSpanElement>) => void
@@ -319,9 +304,7 @@ function WordsWithChords({
   activeWordIndex,
   activeChordIndex,
   globalChordIndexMap,
-  lookAheadWordIndex,
   activeWordRef,
-  lookAheadWordRef,
   onWordClick,
   onWordDragOver,
   onWordDrop,
@@ -341,7 +324,6 @@ function WordsWithChords({
       {line.words.map((word, wi) => {
         const { wordChords, reservedWidthCh } = wordData[wi]
         const isActiveWord = !isEditMode && isActive && showHighlight && wi === activeWordIndex
-        const isLookAheadWord = wi === lookAheadWordIndex
 
         return (
           // Words render in fixed positional order and never reorder; the index is also
@@ -353,7 +335,6 @@ function WordsWithChords({
             wordChords={wordChords}
             reservedWidthCh={reservedWidthCh}
             isActiveWord={isActiveWord}
-            isLookAheadWord={isLookAheadWord}
             isActive={isActive}
             isEditMode={isEditMode}
             isRtl={isRtl}
@@ -363,7 +344,6 @@ function WordsWithChords({
             lineChords={line.chords}
             globalChordIndexMap={globalChordIndexMap}
             activeWordRef={activeWordRef}
-            lookAheadWordRef={lookAheadWordRef}
             onWordClick={onWordClick}
             onWordDragOver={onWordDragOver}
             onWordDrop={onWordDrop}
@@ -383,7 +363,6 @@ interface WordColumnProps {
   wordChords: PositionedChord[]
   reservedWidthCh: number
   isActiveWord: boolean
-  isLookAheadWord: boolean
   isActive: boolean
   isEditMode: boolean
   isRtl: boolean
@@ -393,7 +372,6 @@ interface WordColumnProps {
   lineChords: PositionedChord[]
   globalChordIndexMap: Map<object, number>
   activeWordRef: React.RefObject<HTMLDivElement | null>
-  lookAheadWordRef: React.RefObject<HTMLDivElement | null>
   onWordClick: (time: number) => void
   onWordDragOver?: (e: React.DragEvent<HTMLSpanElement>) => void
   onWordDrop: (wordStartTime: number) => (e: React.DragEvent<HTMLSpanElement>) => void
@@ -413,7 +391,7 @@ interface WordColumnProps {
 }
 
 // Leaf render component: the booleans are independent rendering states of a word column
-// (active-word / look-ahead / active-line / edit-mode / rtl / highlight), not variants.
+// (active-word / active-line / edit-mode / rtl / highlight), not variants.
 // oxlint-disable-next-line react-doctor/no-many-boolean-props
 function WordColumn({
   word,
@@ -421,7 +399,6 @@ function WordColumn({
   wordChords,
   reservedWidthCh,
   isActiveWord,
-  isLookAheadWord,
   isActive,
   isEditMode,
   isRtl,
@@ -431,7 +408,6 @@ function WordColumn({
   lineChords,
   globalChordIndexMap,
   activeWordRef,
-  lookAheadWordRef,
   onWordClick,
   onWordDragOver,
   onWordDrop,
@@ -441,7 +417,7 @@ function WordColumn({
 }: WordColumnProps) {
   return (
     <div
-      ref={isActiveWord ? activeWordRef : isLookAheadWord ? lookAheadWordRef : undefined}
+      ref={isActiveWord ? activeWordRef : undefined}
       className="inline-flex flex-col align-top gap-1 px-1 pb-1"
       style={{ minWidth: `${reservedWidthCh}ch` }}
     >
@@ -451,7 +427,7 @@ function WordColumn({
       {/* oxlint-disable-next-line react-doctor/no-static-element-interactions */}
       <div
         className={cn(
-          'min-h-7 flex flex-wrap gap-1',
+          'min-h-[var(--chord-row-h,1.75rem)] flex flex-wrap gap-1',
           isRtl ? 'justify-end' : 'justify-start',
           isEditMode && wordChords.length === 0 && 'cursor-pointer hover:bg-flame-400/5 rounded',
         )}

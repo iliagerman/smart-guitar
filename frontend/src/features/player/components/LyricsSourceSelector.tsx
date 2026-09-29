@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn'
 import type { LyricsSourceMode } from '@/stores/player-prefs.store'
 
 import type { LyricsSourceOption } from '../lib/lyrics-sources'
+import { dockPillClass, dockPopoverClass } from '../lib/dock-button'
 
 interface LyricsSourceSelectorProps {
   options: LyricsSourceOption[]
@@ -34,29 +35,25 @@ export function LyricsSourceSelector({
       <Popover.Trigger asChild>
         <button
           type="button"
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
-            'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-            'hover:border-flame-400/30 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-          )}
+          className={dockPillClass(open, 'h-9 px-3 text-xs max-sm:px-2.5')}
           title={`Lyrics: ${current.label}`}
           aria-label={`Lyrics source: ${current.label}`}
           data-tour="lyrics-source"
           data-testid="lyrics-source-selector-trigger"
         >
           <Captions size={16} className="text-smoke-300" aria-hidden="true" />
-          <span className="truncate">Lyrics · {current.label}</span>
+          <span className="truncate max-sm:hidden">Lyrics · {current.label}</span>
         </button>
       </Popover.Trigger>
 
       <Popover.Portal>
         <Popover.Content
-          side="top"
+          side="bottom"
           sideOffset={8}
-          align="start"
+          align="end"
+          collisionPadding={12}
           className={cn(
-            'w-64 rounded-xl border border-charcoal-600 bg-charcoal-800 shadow-xl z-50',
+            'w-64', dockPopoverClass,
             'animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           )}
         >
@@ -78,8 +75,8 @@ export function LyricsSourceSelector({
                     className={cn(
                       'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-flame-400/15 text-flame-400'
-                        : 'text-smoke-200 hover:bg-charcoal-700 hover:text-smoke-100',
+                        ? 'bg-fire-500/15 text-fire-200'
+                        : 'text-smoke-200 hover:bg-white/[0.06] hover:text-smoke-50',
                     )}
                     data-testid={`lyrics-source-selector-${option.key}`}
                   >

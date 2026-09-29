@@ -31,7 +31,7 @@ async function mockSong(page: Page, rhythmFields: Record<string, unknown>) {
     if (url.origin !== 'http://127.0.0.1:5187') return route.abort()
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} })
     if (url.pathname === '/fake-guitar.mp3') return route.fulfill({ body: '', contentType: 'audio/mpeg' })
-    return route.fulfill({ response: await route.fetch() })
+    return route.fallback()
   })
   await page.route('**/api/v1/favorites', (route) => route.fulfill({ json: { favorites: [] } }))
   await page.route(`**/api/v1/songs/${SONG_ID}`, (route) => route.fulfill({ json: songDetail(rhythmFields) }))
@@ -137,7 +137,7 @@ test('strumming pattern shows the tab pattern with its snare accents', async ({ 
   await expect(card.getByTestId('strum-step-label').nth(1)).toHaveText('&')
 })
 
-test('tutorial-site strum guesses are not shown without a tab pattern', async ({ authenticatedPage: page }) => {
+test('without a tab pattern the card offers the starter pattern, not tutorial-site guesses', async ({ authenticatedPage: page }) => {
   await mockSong(page, {
     ...syncedBeats,
     songsterr_status: 'ready',
@@ -147,7 +147,11 @@ test('tutorial-site strum guesses are not shown without a tab pattern', async ({
   })
   const card = await openStrumCard(page)
   await expect(card.getByTestId('strum-tutorial-button')).toBeVisible()
-  // A count of zero passes at once; let the page finish loading so the check is real.
-  await page.waitForLoadState('networkidle')
-  await expect(card.getByTestId('strum-step')).toHaveCount(0)
+  // The guess is D D U U D U; the starter is D · D U · U D U, labelled as a starter.
+  await expect(card.getByTestId('strum-starter')).toBeVisible()
+  await expect(card.getByTestId('strum-section-name')).toHaveText(['Starter pattern'])
+  const steps = card.getByTestId('strum-step')
+  await expect(steps).toHaveCount(8)
+  await expect(steps.nth(1)).toHaveAttribute('data-direction', 'miss')
+  await expect(steps.nth(4)).toHaveAttribute('data-direction', 'miss')
 })

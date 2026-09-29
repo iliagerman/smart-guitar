@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn'
+import { FlameLogo } from './FlameLogo'
 
 interface LoadingSpinnerProps {
   className?: string
@@ -18,36 +19,10 @@ const sizeClasses = {
 export function LoadingSpinner({ className, label, size = 'md', fullScreen = false, inline = false }: LoadingSpinnerProps) {
   const isLarge = size === 'lg'
 
-  const videoElement = isLarge ? (
-    <video
-      src="/guitar.mp4"
-      autoPlay
-      loop
-      muted
-      playsInline
-      tabIndex={-1}
-      aria-hidden="true"
-      className={cn('h-105 w-105 object-cover', inline && className)}
-      style={{
-        maskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
-        WebkitMaskImage: 'radial-gradient(circle, black 35%, transparent 65%)',
-      }}
-    />
-  ) : (
-    <video
-      src="/guitar.mp4"
-      autoPlay
-      loop
-      muted
-      playsInline
-      tabIndex={-1}
-      aria-hidden="true"
-      className={cn('object-cover rounded-full', sizeClasses[size], inline && className)}
-    />
-  )
+  const logo = <FlameLogo className={cn(sizeClasses[size], inline && className)} />
 
   if (inline) {
-    return videoElement
+    return logo
   }
 
   return (
@@ -58,7 +33,7 @@ export function LoadingSpinner({ className, label, size = 'md', fullScreen = fal
         className,
       )}
     >
-      {videoElement}
+      {logo}
       {label && (
         <span className={cn(
           'text-smoke-300',

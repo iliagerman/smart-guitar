@@ -38,13 +38,21 @@ import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/form
 import { transposeChordLabel } from '@/lib/chord-utils'
 import { simplifyChords, transposeForCapo } from '@/lib/chord-simplifier'
 import { SongHeader } from './SongHeader'
-import { PlayerControls } from './PlayerControls'
+import { AudioStatusBanner, FocusToggles, PlayerControls, PlayerTools, SheetPickers } from './PlayerControls'
 import { SongContent } from './SongContent'
 import { RecommendedSongs } from '../../components/RecommendedSongs'
 import { TutorialOverlay } from './TutorialOverlay'
 import { SongStage } from './SongStage'
+import { SheetSourceTabs } from '../../components/SheetSourceTabs'
+import { Collapse } from '@/components/shared/Collapse'
+import { cn } from '@/lib/cn'
+import { useMediaQuery } from '@/hooks/use-media-query'
+import { useSongViewStore } from '@/stores/song-view.store'
 import { useProAccess } from '@/features/subscription/hooks/use-pro-access'
 import { getAvailableLyricsSources } from '../../lib/lyrics-sources'
+import { musicStartTime } from '../../lib/music-start'
+import { TourBackdrop } from '@/features/songs/components/tour/TourBackdrop'
+import type { SceneKind } from '@/features/songs/components/tour/tour-worlds'
 import {
   buildSheetVersions,
   getSheetVersionPreferenceKey,
@@ -68,6 +76,9 @@ function getAudioUrl(
   return detail.stems[stem] || null
 }
 
+/** The song page sits backstage: just the follow-spots, no other worlds mounted. */
+const STAGE_SCENES: readonly SceneKind[] = ['backstage']
+
 function formatStemList(stems: string[]): string {
   return stems.map((stem) => stem.replaceAll('_', ' ')).join(', ')
 }
@@ -89,7 +100,7 @@ function BeatGlow({ beatTimes, bpm }: BeatGlowProps) {
     beatTimes ? beatIndexAt(beatTimes, s.currentTime) : Math.floor(s.currentTime / (60 / bpm))
   ))
   if (beatNumber === null) return null
-  return <div key={beatNumber} className="pointer-events-none fixed inset-0 z-20 animate-beat-screen-glow" />
+  return <div key={beatNumber} className="pointer-events-none absolute inset-0 z-20 animate-beat-screen-glow" />
 }
 
 interface LyricsDebugOverlayProps {
@@ -167,6 +178,8 @@ export function SongDetailPage() {
   const selectedChordOptionIndex = usePlaybackStore((s) => s.selectedChordOptionIndex)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
+  // Within a second of the end (an ended song parks at its duration).
+  const atSongEnd = usePlaybackStore((s) => s.currentTime >= s.duration - 1)
   useWakeLock(isPlaying)
   const {
     data: detail,
@@ -189,6 +202,19 @@ export function SongDetailPage() {
   const editingLyrics = useChordEditStore((s) => s.editingLyrics)
   const isEditMode = useChordEditStore((s) => s.isEditMode)
   const addChordAtTime = useChordEditStore((s) => s.addChordAtTime)
+
+  // Playing on a phone or tablet: the sheet takes the screen (tools, band and
+  // app nav step aside) until the song pauses.
+  const isWide = useMediaQuery('(min-width: 1024px)')
+  const focusMode = isPlaying && !isWide && !isEditMode
+  const setImmersive = useSongViewStore((s) => s.setImmersive)
+  useEffect(() => {
+    setImmersive(focusMode)
+  }, [focusMode, setImmersive])
+  useEffect(() => () => {
+    setImmersive(false)
+    useSongViewStore.getState().setMetronomeOpen(false)
+  }, [setImmersive])
   const saveChordsMutation = useSaveChords()
   const deleteChordsMutation = useDeleteChords()
   const userEmail = useAuthStore((s) => s.email)
@@ -217,7 +243,7 @@ export function SongDetailPage() {
   const [showTutorial, setShowTutorial] = useState(false)
   const [showDeleteChordsConfirm, setShowDeleteChordsConfirm] = useState(false)
   const isAdmin = useSubscriptionStore((s) => s.status?.is_admin) ?? false
-  const { isPro, requirePro } = useProAccess()
+  const { requirePro } = useProAccess()
 
   const isFavorited = favorites?.some((f) => f.song_id === songId) || false
   const loadingLabel = useRotatingText(
@@ -300,6 +326,17 @@ export function SongDetailPage() {
       usePlaybackStore.getState().setSheetMode(overrides.sheetMode)
     }
   }, [songId, setCurrentSong])
+
+  // A song whose easy shapes need a capo opens in that capo view, once its
+  // details arrive — unless the user already picked a view for it.
+  const suggestedCapo = detail?.song.id === songId ? detail?.song.easy_capo ?? 0 : null
+  const capoDefaultedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!songId || suggestedCapo === null || capoDefaultedFor.current === songId) return
+    capoDefaultedFor.current = songId
+    if (usePlayerPrefsStore.getState().songOverrides[songId]?.chordDisplayMode !== undefined) return
+    if (suggestedCapo > 0) usePlaybackStore.getState().setChordDisplayMode('capo', suggestedCapo)
+  }, [songId, suggestedCapo])
 
   // Abort any in-progress count-in when navigating to a different song so a pending
   // countdown can't start playback on the newly loaded track.
@@ -411,6 +448,9 @@ export function SongDetailPage() {
     }
   }, [detail, isFullSong, activeStems, setActiveStems, selectFullSong])
 
+  // Where the music starts; kept in a ref because the chords are derived further down.
+  const musicStartRef = useRef(0)
+
   const beginPlayback = useCallback(() => {
     // Record the play only when audio actually starts (after any count-in), so a
     // cancelled count-in is not counted as a play.
@@ -436,6 +476,10 @@ export function SongDetailPage() {
       togglePlay()
       return
     }
+    // Music videos often open with seconds of silence: start where the music does.
+    if (usePlaybackStore.getState().currentTime < 0.25 && musicStartRef.current > 0) {
+      seek(musicStartRef.current)
+    }
     prepareForPlaybackGesture()
     if (countInEnabled) {
       void resumeTickContext()
@@ -457,6 +501,7 @@ export function SongDetailPage() {
     startCountIn,
     beginPlayback,
     togglePlay,
+    seek,
   ])
 
   const handleSeek = useCallback((time: number) => {
@@ -497,6 +542,10 @@ export function SongDetailPage() {
 
   const activeVersion = sheetVersions[selectedVersionIndex] ?? sheetVersions[0]
   const baseChords = useMemo(() => activeVersion?.chords ?? [], [activeVersion])
+  const musicStart = useMemo(() => musicStartTime(baseChords), [baseChords])
+  useEffect(() => {
+    musicStartRef.current = musicStart
+  }, [musicStart])
 
   // Community/UG sheets only have estimated word timing, so per-word
   // tracking looks broken. Auto-disable tracking when one is active and
@@ -754,106 +803,99 @@ export function SongDetailPage() {
 
   const headerTitle = displaySongTitle(detail.song)
   const headerArtist = displayArtistName(detail.song)
+  const handleSetVersionIndex = (idx: number) => {
+    setSongOverride(songId!, 'selectedVersionIndex', idx)
+    setSongOverride(songId!, 'selectedVersionKey', getSheetVersionPreferenceKey(sheetVersions[idx], idx))
+  }
   const beatBpm = songTempoBpm(detail)
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#15171c_0%,#090a0d_58%,#050506_100%)] pb-16 lg:pb-0" data-testid="song-detail-page">
+    <div
+      className={cn('relative flex h-full flex-col overflow-hidden bg-stage-950 lg:pb-0', focusMode ? 'pb-0' : 'pb-16')}
+      data-testid="song-detail-page"
+      data-focus={focusMode}
+    >
       <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
       {isPlaying && beatBpm ? <BeatGlow beatTimes={songBeatTimes(detail)} bpm={beatBpm} /> : null}
-      {/* Background Image */}
-      <div className="fixed inset-0 pointer-events-none">
+      {/* The stage: the home page's backstage lights, held still, tinted by the album art */}
+      <TourBackdrop active="backstage" scenes={STAGE_SCENES} still />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
-          className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30 blur-3xl scale-125"
+          className="artwork-backdrop-feather absolute inset-0 scale-125 bg-cover bg-center bg-no-repeat opacity-[0.14] blur-3xl"
           style={{ backgroundImage: `url("${thumbnailSrc}")` }}
         />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(20,23,28,0.12)_0%,rgba(8,9,11,0.72)_58%,rgba(3,3,4,0.94)_100%)]" />
       </div>
 
-      {/* Fixed top section: song header + player controls */}
-      <div className="relative z-30 shrink-0 border-b border-white/10 bg-[#090a0c]/95 shadow-[0_18px_70px_rgba(0,0,0,0.44)] backdrop-blur-2xl">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div
-            className="artwork-backdrop-feather absolute inset-0 bg-cover bg-center bg-no-repeat opacity-10 blur-2xl scale-125"
-            style={{ backgroundImage: `url("${thumbnailSrc}")` }}
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,20,24,0.28)_0%,rgba(8,9,11,0.78)_55%,rgba(6,6,7,0.96)_100%)]" />
-        </div>
-        {/* On phones the practice panel can grow tall: cap the top area so the
-            chord sheet always keeps the lower part of the screen. */}
-        <div className="relative mx-auto flex max-h-[56svh] max-w-7xl flex-col gap-3 overflow-y-auto overscroll-contain p-2.5 pb-2 sm:gap-4 sm:p-4 sm:pb-3 lg:max-h-none lg:overflow-visible">
+      {/* Top: the song, its tools and the band on stage */}
+      <div className="relative z-30 shrink-0">
+        {/* Cap the top area on phones so the chord sheet always keeps the lower part of the screen. */}
+        <div className={cn('relative mx-auto flex max-h-[52svh] max-w-7xl flex-col overflow-y-auto overscroll-contain px-3 pb-2.5 pt-3 sm:px-5 sm:pt-4 lg:max-h-none lg:overflow-visible', focusMode ? 'gap-0' : 'gap-2.5')}>
           <SongHeader
             songId={songId!}
             title={headerTitle}
             artist={headerArtist}
+            song={detail.song}
+            bpm={beatBpm}
             thumbnailSrc={thumbnailSrc}
             isAdmin={isAdmin}
+            isFavorited={isFavorited}
+            onToggleFavorite={handleToggleFavorite}
+            actionsHidden={focusMode}
             isPlaying={isPlaying}
             isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
             onTogglePlay={handleTogglePlay}
             onSeek={handleSeek}
             onThumbnailError={() => songId && markThumbnailFailed(songId)}
-          />
-
-          <PlayerControls
-            songId={songId!}
-            detail={detail}
-            headerTitle={headerTitle}
-            headerArtist={headerArtist}
-            hasChords={hasChords}
-            hasTabs={hasTabs}
-            hasBars={hasBars}
-            isFavorited={isFavorited}
-            showAudioStatus={showAudioStatus}
-            audioStatusMessage={audioStatusMessage}
-            isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
-            sheetVersions={sheetVersions}
-            activeChords={activeChords}
-            selectedVersionIndex={selectedVersionIndex}
-            availableLyricsSources={availableLyricsSources}
-            selectedLyricsSource={selectedLyricsSource}
-            chordNamesForMap={chordNamesForMap}
-            representativeStrumPattern={representativeStrumPattern}
-            sectionStrumPatterns={sectionStrumPatterns}
-            userEmail={userEmail}
-            chordsUpgrading={chordsUpgrading}
-            hasSyncedLyrics={hasSyncedLyrics}
-            onTogglePlay={handleTogglePlay}
-            onSeek={handleSeek}
-            onToggleFavorite={handleToggleFavorite}
-            onEnterEditMode={handleEnterEditMode}
-            onSetVersionIndex={(idx: number) => {
-              setSongOverride(songId!, 'selectedVersionIndex', idx)
-              setSongOverride(
-                songId!,
-                'selectedVersionKey',
-                getSheetVersionPreferenceKey(sheetVersions[idx], idx),
-              )
-            }}
-            onSetLyricsSource={(mode) => setSongOverride(songId!, 'selectedLyricsSource', mode)}
-            onDeleteChords={() => setShowDeleteChordsConfirm(true)}
-            onOpenTutorial={() => setShowTutorial(true)}
-            getRecordingTap={getRecordingTap}
-            onSetStemVolume={handleSetStemVolume}
-            stemVolumes={songOverrides?.stemVolumes}
-            stage={
-              <SongStage
-                songId={songId!}
+            actions={
+              <PlayerTools
                 detail={detail}
-                songTitle={headerTitle}
-                displayChords={displayChords}
-                lyrics={activeLyrics}
-                isPro={isPro}
-                stemVolumes={songOverrides?.stemVolumes}
-                isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
+                headerTitle={headerTitle}
+                headerArtist={headerArtist}
+                hasChords={hasChords}
+                isStemSelectionDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
+                chordNamesForMap={chordNamesForMap}
+                representativeStrumPattern={representativeStrumPattern}
+                sectionStrumPatterns={sectionStrumPatterns}
+                onEnterEditMode={handleEnterEditMode}
+                onOpenTutorial={() => setShowTutorial(true)}
                 onSetStemVolume={handleSetStemVolume}
-                onSeek={handleSeek}
+                stemVolumes={songOverrides?.stemVolumes}
+                getRecordingTap={getRecordingTap}
+                trailing={isEditMode ? undefined : (
+                  <SheetPickers
+                    hasTabs={hasTabs}
+                    hasBars={hasBars}
+                    sheetVersions={sheetVersions}
+                    activeChords={activeChords}
+                    selectedVersionIndex={selectedVersionIndex}
+                    availableLyricsSources={availableLyricsSources}
+                    selectedLyricsSource={selectedLyricsSource}
+                    userEmail={userEmail}
+                    chordsUpgrading={chordsUpgrading}
+                    onSetVersionIndex={handleSetVersionIndex}
+                    onSetLyricsSource={(mode) => setSongOverride(songId!, 'selectedLyricsSource', mode)}
+                    onDeleteChords={() => setShowDeleteChordsConfirm(true)}
+                  />
+                )}
               />
             }
           />
+
+          {showAudioStatus && <AudioStatusBanner message={audioStatusMessage} />}
+
+          <Collapse open={!focusMode}>
+            <SongStage
+              songId={songId!}
+              detail={detail}
+              stemVolumes={songOverrides?.stemVolumes}
+              isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
+              onSetStemVolume={handleSetStemVolume}
+            />
+          </Collapse>
         </div>
       </div>
 
-      {/* Content */}
+      {/* Middle: the chord sheet gets the rest of the screen */}
       <SongContent
         songId={songId!}
         detail={detail}
@@ -875,10 +917,28 @@ export function SongDetailPage() {
         isSavingChords={saveChordsMutation.isPending}
         onAddChordAtWord={handleAddChordAtWord}
         onOpenTutorial={() => setShowTutorial(true)}
+        sheetBar={isEditMode ? undefined : (
+          <SheetSourceTabs versions={sheetVersions} selectedIndex={selectedVersionIndex} onSelect={handleSetVersionIndex} />
+        )}
+        focusMode={focusMode}
       />
 
-      {/* Recommendations — shown only after playback stops or song ends */}
-      {!isPlaying && hasPlaybackOccurred && <RecommendedSongs songId={songId!} />}
+      {/* Recommendations once the song is over; a pause to practise keeps the sheet */}
+      {!isPlaying && hasPlaybackOccurred && atSongEnd && <RecommendedSongs songId={songId!} />}
+
+      {/* Bottom: the player dock */}
+      <div className="relative z-30 shrink-0 border-t border-fire-500/15 bg-stage-950/85 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-3 pb-2.5 pt-2 sm:px-5">
+          <PlayerControls
+            songId={songId!}
+            isPlaybackDisabled={isLoadingStemAudio || isWaitingForSelectedStems}
+            hasSyncedLyrics={hasSyncedLyrics}
+            focusControls={focusMode ? <FocusToggles /> : undefined}
+            onTogglePlay={handleTogglePlay}
+            onSeek={handleSeek}
+          />
+        </div>
+      </div>
 
       {/* Floating YouTube tutorial */}
       {showTutorial && (

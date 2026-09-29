@@ -1,9 +1,11 @@
-import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
+import { useRef, useEffect, useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { X } from 'lucide-react'
 import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
-import { isElementVisible, scrollIntoContainerView } from '../lib/scroll-to-center'
+import { readingScrollTop } from '../lib/scroll-to-center'
+import { chordBeats, holdLabel } from '../lib/chord-beats'
+import { ChordBeatCount } from './ChordBeatCount'
 import { ChordSheetLine } from './ChordSheetLine'
 import { ChordVoicingPopover } from './ChordVoicingPopover'
 import { getChordColor, formatChordWithBass } from '@/lib/chord-colors'
@@ -31,39 +33,15 @@ interface ChordSheetProps {
   onWordClick?: (startTime: number) => void
   onWordRename?: (segmentIndex: number, wordIndex: number, newText: string) => void
   onWordSelect?: (location: WordLocation) => void
+  /** The song's beat grid (first beat is a downbeat) for the chords' beat counts. */
+  beatTimes?: readonly number[] | null
+  beatsPerBar?: number
 }
 
-const LOOK_AHEAD_WORDS = 20
+const DEFAULT_BEATS_PER_BAR = 4
 
-function computeLookAheadWord(
-  lines: ReturnType<typeof mergeChordLyrics>,
-  activeLineIndex: number,
-  activeWordIndex: number,
-) {
-  if (activeLineIndex < 0 || activeWordIndex < 0) return null
-  let remaining = LOOK_AHEAD_WORDS
-  const activeLine = lines[activeLineIndex]
-  if (!activeLine) return null
-  const wordsLeftInLine = activeLine.words.length - activeWordIndex - 1
-  if (remaining <= wordsLeftInLine) {
-    return { lineIndex: activeLineIndex, wordIndex: activeWordIndex + remaining }
-  }
-  remaining -= wordsLeftInLine
-  let lastWordLocation: { lineIndex: number; wordIndex: number } | null = null
-  for (let li = activeLineIndex + 1; li < lines.length; li++) {
-    const lineWords = lines[li].words.length
-    if (lineWords === 0) continue
-    lastWordLocation = { lineIndex: li, wordIndex: lineWords - 1 }
-    if (remaining <= lineWords) {
-      return { lineIndex: li, wordIndex: remaining - 1 }
-    }
-    remaining -= lineWords
-  }
-  // Fewer than LOOK_AHEAD_WORDS remain — anchor to the last word so proactive scrolling
-  // continues through the final stretch instead of silently stopping.
-  return lastWordLocation
-}
-
+/** Longest a smooth scroll takes; within it, asking for the same spot again is a no-op. */
+const GLIDE_MS = 700
 
 interface ChordLabelChord {
   chord: string
@@ -84,6 +62,9 @@ interface ChordLabelProps {
   globalIndex?: number
   onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
   onSeek?: (time: number) => void
+  /** The song's beat grid; counts the beats the chord is held for. */
+  beatTimes?: readonly number[] | null
+  beatsPerBar?: number
 }
 
 // Leaf render component: the booleans are independent rendering states of a single chord
@@ -102,6 +83,8 @@ function ChordLabel({
   globalIndex,
   onDragStart,
   onSeek,
+  beatTimes,
+  beatsPerBar = DEFAULT_BEATS_PER_BAR,
 }: ChordLabelProps) {
   const [isRenaming, setIsRenaming] = useState(false)
   // Draft value for the rename input, seeded from the prop and reset whenever rename mode
@@ -143,16 +126,19 @@ function ChordLabel({
     )
   }
 
+  const beats = !isEditMode && beatTimes ? chordBeats(beatTimes, chord.start_time, chord.end_time) : null
+
   const chordButton = (
     <button
       type="button"
       dir="ltr"
       draggable={isEditMode}
       onDragStart={onDragStart}
+      title={beats ? `Hold for ${holdLabel(beats.count, beatsPerBar)}` : undefined}
       className={cn(
-        'inline-flex min-w-0 rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
+        'inline-flex min-w-0 flex-col rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70',
-        isRtl ? 'justify-end text-right' : 'justify-start text-left',
+        isRtl ? 'items-end justify-end text-right' : 'items-start justify-start text-left',
         isEditMode
           ? cn(
               'cursor-grab hover:bg-flame-400/10 border border-transparent',
@@ -174,6 +160,9 @@ function ChordLabel({
       >
         {formatChordWithBass(chord.chord, chord.bass, showBassNotes)}
       </span>
+      {beats && beatTimes && (
+        <ChordBeatCount beats={beats} beatsPerBar={beatsPerBar} beatTimes={beatTimes} live={isActive} rtl={isRtl} />
+      )}
     </button>
   )
 
@@ -311,8 +300,12 @@ export function ChordSheet({
   onWordClick,
   onWordRename,
   onWordSelect,
+  beatTimes,
+  beatsPerBar,
 }: ChordSheetProps) {
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
+  const showBeatCounts = usePlayerPrefsStore((s) => s.showBeatCounts)
+  const countBeatTimes = showBeatCounts && !isEditMode && (beatTimes?.length ?? 0) > 1 ? beatTimes : null
   // Memoized: the merge is expensive (sorting, RTL detection, column layout) and the
   // sheet re-renders on every active word/chord change during playback.
   const lines = useMemo(() => mergeChordLyrics(chords, lyrics), [chords, lyrics])
@@ -322,7 +315,7 @@ export function ChordSheet({
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeLineRef = useRef<HTMLDivElement>(null)
   const activeWordRef = useRef<HTMLDivElement>(null)
-  const lookAheadWordRef = useRef<HTMLDivElement>(null)
+  const glideRef = useRef({ top: -1, at: 0 })
   const dragIndexRef = useRef<number | null>(null)
   const currentSongId = usePlaybackStore((s) => s.currentSongId)
 
@@ -333,39 +326,20 @@ export function ChordSheet({
     }
   }, [currentSongId])
 
+  // Follow the song a row at a time: once the active row leaves the reading
+  // band, glide it back once. Re-aiming a glide that's already under way (or
+  // nudging on every word) made the sheet shudder.
   useEffect(() => {
     if (isEditMode || !showHighlight || !scrollRef.current) return
     const container = scrollRef.current
     const activeEl = activeWordRef.current ?? activeLineRef.current
-    const lookAheadEl = lookAheadWordRef.current
-
     if (!activeEl) return
 
-    if (!isElementVisible(container, activeEl)) {
-      scrollIntoContainerView(container, activeEl)
-      return
-    }
-
-    if (lookAheadEl && !isElementVisible(container, lookAheadEl)) {
-      const cRect = container.getBoundingClientRect()
-      const activeRect = activeEl.getBoundingClientRect()
-      const lookAheadRect = lookAheadEl.getBoundingClientRect()
-
-      const padding = 60
-      const desiredDelta = lookAheadRect.bottom - (cRect.bottom - padding)
-
-      if (desiredDelta > 0) {
-        const maxDelta = activeRect.top - (cRect.top + padding)
-        const clampedDelta = Math.max(0, Math.min(desiredDelta, maxDelta))
-
-        if (clampedDelta > 0) {
-          container.scrollTo({
-            top: container.scrollTop + clampedDelta,
-            behavior: 'smooth',
-          })
-        }
-      }
-    }
+    const top = readingScrollTop(container, activeEl)
+    const now = performance.now()
+    if (top === null || (top === glideRef.current.top && now - glideRef.current.at < GLIDE_MS)) return
+    glideRef.current = { top, at: now }
+    container.scrollTo({ top, behavior: 'smooth' })
   }, [activeLineIndex, activeWordIndex, showHighlight, isEditMode])
 
   useAutoScroll(scrollRef, !showHighlight || isEditMode)
@@ -416,14 +390,6 @@ export function ChordSheet({
       dragIndexRef.current = null
     },
     [onChordDrop]
-  )
-
-  // Memoized so the object reference is stable when the value doesn't change —
-  // it's passed down to every line, and an unstable reference would defeat
-  // React.memo on ChordSheetLine for lines unrelated to the look-ahead word.
-  const lookAheadWord = useMemo(
-    () => computeLookAheadWord(lines, activeLineIndex, activeWordIndex),
-    [lines, activeLineIndex, activeWordIndex]
   )
 
   // Build a global chord index map: for each line chord, find its index in the flat chords array.
@@ -485,9 +451,11 @@ export function ChordSheet({
         onDelete={isEditMode ? () => onChordDelete?.(gci) : undefined}
         onDragStart={isEditMode ? handleDragStart(gci) : undefined}
         onSeek={isEditMode ? undefined : onSeek}
+        beatTimes={countBeatTimes}
+        beatsPerBar={beatsPerBar}
       />
     ),
-    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart, onSeek]
+    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart, onSeek, countBeatTimes, beatsPerBar]
   )
 
   const renderEditableWord = useCallback(
@@ -512,6 +480,9 @@ export function ChordSheet({
 
   if (lines.length === 0) return null
 
+  // Every chord row makes room for the beat counts, so the words stay on one line.
+  const tickRowStyle = countBeatTimes ? ({ '--chord-row-h': '2.5rem' } as CSSProperties) : undefined
+
   return (
     <div
       ref={scrollRef}
@@ -521,19 +492,18 @@ export function ChordSheet({
           ? 'bg-flame-400/8 ring-1 ring-inset ring-flame-400/30'
           : 'bg-[linear-gradient(180deg,rgba(18,20,24,0.94),rgba(9,10,12,0.96))]'
       )}
+      style={tickRowStyle}
       data-testid="chord-sheet"
       data-song-scroll-container
     >
       {lines.map((line, li) => {
-        // Narrow the broadcast active/look-ahead state to this line before it
-        // reaches ChordSheetLine: an unrelated line's props then stay
-        // referentially identical across renders (e.g. -1 both times) even
-        // while the active word/chord/look-ahead moves elsewhere, so
-        // React.memo can skip re-rendering it.
+        // Narrow the broadcast active state to this line before it reaches
+        // ChordSheetLine: an unrelated line's props then stay referentially
+        // identical across renders (e.g. -1 both times) even while the active
+        // word/chord moves elsewhere, so React.memo can skip re-rendering it.
         const isActive = li === activeLineIndex
         const lineActiveWordIndex = isActive ? activeWordIndex : -1
         const lineActiveChordIndex = li === activeChordLineIndex ? activeChordIndex : -1
-        const lineLookAheadWordIndex = lookAheadWord?.lineIndex === li ? lookAheadWord.wordIndex : -1
 
         return (
           // Lines render in fixed positional order and never reorder, so the index
@@ -548,10 +518,8 @@ export function ChordSheet({
             activeChordIndex={lineActiveChordIndex}
             selectedChordIndex={selectedChordIndex}
             globalChordIndexMap={globalChordIndexMap}
-            lookAheadWordIndex={lineLookAheadWordIndex}
             activeLineRef={activeLineRef}
             activeWordRef={activeWordRef}
-            lookAheadWordRef={lookAheadWordRef}
             onChordClick={handleChordClick}
             onWordClick={handleWordClick}
             onChordRename={onChordRename}

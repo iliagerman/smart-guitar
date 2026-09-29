@@ -1,7 +1,7 @@
 import { Repeat } from 'lucide-react'
 
-import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
+import { dockPillClass } from '../lib/dock-button'
 
 interface ABLoopControlProps {
   className?: string
@@ -30,14 +30,7 @@ export function ABLoopControl({ className }: ABLoopControlProps) {
   return (
     <button
       type="button"
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
-        'bg-charcoal-700 border border-charcoal-600',
-        'hover:border-flame-400/30 transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-        isLooping || isPending ? 'text-smoke-100' : 'text-smoke-400',
-        className,
-      )}
+      className={dockPillClass(isLooping || isPending, className)}
       onClick={() => tapLoopMarker(usePlaybackStore.getState().currentTime)}
       aria-label={label}
       aria-pressed={isLooping}

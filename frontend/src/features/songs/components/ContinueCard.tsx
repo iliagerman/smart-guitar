@@ -3,20 +3,18 @@ import { Link } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import { songDetailPath } from '@/router/routes'
 import { displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
-import { stepInfo } from '@/features/practice/lib/practice-steps'
 import type { PracticeSongProgress } from '@/types/practice'
 
 interface ContinueCardProps {
   item: PracticeSongProgress
 }
 
-/** Notebook card that picks a song's practice path up where the user left it. */
+/** Notebook card for a song the user already started. */
 export function ContinueCard({ item }: ContinueCardProps) {
-  const { song, progress } = item
+  const { song } = item
   const [imgFailed, setImgFailed] = useState(false)
   const thumb = getThumbnailUrl(song)
-  const step = stepInfo(progress.current_step)
-  const done = progress.completed_steps.length
+  const shapes = song.easy_chords ?? []
 
   return (
     <Link
@@ -33,19 +31,9 @@ export function ContinueCard({ item }: ContinueCardProps) {
         className="size-15 shrink-0 rounded-xl object-cover"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-extrabold tracking-[0.12em] text-fire-600">
-          CONTINUE · STEP {progress.current_step} OF 4
-        </p>
+        <p className="text-[10px] font-extrabold tracking-[0.12em] text-fire-600">KEEP PLAYING</p>
         <p className="truncate font-serif text-lg font-extrabold leading-tight">{displaySongTitle(song)}</p>
-        <p className="truncate text-xs text-ink-600">
-          {step.title}
-          {progress.current_step === 2 && song.easy_chords?.length
-            ? `: ${progress.learned_chords.length} of ${song.easy_chords.length} shapes down`
-            : ''}
-        </p>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-paper-200">
-          <div className="h-full rounded-full bg-gradient-to-r from-fire-600 to-fire-500" style={{ width: `${(done / 4) * 100}%` }} />
-        </div>
+        {shapes.length > 0 && <p className="truncate font-mono text-xs text-ink-600" dir="ltr">{shapes.join(' · ')}</p>}
       </div>
       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-ink-900 text-white" aria-hidden="true">
         <Play size={16} className="ml-0.5" />

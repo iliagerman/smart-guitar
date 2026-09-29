@@ -51,6 +51,8 @@ interface WebkitAudioWindow extends Window {
 // and the progress bar are imperceptibly affected at 50ms resolution, but a
 // phone runs much cooler.
 const MIN_TIME_DELTA = 0.05
+// Longest the silent unlock buffer may take before playback starts anyway.
+const UNLOCK_TIMEOUT_MS = 250
 
 function formatMixerError(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -129,8 +131,10 @@ export function useBufferedStemMixer({
     gain.connect(ctx.destination)
     source.start(0)
     source.stop(ctx.currentTime + 0.001)
+    // Safari can skip `ended` for a one-sample buffer; never let playback wait on it.
     await new Promise<void>((resolve) => {
       source.onended = () => resolve()
+      window.setTimeout(resolve, UNLOCK_TIMEOUT_MS)
     })
     source.disconnect()
     gain.disconnect()

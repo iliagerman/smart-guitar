@@ -25,7 +25,7 @@ export const PRACTICE_STEPS: readonly PracticeStepInfo[] = [
     step: 2,
     title: 'Learn it',
     short: 'Learn it',
-    instruction: 'Easy shapes, guitar only, 75% speed, verse on loop. Tick each shape you can play.',
+    instruction: 'Easy shapes, guitar only, verse on loop. Tick each shape you can play.',
     doneLabel: 'I’ve got these → go on stage',
     pro: false,
   },
@@ -33,23 +33,23 @@ export const PRACTICE_STEPS: readonly PracticeStepInfo[] = [
     step: 3,
     title: 'Play it with the band',
     short: 'On stage',
-    instruction: 'The real recording without its guitar, at 75%. You’re the guitarist.',
-    doneLabel: 'Nailed it → full speed',
-    pro: true,
-  },
-  {
-    step: 4,
-    title: 'Full speed',
-    short: 'Full speed',
-    instruction: 'The whole band at full speed. Record yourself and hear how you sound.',
+    instruction: 'The real recording without its guitar. You’re the guitarist: play the whole song, and hit Record to hear how you sound.',
     doneLabel: 'Song complete',
     pro: true,
   },
 ] as const
 
-export const ALL_STEPS: readonly PracticeStep[] = [1, 2, 3, 4]
+export const ALL_STEPS: readonly PracticeStep[] = [1, 2, 3]
 
-/** Fraction of a step-3/4 play-through that counts as "played it through". */
+/** The final step; finishing it completes the song's path. */
+export const LAST_STEP: PracticeStep = 3
+
+/** True once every step of the song's path is done — the path is then over. */
+export function isPathComplete(progress: { completed_steps: readonly number[] }): boolean {
+  return ALL_STEPS.every((step) => progress.completed_steps.includes(step))
+}
+
+/** Fraction of the on-stage play-through that counts as "played it through". */
 export const STAGE_DONE_FRACTION = 0.9
 
 export const SKILL_LEVELS: readonly { level: SkillLevel; label: string }[] = [
@@ -59,7 +59,7 @@ export const SKILL_LEVELS: readonly { level: SkillLevel; label: string }[] = [
 ]
 
 export function stepInfo(step: PracticeStep): PracticeStepInfo {
-  return PRACTICE_STEPS[step - 1]
+  return PRACTICE_STEPS[Math.min(step, LAST_STEP) - 1]
 }
 
 export function emptyProgress(songId: string): PracticeProgress {

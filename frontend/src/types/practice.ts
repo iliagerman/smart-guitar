@@ -2,8 +2,8 @@ import type { Song, SongDifficulty } from './song'
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced'
 
-/** The four steps of a song's practice path. */
-export type PracticeStep = 1 | 2 | 3 | 4
+/** The three steps of a song's practice path: hear it, learn it, play it with the band. */
+export type PracticeStep = 1 | 2 | 3
 
 export interface PracticeProgress {
   song_id: string
@@ -36,12 +36,16 @@ export interface SavePracticeProgressPayload {
 
 export type SetlistMode = 'play_along' | 'drums_bass' | 'learn'
 
+/** A themed setlist, or a chart of the songs players want most. */
+export type SetlistKind = 'setlist' | 'chart'
+
 export interface Setlist {
   id: string
   title: string
   description: string
   level: SongDifficulty
   suggested_mode: SetlistMode
+  kind: SetlistKind
   song_count: number
   cover_urls: string[]
 }

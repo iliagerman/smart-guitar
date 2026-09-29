@@ -133,7 +133,7 @@ test.describe('Favorites sorting', () => {
 
     await page.goto('/favorites')
     await expect(page.getByTestId('favorites-page')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('No favorites yet')).toBeVisible()
+    await expect(page.getByTestId('favorites-empty')).toContainText(/your crate is empty/i)
     await expect(page.getByTestId('favorites-sort-control')).toHaveCount(0)
   })
 })

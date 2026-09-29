@@ -134,8 +134,8 @@ async function mockApi(page: Page, { tier }: { tier: 'pro' | 'free' }): Promise<
     } })
   })
   await page.route(/\/api\/v1\/songs\/setlists(\?.*)?$/, (route) => route.fulfill({ json: { items: [
-    { id: 'campfire', title: '4-Chord Campfire', description: 'Four easy shapes, whole songs.', level: 'easy', suggested_mode: 'play_along', song_count: 1, cover_urls: [] },
-    { id: 'first-songs', title: 'Your First 10 Songs', description: 'Easy shapes for your first month.', level: 'easy', suggested_mode: 'learn', song_count: 1, cover_urls: [] },
+    { id: 'campfire', title: '4-Chord Campfire', description: 'Four easy shapes, whole songs.', level: 'easy', suggested_mode: 'play_along', kind: 'setlist', song_count: 24, cover_urls: [] },
+    { id: 'first-songs', title: 'Your First 10 Songs', description: 'Easy shapes for your first month.', level: 'easy', suggested_mode: 'learn', kind: 'setlist', song_count: 10, cover_urls: [] },
   ] } }))
   await page.route(/\/api\/v1\/songs\/setlists\/[a-z-]+(\?.*)?$/, (route) => route.fulfill({ json: { items: [song], total: 1, offset: 0, limit: 20 } }))
   await page.route(/\/api\/v1\/songs(\?.*)?$/, (route) => route.fulfill({ json: { items: [song], total: 1, offset: 0, limit: 20 } }))
@@ -161,6 +161,28 @@ test.describe('Tonight’s practice home', () => {
     await expect(page.getByTestId('setlist-songs').getByTestId('difficulty-easy')).toBeVisible()
   })
 
+  test('the hits: a top ten, a second chart, and the full chart one tap away', async ({ authenticatedPage: page }) => {
+    await mockApi(page, { tier: 'pro' })
+    const charts: string[] = []
+    await page.route(/\/api\/v1\/songs\/setlists\/(hits|israeli-hits)(\?.*)?$/, (route) => {
+      charts.push(new URL(route.request().url()).pathname.split('/').pop() ?? '')
+      return route.fulfill({ json: { items: [song], total: 103, offset: 0, limit: 40 } })
+    })
+    await page.goto('/songs')
+
+    await expect(page.getByTestId('hits-section').getByTestId(`hit-card-${SONG_ID}`)).toContainText(/practice fixture/i)
+    await expect(page.getByTestId('hits-teaser')).toContainText('102 more hits')
+
+    await page.getByTestId('hits-tab-israeli-hits').click()
+    await expect(page.getByTestId('hits-tab-israeli-hits')).toHaveAttribute('aria-selected', 'true')
+    await expect.poll(() => charts).toContain('israeli-hits')
+
+    await page.getByTestId('hits-tab-hits').click()
+    await page.getByTestId('hits-all-link').click()
+    await expect(page).toHaveURL(/\/setlists\/hits$/)
+    await expect(page.getByTestId('setlist-play-first')).toContainText(/practice fixture/i)
+  })
+
   test('adding a song from YouTube is Pro: free users get the paywall', async ({ authenticatedPage: page }) => {
     await mockApi(page, { tier: 'free' })
     await page.goto('/songs')
@@ -177,45 +199,25 @@ test.describe('Tonight’s practice home', () => {
   })
 })
 
-test.describe('Song practice path', () => {
-  test('Pro: hear it, learn the shapes, then take the guitarist’s seat', async ({ authenticatedPage: page }) => {
-    const mocks = await mockApi(page, { tier: 'pro' })
+test.describe('Song band stage', () => {
+  test('Pro: the band plays; kick a member out and take the guitarist’s seat', async ({ authenticatedPage: page }) => {
+    await mockApi(page, { tier: 'pro' })
     await page.goto(`/songs/${SONG_ID}`)
 
-    const stage = page.getByTestId('band-stage')
-    await expect(stage).toBeVisible()
+    await expect(page.getByTestId('band-stage')).toBeVisible()
     await expect(page.getByTestId('band-member-guitar')).toHaveAttribute('data-state', 'live')
+    // No step-by-step practice path on the song page: just the band and the sheet.
+    await expect(page.getByTestId('practice-path')).toHaveCount(0)
 
-    // Step 1 — only the guitarist plays.
-    await page.getByTestId('practice-start-button').click()
-    await expect(page.getByTestId('band-member-guitar')).toHaveAttribute('data-state', 'live')
-    await expect(page.getByTestId('band-member-drums')).toHaveAttribute('data-state', 'muted')
-    await expect(page.getByTestId('band-member-vocals')).toHaveAttribute('data-state', 'muted')
-
-    // Step 2 — the song's shapes as cards to tick.
-    await page.getByTestId('practice-finish-button').click()
-    await expect(page.getByTestId('learn-shapes')).toBeVisible()
-    await page.getByTestId('learn-shape-Em').click()
-    await expect(page.getByTestId('learn-shape-Em')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId('playback-speed-selector')).toContainText('0.75x')
-    await expect.poll(() => mocks.progressPuts.some((p) => JSON.stringify(p).includes('"learned_chords":["Em"]'))).toBe(true)
-
-    // Step 3 — the band plays, the guitar seat is yours.
-    await page.getByTestId('practice-finish-button').click()
-    await expect(page.getByTestId('band-member-guitar')).toHaveAttribute('data-state', 'you')
-    await expect(page.getByTestId('band-member-drums')).toHaveAttribute('data-state', 'live')
-    await expect(page.getByTestId('stage-goal')).toBeVisible()
-    await expect.poll(() => mocks.progressPuts.some((p) => (p as { current_step: number }).current_step === 3)).toBe(true)
-    await expect(page.getByTestId('practice-step-2')).toHaveAttribute('data-done', 'true')
-
-    // Tap a member to kick them out, tap the "YOU" seat to bring the guitarist back.
     await page.getByTestId('band-member-drums').click()
     await expect(page.getByTestId('band-member-drums')).toHaveAttribute('data-state', 'muted')
+    await page.getByTestId('band-member-guitar').click()
+    await expect(page.getByTestId('band-member-guitar')).toHaveAttribute('data-state', 'you')
     await page.getByTestId('band-member-guitar').click()
     await expect(page.getByTestId('band-member-guitar')).toHaveAttribute('data-state', 'live')
   })
 
-  test('Free: the band is locked, stepping on stage opens the paywall', async ({ authenticatedPage: page }) => {
+  test('Free: the band is locked, tapping a member opens the paywall', async ({ authenticatedPage: page }) => {
     await mockApi(page, { tier: 'free' })
     await page.goto(`/songs/${SONG_ID}`)
 
@@ -224,16 +226,6 @@ test.describe('Song practice path', () => {
     await expect(page.getByTestId('paywall-dialog')).toBeVisible()
     await expect(page.getByTestId('paywall-pitch')).toContainText(/take the guitarist/i)
     await page.getByTestId('paywall-close-button').click()
-
-    // Hear it and Learn it are free.
-    await page.getByTestId('practice-start-button').click()
-    await expect(page.getByTestId('practice-step-panel')).toContainText(/hear it/i)
-    await page.getByTestId('practice-finish-button').click()
-    await expect(page.getByTestId('learn-shapes')).toBeVisible()
-
-    await page.getByTestId('practice-step-3').click()
-    await expect(page.getByTestId('paywall-dialog')).toBeVisible()
-    await expect(page.getByTestId('paywall-pitch')).toContainText(/step 3/i)
-    await expect(page.getByTestId('paywall-progress')).toContainText(/practice fixture/i)
+    await expect(page.getByTestId('paywall-dialog')).toHaveCount(0)
   })
 })

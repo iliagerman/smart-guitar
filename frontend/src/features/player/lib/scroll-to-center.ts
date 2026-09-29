@@ -17,47 +17,26 @@ export function scrollToCenter(
   container.scrollTop += delta
 }
 
-/**
- * Check whether a target element is fully visible within a scroll container.
- * An optional margin (px) triggers the scroll slightly before the element
- * reaches the exact edge, so users don't feel like they're "chasing" content.
- */
-export function isElementVisible(
-  container: HTMLElement,
-  target: HTMLElement,
-  margin = 0,
-): boolean {
-  const cRect = container.getBoundingClientRect()
-  const tRect = target.getBoundingClientRect()
-  return tRect.top >= cRect.top - margin && tRect.bottom <= cRect.bottom + margin
-}
+/** Where a followed row settles, as a fraction of the container's height from its top. */
+const READING_POINT = 0.3
+/** The row may drift between these fractions of the height before the sheet moves. */
+const BAND_TOP = 0.1
+const BAND_BOTTOM = 0.7
+/** Moves smaller than this aren't worth a scroll. */
+const MIN_MOVE_PX = 4
 
 /**
- * Scroll just enough to bring the target element into view within the
- * container, plus a small padding so it doesn't sit right at the edge.
- * Uses native smooth scrolling for a gentle, non-jarring transition.
+ * The scrollTop that brings `target` back to the reading point, or null while
+ * it is still comfortably inside the reading band. Measured in content
+ * coordinates, so asking again mid-glide returns the same answer.
  */
-export function scrollIntoContainerView(
-  container: HTMLElement,
-  target: HTMLElement,
-  padding = 60,
-): void {
-  const cRect = container.getBoundingClientRect()
-  const tRect = target.getBoundingClientRect()
+export function readingScrollTop(container: HTMLElement, target: HTMLElement): number | null {
+  const box = container.getBoundingClientRect()
+  const rect = target.getBoundingClientRect()
+  const top = rect.top - box.top
+  if (top >= box.height * BAND_TOP && rect.bottom - box.top <= box.height * BAND_BOTTOM) return null
 
-  let delta = 0
-  if (tRect.bottom > cRect.bottom - padding) {
-    // Target is below the visible area — scroll down just enough
-    delta = tRect.bottom - (cRect.bottom - padding)
-  } else if (tRect.top < cRect.top + padding) {
-    // Target is above the visible area — scroll up just enough
-    delta = tRect.top - (cRect.top + padding)
-  }
-
-  if (delta !== 0) {
-    container.scrollTo({
-      top: container.scrollTop + delta,
-      behavior: 'smooth',
-    })
-  }
+  const maxScroll = container.scrollHeight - container.clientHeight
+  const next = Math.round(Math.min(maxScroll, Math.max(0, container.scrollTop + top - box.height * READING_POINT)))
+  return Math.abs(next - container.scrollTop) < MIN_MOVE_PX ? null : next
 }

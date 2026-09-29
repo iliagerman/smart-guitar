@@ -18,7 +18,7 @@ export function TunerControls({ isListening, permissionDenied, onToggle }: Tuner
           'border-2',
           isListening
             ? 'bg-ember-500/20 border-ember-500 text-ember-400 animate-flame-pulse'
-            : 'bg-flame-400/15 border-flame-400/40 text-flame-400 hover:bg-flame-400/25'
+            : 'bg-gradient-to-br from-fire-400 to-fire-600 border-fire-400/60 text-white shadow-[0_10px_30px_rgba(249,115,22,0.45)] hover:scale-105'
         )}
         aria-label={isListening ? 'Stop tuning' : 'Start tuning'}
         data-testid="tuner-toggle-button"

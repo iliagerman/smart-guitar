@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2, Play, Pause, Minus, Plus, ChevronsDown } from 'lucide-react'
 
-import { songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
+import { Collapse } from '@/components/shared/Collapse'
+import { songBeatTimes, songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
 import { useChordEditStore } from '@/stores/chord-edit.store'
+import { useSongViewStore } from '@/stores/song-view.store'
 import { ProcessButton } from '../../components/ProcessButton'
 import { BackgroundProcessingCard } from '../../components/BackgroundProcessingCard'
 import { BarsSheet } from '../../components/BarsSheet'
@@ -13,6 +15,8 @@ import { ChordSheet } from '../../components/ChordSheet'
 import { ChordEditToolbar } from '../../components/ChordEditToolbar'
 import { TabsSheet } from '../../components/TabsSheet'
 import { ChordMap } from '../../components/ChordMap'
+import { StrumStrip } from '../../components/StrumStrip'
+import { SongMetronome } from '../../components/SongMetronome'
 import { CurrentChordPanel } from './CurrentChordPanel'
 import type { SongDetail, LyricsSegment, ChordEntry } from '@/types/song'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
@@ -38,6 +42,10 @@ interface SongContentProps {
   isSavingChords: boolean
   onAddChordAtWord: (startTime: number) => void
   onOpenTutorial: () => void
+  /** Sits on top of the chord sheet: the chord source tabs. */
+  sheetBar?: ReactNode
+  /** Playing on a phone or tablet: the sheet bar folds away; strum and metronome are optional. */
+  focusMode?: boolean
 }
 
 /**
@@ -68,6 +76,8 @@ export function SongContent({
   isSavingChords,
   onAddChordAtWord,
   onOpenTutorial,
+  sheetBar,
+  focusMode = false,
 }: SongContentProps) {
   const sheetMode = usePlaybackStore((s) => s.sheetMode)
   const isAtSongStart = usePlaybackStore((s) => s.currentTime === 0)
@@ -83,6 +93,9 @@ export function SongContent({
   }, [isAtSongStart, sheetMode])
 
   const isEditMode = useChordEditStore((s) => s.isEditMode)
+  const metronomeOpen = useSongViewStore((s) => s.metronomeOpen)
+  const setMetronomeOpen = useSongViewStore((s) => s.setMetronomeOpen)
+  const focusShowStrum = usePlayerPrefsStore((s) => s.focusShowStrum)
   const editingChords = useChordEditStore((s) => s.editingChords)
   const editingLyrics = useChordEditStore((s) => s.editingLyrics)
   const selectedEditChordIndex = useChordEditStore((s) => s.selectedChordIndex)
@@ -145,18 +158,38 @@ export function SongContent({
                 )}
                 <div className="flex min-h-0 flex-1 flex-col items-stretch gap-3 lg:flex-row lg:gap-4">
                   <CurrentChordPanel chords={displayChords} />
-                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#121418]/88 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
-                    {/* Fullscreen toggle — mobile only */}
-                    <button
-                      type="button"
-                      onClick={toggleFullscreen}
-                      className="absolute right-2 top-2 z-10 rounded-xl border border-white/10 bg-charcoal-800/80 p-2 text-smoke-300 shadow-lg transition-colors hover:border-flame-400/30 hover:text-smoke-100 lg:hidden"
-                      aria-label="Fullscreen"
-                      title="Expand to fullscreen"
-                      data-testid="fullscreen-toggle"
-                    >
-                      <Maximize2 size={18} />
-                    </button>
+                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-white/[0.08] bg-stage-950/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.5)]">
+                    {/* The sheet bar: where the chords come from; fullscreen on phones */}
+                    <Collapse open={!focusMode} className="shrink-0">
+                      <div className="flex items-center gap-2 border-b border-white/[0.06] bg-black/20 px-2.5 py-2 sm:px-3" data-testid="sheet-bar">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">{sheetBar}</div>
+                        <button
+                          type="button"
+                          onClick={toggleFullscreen}
+                          className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.045] text-smoke-300 transition-colors hover:border-fire-400/35 hover:text-smoke-50 lg:hidden"
+                          aria-label="Fullscreen"
+                          title="Expand to fullscreen"
+                          data-testid="fullscreen-toggle"
+                        >
+                          <Maximize2 size={16} />
+                        </button>
+                      </div>
+                    </Collapse>
+
+                    {metronomeOpen && <SongMetronome detail={detail} onClose={() => setMetronomeOpen(false)} />}
+
+                    {/* Without the chord map beside the sheet, the strumming sits above it */}
+                    {hasChords && !isEditMode && sheetMode !== 'tabs' && (
+                      <Collapse open={!focusMode || focusShowStrum} className="shrink-0 lg:hidden">
+                        <StrumStrip
+                          sectionPatterns={sectionStrumPatterns}
+                          bpm={songTempoBpm(detail) ?? 120}
+                          beatsPerBar={detail.time_signature?.[0]}
+                          beatTimes={songBeatTimes(detail)}
+                          loading={!detail.songsterr_status}
+                        />
+                      </Collapse>
+                    )}
 
                     {chordsLoading && !hasChords ? (
                       <div className="flex-1 flex items-center justify-center text-smoke-400" data-testid="chords-loading">
@@ -192,6 +225,8 @@ export function SongContent({
                         )}
                         <ChordSheet
                           chords={isEditMode ? editingChords : displayChords}
+                          beatTimes={detail.beat_times}
+                          beatsPerBar={detail.time_signature?.[0]}
                           lyrics={isEditMode && editingLyrics ? editingLyrics : activeLyrics}
                           onSeek={onSeek}
                           isEditMode={isEditMode}
@@ -218,6 +253,7 @@ export function SongContent({
                       tutorialUrl={detail.tutorial_url}
                       tutorialLinks={detail.tutorial_links}
                       strumLoading={!detail.songsterr_status}
+                      beatsPerBar={detail.time_signature?.[0]}
                       songKey={detail.song_key}
                       onOpenTutorial={onOpenTutorial}
                     />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { beatIndexAt, gridSubdivisionAt, songBeatTimes, songTempoBpm } from './song-beat-grid'
+import { beatIndexAt, firstSubdivisionFrom, songBeatTimes, songTempoBpm, subdivisionTime } from './song-beat-grid'
 
 describe('songTempoBpm', () => {
   it('prefers the tempo measured from the recording over the tab tempo', () => {
@@ -27,23 +27,53 @@ describe('songBeatTimes', () => {
   })
 })
 
-describe('gridSubdivisionAt', () => {
+describe('subdivisionTime', () => {
   const beatTimes = [0.7, 1.2, 1.8, 2.4]
 
   it('puts the first detected downbeat on beat one, not 0:00', () => {
-    expect(gridSubdivisionAt(beatTimes, 0.7)).toEqual({ subdivisionNumber: 0, secondsAfterSubdivision: 0 })
+    expect(subdivisionTime(beatTimes, 120, 0)).toBe(0.7)
   })
 
   it('follows uneven beat spacing instead of a fixed tempo', () => {
-    // Second beat is 0.6 s long, so its off-beat starts at 1.5 s.
-    expect(gridSubdivisionAt(beatTimes, 1.3)?.subdivisionNumber).toBe(2)
-    expect(gridSubdivisionAt(beatTimes, 1.55)?.subdivisionNumber).toBe(3)
-    expect(gridSubdivisionAt(beatTimes, 1.55)?.secondsAfterSubdivision).toBeCloseTo(0.05)
+    // Second beat is 0.6 s long, so its off-beat lands at 1.5 s.
+    expect(subdivisionTime(beatTimes, 120, 2)).toBe(1.2)
+    expect(subdivisionTime(beatTimes, 120, 3)).toBeCloseTo(1.5)
   })
 
-  it('returns null before the first beat and after the last beat', () => {
-    expect(gridSubdivisionAt(beatTimes, 0.2)).toBeNull()
-    expect(gridSubdivisionAt(beatTimes, 2.4)).toBeNull()
+  it('ends with the detected beats', () => {
+    expect(subdivisionTime(beatTimes, 120, 5)).toBeCloseTo(2.1)
+    expect(subdivisionTime(beatTimes, 120, 6)).toBeNull()
+  })
+
+  it('uses a fixed tempo from 0:00 when no beats were detected', () => {
+    expect(subdivisionTime(null, 120, 0)).toBe(0)
+    expect(subdivisionTime(null, 120, 3)).toBeCloseTo(0.75)
+  })
+})
+
+describe('firstSubdivisionFrom', () => {
+  const beatTimes = [0.7, 1.2, 1.8, 2.4]
+
+  it('starts on beat one before the first detected beat', () => {
+    expect(firstSubdivisionFrom(beatTimes, 120, 0)).toBe(0)
+    expect(firstSubdivisionFrom(beatTimes, 120, 0.7)).toBe(0)
+  })
+
+  it('never returns a half-beat that has already passed', () => {
+    expect(firstSubdivisionFrom(beatTimes, 120, 0.71)).toBe(1)
+    expect(firstSubdivisionFrom(beatTimes, 120, 1.2)).toBe(2)
+    expect(firstSubdivisionFrom(beatTimes, 120, 1.51)).toBe(4)
+  })
+
+  it('returns null once the detected beats are over', () => {
+    expect(firstSubdivisionFrom(beatTimes, 120, 2.2)).toBeNull()
+    expect(firstSubdivisionFrom(beatTimes, 120, 3)).toBeNull()
+  })
+
+  it('counts half-beats of a fixed tempo when no beats were detected', () => {
+    expect(firstSubdivisionFrom(null, 120, 0)).toBe(0)
+    expect(firstSubdivisionFrom(null, 120, 0.25)).toBe(1)
+    expect(firstSubdivisionFrom(null, 120, 0.26)).toBe(2)
   })
 })
 

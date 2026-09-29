@@ -2,6 +2,7 @@ import { Minus, Plus, Timer } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { dockPillClass, dockStepButtonClass } from '../lib/dock-button'
 
 const STEP_MS = 50
 
@@ -19,19 +20,13 @@ export function LyricsSyncControl({ songId, className }: LyricsSyncControlProps)
 
   return (
     <div
-      className={cn(
-        'inline-flex items-center rounded-lg px-1.5 py-1.5 text-sm font-medium',
-        'bg-charcoal-700 border border-charcoal-600 text-smoke-100',
-        'hover:border-flame-400/30 transition-colors',
-        'w-auto',
-        className,
-      )}
+      className={dockPillClass(false, cn('gap-1 px-1.5', className))}
       data-testid="lyrics-sync-control"
       aria-label="Lyrics sync offset"
     >
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className={dockStepButtonClass}
         onClick={() => setOffset(lyricsOffsetMs - STEP_MS)}
         aria-label="Lyrics earlier"
         title="Lyrics earlier"
@@ -41,7 +36,7 @@ export function LyricsSyncControl({ songId, className }: LyricsSyncControlProps)
 
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-charcoal-800/60 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-colors hover:bg-white/10"
         onClick={() => setOffset(0)}
         aria-label="Reset lyrics sync"
         title="Reset lyrics sync"
@@ -58,7 +53,7 @@ export function LyricsSyncControl({ songId, className }: LyricsSyncControlProps)
 
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded p-1 hover:bg-charcoal-800/60 text-smoke-200 transition-colors"
+        className={dockStepButtonClass}
         onClick={() => setOffset(lyricsOffsetMs + STEP_MS)}
         aria-label="Lyrics later"
         title="Lyrics later"

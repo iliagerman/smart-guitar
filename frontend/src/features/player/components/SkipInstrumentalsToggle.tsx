@@ -1,7 +1,7 @@
 import { FastForward } from 'lucide-react'
 
-import { cn } from '@/lib/cn'
 import { usePlayerPrefsStore } from '@/stores/player-prefs.store'
+import { dockPillClass } from '../lib/dock-button'
 
 interface SkipInstrumentalsToggleProps {
   className?: string
@@ -30,15 +30,7 @@ export function SkipInstrumentalsToggle({ className, disabled = false }: SkipIns
   return (
     <button
       type="button"
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium',
-        'bg-charcoal-700 border border-charcoal-600',
-        'hover:border-flame-400/30 transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-flame-400/40 focus:ring-offset-1 focus:ring-offset-charcoal-800',
-        isActive ? 'text-smoke-100' : 'text-smoke-400',
-        disabled && 'cursor-not-allowed opacity-50 hover:border-charcoal-600',
-        className,
-      )}
+      className={dockPillClass(isActive, className)}
       onClick={toggleSkipInstrumentals}
       disabled={disabled}
       aria-label={label}

@@ -1,6 +1,6 @@
 import type { ChordEntry, RhythmInfo, StrumEvent, TabRhythm } from '@/types/song'
 
-function directionToSymbol(direction: StrumDirection): StrumSymbol {
+export function directionToSymbol(direction: StrumDirection): StrumSymbol {
   if (direction === 'miss') {
     return {
       symbol: '·',

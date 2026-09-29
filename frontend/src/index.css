@@ -3,6 +3,8 @@
 :root {
   /* Defaults; updated at runtime by `VisualViewportVars` when supported. */
   --vv-height: 100dvh;
+  /* Desktop nav rail, including its gutter; overlays that span the page start after it. */
+  --nav-rail-width: 6.25rem;
   --vv-bottom-offset: 0px;
 }
 
@@ -158,6 +160,17 @@ body {
   animation: count-in-pop 0.4s ease-out;
 }
 
+@keyframes heartbeat {
+  0%, 40%, 100% { transform: scale(1); }
+  12% { transform: scale(1.18); }
+  24% { transform: scale(1.04); }
+  32% { transform: scale(1.14); }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 1.8s ease-in-out infinite;
+}
+
 /* The inset glow is painted ONCE into a compositor layer (the opacity
    animation promotes the element), then only its opacity is animated —
    compositor-only, no per-frame repaint. Animating box-shadow directly forces
@@ -182,13 +195,80 @@ body {
       transparent 92%);
 }
 
+/* Nav rail: each icon moves its own way when you point at it. */
+@keyframes nav-bounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-4px) rotate(-8deg); }
+  60% { transform: translateY(0) rotate(5deg); }
+}
+
+@keyframes nav-beat {
+  0%, 100% { transform: scale(1); }
+  20% { transform: scale(1.22); }
+  40% { transform: scale(0.94); }
+  60% { transform: scale(1.14); }
+}
+
+@keyframes nav-swing {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-16deg); }
+  75% { transform: rotate(16deg); }
+}
+
+@keyframes nav-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+@keyframes nav-rise {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.22); }
+}
+
+@keyframes nav-spin {
+  to { transform: rotate(120deg); }
+}
+
+.group:hover .nav-anim-bounce { animation: nav-bounce 0.6s ease-in-out; }
+.group:hover .nav-anim-beat { animation: nav-beat 0.8s ease-in-out; }
+.group:hover .nav-anim-swing { animation: nav-swing 0.7s ease-in-out; }
+.group:hover .nav-anim-pulse { animation: nav-pulse 0.6s ease-in-out; }
+.group:hover .nav-anim-rise { animation: nav-rise 0.6s ease-in-out; transform-origin: bottom; }
+.group:hover .nav-anim-spin { animation: nav-spin 0.6s ease-in-out; }
+
+/* A living flame: the streak, and the logo breathing on the rail. */
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1, 1) rotate(-2deg); filter: brightness(1); }
+  25% { transform: scale(1.06, 1.12) rotate(2deg); filter: brightness(1.18); }
+  50% { transform: scale(0.97, 1.03) rotate(-1deg); filter: brightness(0.95); }
+  75% { transform: scale(1.04, 1.09) rotate(1.5deg); filter: brightness(1.12); }
+}
+
+.animate-flame-flicker {
+  animation: flame-flicker 1.6s ease-in-out infinite;
+  transform-origin: 50% 85%;
+}
+
+@keyframes logo-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.04); }
+}
+
+.animate-logo-breathe {
+  animation: logo-breathe 3.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   .animate-flame-pulse,
   .animate-favorite-ignite,
   .animate-slide-up,
   .animate-count-in-pop,
-  .animate-beat-screen-glow {
+  .animate-heartbeat,
+  .animate-beat-screen-glow,
+  .animate-flame-flicker,
+  .animate-logo-breathe,
+  .group:hover [class*='nav-anim-'] {
     animation: none;
   }
 }
@@ -229,16 +309,16 @@ body {
 }
 
 .chord-sheet-line-active {
-  border-left: 3px solid var(--color-flame-400);
+  border-left: 3px solid var(--color-fire-500);
   border-radius: 1rem;
-  background: linear-gradient(90deg, rgba(250, 204, 21, 0.18) 0%, rgba(250, 204, 21, 0.06) 58%, transparent 100%);
-  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08), 0 12px 34px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0.06) 58%, transparent 100%);
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.1), 0 12px 34px rgba(0, 0, 0, 0.2);
 }
 
 .chord-sheet-rtl.chord-sheet-line-active {
   border-left: none;
-  border-right: 3px solid var(--color-flame-400);
-  background: linear-gradient(270deg, rgba(250, 204, 21, 0.18) 0%, rgba(250, 204, 21, 0.06) 58%, transparent 100%);
+  border-right: 3px solid var(--color-fire-500);
+  background: linear-gradient(270deg, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0.06) 58%, transparent 100%);
 }
 
 .chord-sheet-rtl {
@@ -256,9 +336,14 @@ body {
 }
 
 .chord-sheet-chord-active {
-  background-color: rgba(250, 204, 21, 0.2);
-  border-radius: 0.25rem;
+  background-color: rgba(249, 115, 22, 0.32);
+  border-radius: 0.35rem;
   padding: 0 0.25rem;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.45);
+}
+
+.chord-sheet-chord-active > span {
+  color: #fff;
 }
 
 .chord-line {

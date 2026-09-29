@@ -22,9 +22,9 @@ Run `just test-practice`. It uses the same sandboxed harness and `frontend/playw
 Checks cover:
 
 - The "Tonight's practice" home: level picker, first-song card, setlists and the setlist page.
-- The Pro path on a song: Hear it plays the guitar alone, Learn it shows shape cards at 75% speed, and Play it with the band leaves the dashed "YOU" seat.
+- The Pro path on a song: Hear it plays the guitar alone, Learn it shows shape cards at the song's real speed, Play it with the band leaves the dashed "YOU" seat, and finishing it marks the song learned so the path steps aside.
 - Band-member toggles.
-- The free plan: locked band members, adding songs from YouTube and steps 3–4 all open the paywall with the yearly and monthly plans.
+- The free plan: locked band members, adding songs from YouTube and step 3 all open the paywall with the yearly and monthly plans.
 - The trial countdown banner opening the paywall.
 
 The path logic (step completion, shape order, verse loop) is covered by `just test-frontend src/features/practice/lib/practice-steps.test.ts`. Backend setlists, practice progress, the free tier and song retagging are covered by the backend suite (`just test-backend`).

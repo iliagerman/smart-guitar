@@ -16,7 +16,10 @@ interface MetronomePanelProps {
   mode: MetronomeMode
   playbackTime?: number
   playbackPlaying?: boolean
+  playbackRate?: number
   compact?: boolean
+  /** Compact without the meter, sound and volume row: just the beat and the tempo. */
+  minimal?: boolean
 }
 
 interface BeatIndicatorProps {
@@ -71,7 +74,7 @@ function validTimeSignature(value: readonly [number, number] | null | undefined)
 
 const IDLE_BAR: Record<BeatEmphasis, string> = {
   downbeat: 'h-2/3 bg-smoke-500/70',
-  accent: 'h-2/3 bg-flame-400/45',
+  accent: 'h-2/3 bg-fire-400/50',
   normal: 'h-1/2 bg-smoke-700/60',
 }
 
@@ -88,8 +91,8 @@ function BeatIndicator({ beat, emphases, enabled, compact }: BeatIndicatorProps)
               'flex flex-col items-center justify-end rounded-xl border transition-[border-color,background-color,box-shadow,transform] duration-100 motion-reduce:transition-none',
               compact ? 'h-8 p-1' : 'h-16 p-2 sm:h-20',
               active
-                ? 'scale-[1.03] border-flame-300 bg-flame-300/18 shadow-[0_0_24px_rgba(250,204,21,0.3)]'
-                : emphasis === 'accent' ? 'border-flame-400/30 bg-white/[0.045]' : 'border-white/10 bg-white/[0.045]',
+                ? 'scale-[1.03] border-fire-400 bg-fire-500/20 shadow-[0_0_24px_rgba(249,115,22,0.45)]'
+                : emphasis === 'accent' ? 'border-fire-500/35 bg-white/[0.045]' : 'border-white/10 bg-white/[0.045]',
             )}
             title={emphasis === 'accent' ? 'The snare hits this beat' : undefined}
             data-accented={index === 0}
@@ -98,10 +101,10 @@ function BeatIndicator({ beat, emphases, enabled, compact }: BeatIndicatorProps)
           >
             <div className={cn(
               'w-full rounded-full transition-[height,background-color,box-shadow] duration-100 motion-reduce:transition-none',
-              active ? 'h-full bg-flame-300 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : IDLE_BAR[emphasis],
+              active ? 'h-full bg-gradient-to-t from-fire-600 to-fire-300 shadow-[0_0_20px_rgba(249,115,22,0.6)]' : IDLE_BAR[emphasis],
             )} />
             {!compact && (
-              <span className={cn('mt-1 font-mono text-[10px]', active ? 'text-flame-200' : emphasis === 'accent' ? 'text-flame-300' : 'text-smoke-500')}>
+              <span className={cn('mt-1 font-mono text-[10px]', active ? 'text-fire-200' : emphasis === 'accent' ? 'text-fire-300' : 'text-smoke-500')}>
                 {index + 1}{emphasis === 'accent' ? ' >' : ''}
               </span>
             )}
@@ -153,7 +156,7 @@ function MetronomeSettings(props: MetronomeSettingsProps) {
           'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
           focusRing,
           props.soundEnabled
-            ? 'border-flame-400/40 bg-flame-400/15 text-flame-200 hover:border-flame-300/60'
+            ? 'border-fire-500/40 bg-fire-500/15 text-fire-200 hover:border-fire-400/60'
             : 'border-charcoal-600 bg-charcoal-800 text-smoke-300 hover:border-flame-400/30',
         )}
         data-testid="metronome-sound-toggle"
@@ -171,7 +174,7 @@ function MetronomeSettings(props: MetronomeSettingsProps) {
           max="100"
           value={props.volume}
           onChange={(event) => props.onVolumeChange(Number(event.target.value))}
-          className={cn('min-w-16 flex-1 accent-flame-400', focusRing)}
+          className={cn('min-w-16 flex-1 accent-fire-500', focusRing)}
           aria-label="Metronome volume"
           data-testid="metronome-volume"
         />
@@ -220,7 +223,7 @@ function CompactTempoControls({ bpm, autoBpm, onBpmChange, onUseSongTempo }: Pan
   )
 }
 
-function CompactPanel(props: PanelViewProps) {
+function CompactPanel({ minimal = false, ...props }: PanelViewProps & { minimal?: boolean }) {
   return (
     <section className="min-w-0 flex-1" data-testid="metronome-panel">
       <div className="flex items-center gap-2">
@@ -229,7 +232,7 @@ function CompactPanel(props: PanelViewProps) {
         </div>
         <CompactTempoControls {...props} />
       </div>
-      <div className="mt-2"><MetronomeSettings {...props} /></div>
+      {!minimal && <div className="mt-2"><MetronomeSettings {...props} /></div>}
     </section>
   )
 }
@@ -251,7 +254,7 @@ function PanelHeader({ enabled, sourceLabel, onEnabledToggle }: PanelViewProps) 
           'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:ring-offset-1 focus-visible:ring-offset-charcoal-900',
           focusRing,
           enabled
-            ? 'border-flame-400/40 bg-flame-400/20 text-flame-200 hover:border-flame-300/60'
+            ? 'border-fire-500/40 bg-fire-500/20 text-fire-200 hover:border-fire-400/60'
             : 'border-charcoal-600 bg-charcoal-800 text-smoke-200 hover:border-flame-400/30',
         )}
         data-testid="metronome-toggle-button"
@@ -283,7 +286,7 @@ function TempoSlider({ bpm, onBpmChange }: PanelViewProps) {
         max={MAX_BPM}
         value={bpm}
         onChange={(event) => onBpmChange(Number(event.target.value))}
-        className={cn('w-full accent-flame-400', focusRing)}
+        className={cn('w-full accent-fire-500', focusRing)}
         data-testid="metronome-tempo-slider"
       />
       <button
@@ -318,7 +321,7 @@ function SongTempoButton({ autoBpm, autoTimeSignature, onUseSongTempo }: PanelVi
 function FullPanel(props: PanelViewProps) {
   return (
     <section
-      className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col justify-start overflow-y-auto rounded-[2rem] border border-white/10 bg-[#111215]/95 p-6 shadow-[0_0_60px_rgba(250,204,21,0.16),0_24px_90px_rgba(0,0,0,0.48)] backdrop-blur-2xl sm:p-8"
+      className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col justify-start overflow-y-auto rounded-[2rem] border border-white/[0.08] bg-stage-950/75 p-6 shadow-[0_0_70px_rgba(249,115,22,0.1),0_24px_90px_rgba(0,0,0,0.5)] sm:p-8"
       data-testid="metronome-panel"
     >
       <PanelHeader {...props} />
@@ -351,7 +354,7 @@ function FullPanel(props: PanelViewProps) {
   )
 }
 
-function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, autoBeatAccents, mode, playbackTime, playbackPlaying }: MetronomePanelProps): PanelViewProps {
+function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, autoBeatAccents, mode, playbackTime, playbackPlaying, playbackRate }: MetronomePanelProps): PanelViewProps {
   const autoMeter = validTimeSignature(autoTimeSignature)
   const initialBpm = clampBpm(autoBpm ?? 120)
   const [manualBpm, setManualBpm] = useState(initialBpm)
@@ -369,7 +372,7 @@ function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, autoBeatAcce
   // The song's accents only apply while the meter follows the song.
   const songAccents = manualMeterOverride ? null : autoBeatAccents ?? null
   const emphases = useMemo(() => beatEmphases(beatsPerBar, songAccents), [beatsPerBar, songAccents])
-  const metronome = useMetronome({ bpm, beatsPerBar, emphases, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying, beatTimes })
+  const metronome = useMetronome({ bpm, beatsPerBar, emphases, enabled, soundEnabled, volume: volume / 100, mode, playbackTime, playbackPlaying, playbackRate, beatTimes })
 
   const updateBpm = useCallback((value: number) => {
     setManualTempoOverride(true)
@@ -418,5 +421,5 @@ function usePanelState({ autoBpm, autoTimeSignature, autoBeatTimes, autoBeatAcce
 /** Metronome with tempo, meter, song-accented beats, and click volume controls. */
 export function MetronomePanel(props: MetronomePanelProps) {
   const panelState = usePanelState(props)
-  return props.compact ? <CompactPanel {...panelState} /> : <FullPanel {...panelState} />
+  return props.compact ? <CompactPanel {...panelState} minimal={props.minimal} /> : <FullPanel {...panelState} />
 }
