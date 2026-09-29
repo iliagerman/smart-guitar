@@ -1,0 +1,1026 @@
+/* ===== The scrolling 3D worlds and the page that floats above them =====
+   Layers, back to front: backdrop (shown until the 3D is ready, and when
+   WebGL is unavailable), the WebGL canvas, a legibility scrim, name tags,
+   then the page. */
+
+body {
+  background: var(--night);
+}
+
+.world-backdrop,
+.world-canvas,
+.world-scrim,
+.world-tags {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.world-backdrop {
+  z-index: 0;
+  background:
+    radial-gradient(60% 50% at 70% 60%, rgba(249, 115, 22, 0.28), rgba(7, 6, 10, 0) 70%),
+    radial-gradient(50% 40% at 20% 20%, rgba(124, 58, 237, 0.18), rgba(7, 6, 10, 0) 70%),
+    var(--night);
+}
+
+.world-canvas {
+  z-index: 1;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.world-on .world-canvas { opacity: 1; }
+.world-off .world-canvas { display: none; }
+
+.world-scrim {
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(7, 6, 10, 0.72) 0%, rgba(7, 6, 10, 0.25) 38%, rgba(7, 6, 10, 0) 55%);
+  transition: opacity 0.8s ease;
+}
+
+.world-tags {
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.world-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  translate: -50% -130%;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(7, 6, 10, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.world-tag.is-on { opacity: 1; }
+
+/* In the song the musicians stand in a column, so their tags sit to the left. */
+[data-world="song"] .world-tag { translate: calc(-100% - 26px) -10%; }
+
+/* ---------- Page layer ---------- */
+main,
+.site-footer {
+  position: relative;
+  z-index: 4;
+}
+
+/* The canvas under the text takes the pointer (to strum the strings); only
+   real controls and cards take it back. */
+.world-on main { pointer-events: none; }
+.world-on main a,
+.world-on main button,
+.world-on main video,
+.world-on main .demo,
+.world-on main .ticket,
+.world-on main .quote,
+.world-on main .tickets-note { pointer-events: auto; }
+
+.site-footer {
+  background: var(--night);
+}
+
+.chapter {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: 6.5rem 0 3rem;
+}
+
+.chapter > .container { position: relative; z-index: 1; width: 100%; }
+
+.copy {
+  max-width: 34rem;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+}
+
+/* Word spans clip their overflow, which would cut a text-shadow into boxes;
+   headings get a drop-shadow filter instead. */
+.copy h1,
+.copy h2 {
+  text-shadow: none;
+  filter: drop-shadow(0 3px 14px rgba(0, 0, 0, 0.55));
+}
+
+.copy--center {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.copy h1,
+.copy h2 {
+  color: #fff;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+
+.copy h1 { font-size: clamp(2.3rem, 9vw, 4.6rem); }
+.copy h2 { font-size: clamp(2rem, 8vw, 4.1rem); }
+
+.copy .lede {
+  margin-top: 1rem;
+  max-width: 30rem;
+  font-size: clamp(1.02rem, 4.2vw, 1.22rem);
+  line-height: 1.5;
+  color: var(--smoke-100);
+}
+
+.copy--center .lede { margin-left: auto; margin-right: auto; }
+
+.copy .note {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  color: var(--smoke-300);
+}
+
+.copy .note b { color: var(--flame-300); }
+
+.step {
+  display: inline-block;
+  margin-right: 0.15em;
+  font-family: var(--font-mono);
+  font-size: 0.34em;
+  font-weight: 800;
+  vertical-align: 0.9em;
+  color: var(--fire-400);
+}
+
+.tag {
+  display: inline-block;
+  margin-bottom: 0.9rem;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-shadow: none;
+}
+
+.tag--free { background: #dcfce7; color: #166534; }
+.tag--pro { background: var(--flame-400); color: #1c1917; }
+
+.cta {
+  max-width: 420px;
+  margin-top: 1.75rem;
+  text-align: center;
+  text-shadow: none;
+}
+
+.copy--center .cta { margin-left: auto; margin-right: auto; }
+
+/* Hero */
+.chapter--hero {
+  position: relative;
+  padding-top: 5.5rem;
+}
+
+.strum-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  background: rgba(7, 6, 10, 0.35);
+  font-family: var(--font-sans);
+  margin-top: 1.25rem;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px dashed rgba(253, 186, 116, 0.5);
+  color: var(--fire-200);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-shadow: none;
+  transition: opacity 0.6s ease;
+}
+
+.strum-hint .icon { width: 16px; height: 16px; }
+.strum-hint:hover { border-color: var(--fire-400); color: #fff; }
+.strum-hint .sh-on,
+.world-sound .strum-hint .sh-off { display: none; }
+.world-sound .strum-hint .sh-on { display: inline; }
+
+.world-off .strum-hint { display: none; }
+.world-sound.world-strummed .strum-hint { opacity: 0; pointer-events: none; }
+
+.touch-hint, .kbd-hint { display: none; }
+@media (hover: none) { .world-sound .strum-hint .touch-hint { display: inline; } }
+@media (hover: hover) { .world-sound .strum-hint .kbd-hint { display: inline; } }
+
+.scroll-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  transform: translateX(-50%);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--smoke-400);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.scroll-cue:hover { color: var(--smoke-300); }
+/* the hero runs 12vh past the fold (its fading edge); keep the cue on screen */
+.chapter--hero .scroll-cue { bottom: calc(12vh + 1.25rem); }
+.scroll-cue svg { animation: cue 1s ease-in-out infinite alternate; }
+
+@keyframes cue {
+  from { transform: translateY(-3px); }
+  to { transform: translateY(4px); }
+}
+
+/* Right-hand rail: one dot per chapter, as in the app (wide screens only). */
+.tour-rail {
+  position: fixed;
+  right: 1.25rem;
+  top: 50%;
+  z-index: 40;
+  display: none;
+  transform: translateY(-50%);
+}
+
+@media (min-width: 1280px) {
+  .tour-rail { display: block; }
+}
+
+.tour-rail ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour-rail a {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.tour-rail a i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: width 0.2s ease, height 0.2s ease, background-color 0.2s ease;
+}
+
+.tour-rail a[aria-current] i {
+  width: 10px;
+  height: 10px;
+  background: var(--fire-500);
+  box-shadow: 0 0 12px var(--fire-500);
+}
+
+.tour-rail a span {
+  position: absolute;
+  right: 1.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(7, 6, 10, 0.8);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--smoke-100);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.tour-rail a:hover span,
+.tour-rail a:focus-visible span { opacity: 1; }
+
+/* Hero entrance */
+.js .chapter--hero .intro { opacity: 0; transform: translateY(16px); }
+.is-loaded .chapter--hero .intro {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.9s ease, transform 1s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+.is-loaded .chapter--hero .lede.intro { transition-delay: 0.45s; }
+.is-loaded .chapter--hero .cta.intro { transition-delay: 0.65s; }
+.is-loaded .chapter--hero .strum-hint.intro { transition-delay: 1.4s; }
+
+/* Word-by-word headings */
+.w {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
+.wi {
+  display: inline-block;
+  transform: translateY(110%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: calc(var(--wi) * 70ms);
+}
+
+.visible .wi,
+.is-loaded .chapter--hero .wi { transform: none; }
+
+/* Stage chapter: copy and the live demo in one column */
+.chapter--stage .container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.chapter--stage .demo {
+  max-width: 520px;
+  background: linear-gradient(180deg, rgba(20, 16, 26, 0.82), rgba(12, 10, 16, 0.78));
+}
+
+/* ---------- Tickets ---------- */
+.chapter--tickets,
+.chapter--players,
+.chapter--encore {
+  align-items: center;
+}
+
+.tickets {
+  display: grid;
+  gap: 18px;
+  max-width: 940px;
+  margin: 2rem auto 0;
+}
+
+.ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9);
+  transition: transform 0.35s ease;
+}
+
+@media (hover: hover) {
+  .ticket:hover { transform: translateY(-6px) rotate(-0.6deg); }
+}
+
+.t-main { padding: 22px 22px 22px; }
+
+.t-kind {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.t-name {
+  margin-top: 0.3rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 3.2rem;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+}
+
+.t-price { margin: 0.4rem 0 0.9rem; font-size: 0.95rem; }
+.t-price b { font-family: var(--font-display); font-weight: 400; font-size: 2.4rem; margin-right: 0.2rem; }
+.t-alt { display: block; font-size: 0.85rem; }
+
+.save {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(250, 204, 21, 0.18);
+  color: var(--flame-300);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.t-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.92rem;
+}
+
+.t-list li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.t-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 11px;
+  height: 6px;
+  border-left: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.85;
+}
+
+.t-stub {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-left: 2px dashed rgba(0, 0, 0, 0.25);
+}
+
+.t-stub span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+}
+
+.barcode {
+  width: 30px;
+  height: 90px;
+  background: repeating-linear-gradient(0deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 5px, transparent 5px 8px, currentColor 8px 11px, transparent 11px 13px);
+  opacity: 0.7;
+}
+
+.ticket--free {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.ticket--free .t-kind { color: var(--ink-3); }
+.ticket--free .t-name { color: var(--ink); }
+.ticket--pro .t-name { color: #fff; }
+
+.ticket--pro {
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(249, 115, 22, 0.35), rgba(0, 0, 0, 0) 60%),
+    linear-gradient(135deg, #24120a, #160b07 60%, #2a0f07);
+  color: #fff;
+  border: 1px solid rgba(251, 146, 60, 0.45);
+}
+
+.ticket--pro .t-kind { color: var(--flame-300); }
+.ticket--pro .t-stub { border-left-color: rgba(255, 255, 255, 0.25); color: var(--flame-300); }
+
+/* holographic foil sweeping across the backstage pass */
+.ticket--pro::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 170, 80, 0.2) 38%, rgba(236, 72, 153, 0.18) 46%, rgba(168, 85, 247, 0.16) 54%, transparent 70%);
+  background-size: 250% 100%;
+  mix-blend-mode: screen;
+  animation: foil 5s ease-in-out infinite;
+}
+
+@keyframes foil {
+  0% { background-position: 120% 0; }
+  60%, 100% { background-position: -120% 0; }
+}
+
+.tickets-note {
+  max-width: 640px;
+  margin: 1.5rem auto 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--smoke-300);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+}
+
+.tickets-note a { color: var(--fire-300); text-decoration: underline; }
+
+@media (min-width: 760px) {
+  .tickets { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- Players ---------- */
+.chapter--players .quotes { margin-top: 2rem; }
+.chapter--players .quote { background: rgba(17, 14, 21, 0.9); }
+
+/* ---------- Dock, progress ---------- */
+/* ---------- Chapter track in the nav pill ---------- */
+.nav-track {
+  display: none;
+  list-style: none;
+  align-items: center;
+}
+
+.nav-track li {
+  display: flex;
+  align-items: center;
+}
+
+.nav-track li + li::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.nav-track a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: var(--radius-full);
+  color: var(--smoke-400);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.nav-track a:hover { color: #fff; }
+
+.nav-track a:focus-visible,
+.nav-brand:focus-visible,
+.nav-login:focus-visible {
+  outline: 2px solid var(--fire-400);
+  outline-offset: 2px;
+}
+
+.nav-track i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  transition: background var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.nav-track a.is-past i { background: var(--fire-700); }
+
+.nav-track a[aria-current] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.nav-track a[aria-current] i {
+  background: var(--fire-400);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.22), 0 0 12px rgba(249, 115, 22, 0.9);
+  transform: scale(1.15);
+}
+
+@media (min-width: 1080px) {
+  .nav-track { display: flex; }
+}
+
+.dock {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 90;
+  transform: translateY(160%);
+  visibility: hidden;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.4s;
+}
+
+.dock.is-on {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dock .btn-google {
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.9), 0 0 30px rgba(249, 115, 22, 0.35);
+}
+
+/* ---------- Wide screens: copy on the left, the world on the right ---------- */
+@media (min-width: 960px) {
+  .chapter {
+    align-items: center;
+    padding: 6rem 0;
+  }
+
+  .world-scrim {
+    background: linear-gradient(90deg, rgba(7, 6, 10, 0.78) 0%, rgba(7, 6, 10, 0.4) 34%, rgba(7, 6, 10, 0) 56%);
+  }
+
+  [data-world="stage"] .world-scrim {
+    background: linear-gradient(90deg, rgba(7, 6, 10, 0.6) 0%, rgba(7, 6, 10, 0.1) 40%, rgba(7, 6, 10, 0) 60%);
+  }
+
+  .cta { margin-left: 0; }
+  .dock { display: none; }
+}
+
+@media (max-width: 959px) {
+  [data-world="stage"] .world-scrim {
+    background: linear-gradient(180deg, rgba(7, 6, 10, 0.6) 0%, rgba(7, 6, 10, 0.1) 40%, rgba(7, 6, 10, 0) 60%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js .chapter--hero .intro { opacity: 1; transform: none; transition: none; }
+  .scroll-cue svg,
+  .ticket--pro::after { animation: none; }
+  .world-canvas { transition: none; }
+  .hero-spots i { animation: none; }
+  .dock { transition: none; }
+}
+
+/* ---------- Hero: the burning guitar on black ----------
+   The hero has its own ember-black backdrop; scrolling lifts it away to
+   reveal the 3D room underneath. */
+.chapter--hero {
+  overflow: hidden;
+  background:
+    radial-gradient(70% 45% at 50% -8%, rgba(249, 115, 22, 0.32), transparent 70%),
+    radial-gradient(45% 55% at 72% 55%, rgba(234, 88, 12, 0.22), transparent 72%),
+    var(--night);
+}
+
+/* Two follow-spots swaying over the hero, as in the app. */
+.hero-spots i {
+  position: absolute;
+  top: -12%;
+  width: 46vw;
+  max-width: 620px;
+  height: 125%;
+  background: linear-gradient(to bottom, rgba(253, 224, 71, 0.16), rgba(249, 115, 22, 0.04) 55%, transparent 85%);
+  clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+  transform-origin: 50% 0;
+  filter: blur(6px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: spot-sway 11s ease-in-out infinite alternate;
+}
+.hero-spots i:first-child { left: 2%; }
+.hero-spots i:last-child { right: 2%; animation-duration: 13s; animation-delay: -4s; animation-direction: alternate-reverse; }
+@keyframes spot-sway {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(14deg); }
+}
+
+/* fade the hero's bottom edge so the room shows through as it lifts */
+.chapter--hero {
+  min-height: calc(100svh + 12vh); /* the fade sits just below the fold */
+  padding-bottom: 14vh;
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 12vh), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 12vh), transparent);
+}
+
+.chapter--hero .container {
+  display: grid;
+  align-items: center;
+}
+
+.hero-flame {
+  justify-self: center;
+  width: min(92vw, 46vh);
+  height: min(92vw, 46vh);
+  margin-top: -1rem;
+  order: -1;
+}
+
+@media (min-width: 960px) {
+  .chapter--hero .container {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .hero-flame {
+    order: 0;
+    width: min(44vw, 82vh, 640px);
+    height: min(44vw, 82vh, 640px);
+    margin: -2rem 0 0;
+  }
+}
+
+
+/* ---------- The burning guitar through the whole page ---------- */
+.finale-flame {
+  display: block;
+  width: min(46vw, 230px);
+  aspect-ratio: 1;
+  margin: 0 auto -1.25rem;
+}
+
+.ticket--pro { position: relative; overflow: hidden; }
+.ticket-flame {
+  position: absolute;
+  right: -18px;
+  top: -14px;
+  width: 150px;
+  aspect-ratio: 1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.ticket--pro > :not(.ticket-flame) { position: relative; }
+
+/* rising embers over every chapter, under the text */
+.embers {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Archivo is the display face: heavy weights for every place it is used. */
+h1, h2, h3, h4,
+.footer-logo span,
+.quote-by b,
+.t-name,
+.t-price b { font-weight: 800; letter-spacing: -0.01em; }
+.t-name { font-size: 2.4rem; }
+.t-price b { font-size: 1.9rem; }
+
+/* ---------- The journey: from a buzzing chord to the stage ---------- */
+.journey {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  max-width: 32rem;
+  margin: 1.6rem 0 0;
+  padding: 1.1rem 0 0;
+  list-style: none;
+  text-shadow: none;
+}
+
+/* the line fills with fire as the chapter comes into view */
+.journey::before,
+.journey::after {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  right: 12%;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.journey::after {
+  background: linear-gradient(90deg, #7c2d12, #ea580c 55%, #fde047);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.8s cubic-bezier(0.3, 0.7, 0.2, 1) 0.3s;
+}
+.reveal.visible .journey::after { transform: scaleX(1); }
+
+.journey li {
+  position: relative;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--smoke-300);
+}
+.journey li::before {
+  content: "";
+  position: absolute;
+  top: -1.08rem;
+  left: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #3a1a0c;
+  box-shadow: 0 0 0 3px rgba(7, 6, 10, 0.9);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.journey b {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+}
+/* each step lights up in turn, brighter as you get better */
+.reveal.visible .journey li:nth-child(1)::before { background: #9a3412; transition-delay: 0.4s; }
+.reveal.visible .journey li:nth-child(2)::before { background: #ea580c; transition-delay: 0.8s; }
+.reveal.visible .journey li:nth-child(3)::before { background: #fb923c; transition-delay: 1.2s; }
+.reveal.visible .journey li:nth-child(4)::before { background: #fde047; box-shadow: 0 0 0 3px rgba(7, 6, 10, 0.9), 0 0 14px 3px rgba(253, 224, 71, 0.6); transition-delay: 1.6s; }
+.journey li:nth-child(4) b { color: var(--flame-300); }
+
+@media (max-width: 480px) {
+  .journey { gap: 0.35rem; }
+  .journey li { font-size: 0.72rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey::after,
+  .journey li::before { transition: none; }
+}
+
+/* =====================================================================
+   The app's look over the 3D journey. Same type, colour and glass as the
+   app (frontend/src/index.css): Bebas Neue headlines lit in each chapter's
+   colour, mono eyebrows, fire pills. Later rules here win over the above.
+   ===================================================================== */
+
+h1, h2, h3, h4,
+.footer-logo span,
+.t-name,
+.t-price b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+
+.copy h1,
+.copy h2 {
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: 0.03em;
+}
+
+.copy h1 { font-size: clamp(3.2rem, 11vw, 7rem); }
+.copy h2 { font-size: clamp(2.9rem, 9.5vw, 5.8rem); }
+
+/* Highlighted words glow in the chapter's light, like the app's stop titles. */
+.hl,
+.hl .wi {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--accent, var(--fire-500));
+}
+
+.hl {
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent, var(--fire-500)) 55%, transparent));
+}
+
+/* "Day 1 · Your room": the app's mono eyebrow, in the chapter's colour. */
+.eyebrow {
+  display: block;
+  margin-bottom: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--accent, var(--fire-400));
+}
+
+.copy .lede { color: var(--smoke-100); }
+
+.step {
+  font-weight: 700;
+  font-size: 0.3em;
+  vertical-align: 1.1em;
+  color: var(--smoke-400);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--radius-full);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tag--free { background: rgba(22, 163, 74, 0.2); color: #86efac; box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.4); }
+.tag--pro { background: var(--gradient-fire); color: #fff; box-shadow: 0 6px 18px rgba(249, 115, 22, 0.4); }
+
+.strum-hint {
+  border-radius: var(--radius-full);
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(7, 6, 10, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* Nav chapter track: the app's tab pills. */
+.nav-track {
+  gap: 0.15rem;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.nav-track li + li::before { display: none; }
+.nav-track i { display: none; }
+.nav-track a { font-weight: 700; color: var(--smoke-400); }
+.nav-track a.is-past { color: var(--smoke-200); }
+
+.nav-track a[aria-current] {
+  background: var(--gradient-fire);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.45);
+}
+
+/* Journey: mono day labels, lighting up day by day. */
+.journey b {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Tickets: the app's dark glass; Pro burns. */
+.ticket {
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(7, 6, 10, 0.7);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+
+.ticket--free,
+.ticket--free .t-kind,
+.ticket--free .t-name { color: var(--smoke-100); }
+.ticket--free .t-kind { color: var(--smoke-400); }
+.ticket--free .t-list li { color: var(--smoke-200); }
+.ticket--free .t-stub { border-left-color: rgba(255, 255, 255, 0.14); color: var(--smoke-500); }
+
+.ticket--pro {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: linear-gradient(160deg, rgba(249, 115, 22, 0.24), rgba(7, 6, 10, 0.78) 55%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(249, 115, 22, 0.22);
+}
+
+.t-name { font-size: 3.4rem; line-height: 0.9; }
+.t-price b { font-size: 2.4rem; }
+
+.tickets-note {
+  color: var(--smoke-300);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+}
+
+/* Name tags over the musicians: the app's glass chips. */
+.world-tag {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-color: rgba(251, 146, 60, 0.4);
+}
+
+/* Copy always reads on the left: a soft shade behind it on wide screens,
+   so it stays legible over the brightest stage lights. */
+@media (min-width: 960px) {
+  .world-scrim {
+    background:
+      linear-gradient(90deg, rgba(7, 6, 10, 0.62) 0%, rgba(7, 6, 10, 0.3) 34%, rgba(7, 6, 10, 0) 54%),
+      linear-gradient(180deg, rgba(7, 6, 10, 0.72) 0%, rgba(7, 6, 10, 0.25) 38%, rgba(7, 6, 10, 0) 55%);
+  }
+}
+
+.tickets-note {
+  width: fit-content;
+  max-width: min(40rem, 100%);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0.6rem 1.1rem;
+  border-radius: 1.2rem;
+  background: rgba(7, 6, 10, 0.7);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* The encore mirrors the hero: back to the black stage, the spots and the
+   burning guitar, rising out of the concert as you arrive. */
+.chapter--encore {
+  position: relative;
+  overflow: hidden;
+  align-items: center;
+  background:
+    radial-gradient(70% 45% at 50% -8%, rgba(249, 115, 22, 0.32), transparent 70%),
+    radial-gradient(45% 55% at 50% 60%, rgba(234, 88, 12, 0.18), transparent 72%),
+    var(--night);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 16vh);
+  mask-image: linear-gradient(180deg, transparent, #000 16vh);
+}
+
+/* Phones: the hero's sign-up sits where the scroll cue would; the sticky dock takes over. */
+@media (max-width: 959px) {
+  .chapter--hero .scroll-cue { display: none; }
+}

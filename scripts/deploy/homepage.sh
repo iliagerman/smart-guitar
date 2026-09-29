@@ -11,9 +11,13 @@ load_aws_env_from_secrets_if_missing
 bucket="$(read_output landing_bucket_name)"
 cf_dist="$(read_output landing_cloudfront_distribution_id)"
 
+echo "==> Building the landing page 3D worlds (homepage/js/world.min.js) ..."
+npm --prefix "${project_dir}/homepage/world" ci --silent
+npm --prefix "${project_dir}/homepage/world" run build
+
 echo "==> Syncing homepage to s3://${bucket} ..."
 aws s3 sync "${project_dir}/homepage" "s3://${bucket}" --delete \
-  --exclude ".DS_Store" --exclude "plan.md"
+  --exclude ".DS_Store" --exclude "plan.md" --exclude "world/*"
 
 echo "==> Invalidating CloudFront distribution ${cf_dist} ..."
 aws cloudfront create-invalidation --distribution-id "${cf_dist}" --paths "/*" > /dev/null

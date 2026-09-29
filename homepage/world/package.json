@@ -1,0 +1,14 @@
+{
+  "name": "smart-guitar-landing-world",
+  "private": true,
+  "description": "3D scroll worlds and the animated logo for the landing page. Built into ../js/world.min.js and ../js/flame-logo.min.js.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --minify --format=esm --target=es2020 --outfile=../js/world.min.js && esbuild src/logo-entry.js --bundle --minify --format=iife --target=es2020 --outfile=../js/flame-logo.min.js",
+    "watch": "esbuild src/main.js --bundle --format=esm --target=es2020 --sourcemap --outfile=../js/world.min.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "three": "0.186.1"
+  }
+}

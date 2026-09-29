@@ -46,8 +46,8 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: 0.02em;
+  line-height: 0.9;
+  letter-spacing: 0.03em;
   color: var(--smoke-100);
 }
 
@@ -111,10 +111,10 @@ button {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--charcoal-900);
+  background: var(--stage-950);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--charcoal-600);
+  background: var(--stage-edge);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {

@@ -1,6 +1,6 @@
 /* ===== Smart Guitar — Design Tokens ===== */
-/* Fire scale mirrored from frontend/src/index.css; stage + notebook tokens from the
-   2026-09 "learn it, then play it with the band" landing direction. */
+/* Mirrored from the app (frontend/src/index.css), so the landing page and the
+   app look like one product: the night stage, fire, and Bebas Neue headlines. */
 
 :root {
   /* Fire (orange) */
@@ -22,11 +22,13 @@
   --ember-600: #dc2626;
 
   /* Flame (gold) */
+  --flame-200: #fef08a;
   --flame-300: #fde047;
   --flame-400: #facc15;
   --flame-500: #eab308;
+  --amber: #fbbf24;
 
-  /* Charcoal (dark bg) */
+  /* Charcoal (kept for the legal pages) */
   --charcoal-600: #383838;
   --charcoal-700: #282828;
   --charcoal-800: #1a1a1a;
@@ -34,20 +36,25 @@
   --charcoal-950: #0a0a0a;
 
   /* Smoke (text on dark) */
+  --smoke-50: #fafaf9;
   --smoke-100: #f5f5f4;
+  --smoke-200: #e7e5e4;
   --smoke-300: #d6d3d1;
   --smoke-400: #a8a29e;
   --smoke-500: #78716c;
   --smoke-600: #57534e;
 
-  /* Stage (where playing happens) */
+  /* Stage (the app's night) */
   --night: #07060a;
-  --stage: #110e15;
-  --stage-2: #1b1720;
+  --stage-950: #07060a;
+  --stage-900: #110e15;
+  --stage-800: #1b1720;
   --stage-edge: #3b3342;
-  --line: rgba(255, 255, 255, 0.09);
-
-  /* Notebook (where learning happens) */
+  --line: rgba(255, 255, 255, 0.08);
+  --glass: rgba(7, 6, 10, 0.62);
+  /* Older names the 3D page's styles still use */
+  --stage: var(--stage-900);
+  --stage-2: var(--stage-800);
   --paper: #f6f1e9;
   --paper-2: #efe7da;
   --paper-line: #e2d8c8;
@@ -57,14 +64,18 @@
 
   --ok: #16a34a;
 
-  /* Type */
+  /* Type (same three families as the app) */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Bebas Neue", "Impact", "Arial Narrow", sans-serif;
+  --font-display: "Bebas Neue", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   /* Gradients */
-  --gradient-fire: linear-gradient(135deg, var(--flame-400), var(--fire-500), var(--ember-500));
-  --gradient-fire-text: linear-gradient(90deg, var(--flame-400), var(--fire-500), var(--ember-500));
+  --gradient-fire: linear-gradient(135deg, var(--fire-400), var(--fire-600));
+  --gradient-fire-text: linear-gradient(90deg, var(--flame-300), var(--fire-500), var(--ember-500));
+
+  /* Shadows */
+  --shadow-fire: 0 14px 36px rgba(249, 115, 22, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --shadow-card: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* Spacing */
   --section-pad-y: 3.75rem;
@@ -76,6 +87,7 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+  --radius-card: 1.75rem;
   --radius-full: 9999px;
 
   /* Transitions */

@@ -15,7 +15,10 @@ section {
 /* --- Footer --- */
 .site-footer {
   padding: 2.5rem 0 3rem;
+  position: relative;
+  z-index: 1;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(7, 6, 10, 0.86);
   text-align: center;
   color: var(--smoke-500);
   font-size: 0.875rem;
@@ -34,16 +37,16 @@ section {
   gap: 0.6rem;
 }
 
-.footer-logo img {
-  width: 28px;
-  height: 28px;
-  mix-blend-mode: screen;
+.footer-flame {
+  width: 44px;
+  height: 44px;
+  margin: -8px -4px -8px -10px;
 }
 
 .footer-logo span {
   font-family: var(--font-display);
-  font-size: 1.2rem;
-  letter-spacing: 0.1em;
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
 }
 
 .footer-links {

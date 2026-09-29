@@ -68,3 +68,7 @@ aidlc/diagnostics/
 # aidlc/spaces/*/intents/*/<phase>/<stage>/*.md (artifacts + diary).
 .claude/settings.local.json
 # END AWS AI-DLC v2
+
+# Landing page 3D bundles, built by `just build-homepage` and on deploy
+homepage/js/world.min.js
+homepage/js/flame-logo.min.js

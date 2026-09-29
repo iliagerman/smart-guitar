@@ -1,64 +1,107 @@
 /* ===== Shared components: nav, buttons ===== */
 /* Used by index.html and the legal pages (terms, privacy, refund). */
 
-/* --- Navigation --- */
+/* --- Navigation: the app's floating glass rail, laid on its side --- */
 .site-nav {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 0.85rem 0;
-  transition: background var(--transition-base), padding var(--transition-base),
-              box-shadow var(--transition-base);
-}
-
-.site-nav.scrolled {
-  background: rgba(7, 6, 10, 0.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  padding: 0.55rem 0;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 12px var(--section-pad-x) 0;
+  pointer-events: none;
 }
 
 .nav-inner {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  max-width: var(--container-max);
+  max-width: calc(var(--container-max) - 2 * var(--section-pad-x));
+  height: 60px;
   margin: 0 auto;
-  padding: 0 var(--section-pad-x);
+  padding: 0 8px 0 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(17, 14, 21, 0.72), rgba(10, 8, 13, 0.66));
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  pointer-events: auto;
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+
+.site-nav.scrolled .nav-inner {
+  background: linear-gradient(180deg, rgba(17, 14, 21, 0.92), rgba(10, 8, 13, 0.9));
 }
 
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   min-width: 0;
+  padding: 4px 6px 4px 2px;
+  border-radius: var(--radius-full);
 }
 
-.nav-brand img {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  mix-blend-mode: screen;
+/* The animated flame logo (js/flame-logo.min.js). Its fire is transparent, so
+   it is drawn larger than the rail and the flames rise past its edge. */
+.nav-flame {
+  width: 76px;
+  height: 76px;
+  margin: -20px -14px -6px -16px;
+  pointer-events: none;
+  animation: logo-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes logo-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.04); }
 }
 
 .nav-word {
   font-family: var(--font-display);
-  font-size: 1.35rem;
-  letter-spacing: 0.12em;
+  font-weight: 400;
+  font-size: 1.6rem;
+  letter-spacing: 0.05em;
   line-height: 1;
-  color: var(--smoke-100);
+  color: #fff;
   white-space: nowrap;
+}
+
+.nav-word em {
+  font-style: normal;
+  color: var(--fire-500);
+  text-shadow: 0 0 18px rgba(249, 115, 22, 0.5);
 }
 
 .nav-links {
   display: flex;
   list-style: none;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
+}
+
+/* scroll progress along the rail's lower edge */
+.nav-progress {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nav-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--flame-400), var(--fire-500));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.8);
 }
 
 .nav-login {
@@ -66,9 +109,9 @@
   white-space: nowrap;
   align-items: center;
   min-height: 40px;
-  padding: 0 0.75rem;
+  padding: 0 0.85rem;
   color: var(--smoke-300);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
   border-radius: var(--radius-full);
   transition: color var(--transition-fast);
@@ -78,17 +121,17 @@
   color: #fff;
 }
 
-/* --- Buttons --- */
+/* --- Buttons: fire pills, like the app's play and start buttons --- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 44px;
+  min-height: 46px;
   padding: 0.7rem 1.6rem;
   font-family: var(--font-sans);
   font-size: 0.95rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.01em;
   border-radius: var(--radius-full);
   border: 1px solid transparent;
@@ -101,41 +144,33 @@
 }
 
 .btn-fire {
-  background: var(--fire-500);
+  background: var(--gradient-fire);
   color: #fff;
-  box-shadow: 0 10px 26px -10px rgba(249, 115, 22, 0.7);
+  box-shadow: var(--shadow-fire);
 }
 
 .btn-fire:hover {
-  background: var(--fire-600);
-  box-shadow: 0 12px 30px -8px rgba(249, 115, 22, 0.75);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(249, 115, 22, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-ghost {
   background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--smoke-100);
+  border-color: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .btn-ghost:hover {
-  border-color: var(--smoke-400);
-  color: var(--smoke-100);
-}
-
-.btn-ink {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.btn-ink:hover {
-  background: #000;
-  transform: translateY(-1px);
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .btn-nav {
-  min-height: 40px;
-  padding: 0 1.1rem;
+  min-height: 44px;
+  padding: 0 1.25rem;
   font-size: 0.875rem;
 }
 
@@ -151,37 +186,36 @@
   gap: 0.75rem;
   width: 100%;
   min-height: 58px;
-  padding: 0 1.5rem;
+  padding: 0 1.5rem 0 0.6rem;
   border-radius: var(--radius-full);
-  background: var(--fire-500);
+  background: var(--gradient-fire);
   color: #fff;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.005em;
-  box-shadow: 0 16px 36px -12px rgba(249, 115, 22, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: background var(--transition-fast), transform var(--transition-fast),
-              box-shadow var(--transition-base);
+  box-shadow: var(--shadow-fire);
+  transition: transform var(--transition-fast), box-shadow var(--transition-base);
 }
 
 .btn-google:hover {
-  background: var(--fire-600);
-  transform: translateY(-1px);
-  box-shadow: 0 20px 40px -12px rgba(249, 115, 22, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px rgba(249, 115, 22, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-google .g-logo {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .btn-google .g-logo svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 419px) {
@@ -189,14 +223,14 @@
     gap: 0.5rem;
   }
 
-  .nav-brand img {
-    width: 32px;
-    height: 32px;
+  .nav-flame {
+    width: 66px;
+    height: 66px;
+    margin: -16px -12px -4px -14px;
   }
 
   .nav-word {
-    font-size: 1.15rem;
-    letter-spacing: 0.07em;
+    font-size: 1.4rem;
   }
 
   .nav-login {
@@ -211,5 +245,11 @@
 @media (max-width: 339px) {
   .nav-word {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-flame {
+    animation: none;
   }
 }
