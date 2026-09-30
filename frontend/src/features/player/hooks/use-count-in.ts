@@ -22,6 +22,8 @@ interface UseCountInResult {
   start: (onComplete: () => void) => void
   /** Abort an in-progress count-in; `onComplete` will not fire. */
   cancel: () => void
+  /** Cut the count-in short and fire `onComplete` now. */
+  skip: () => void
 }
 
 /**
@@ -80,8 +82,18 @@ export function useCountIn({
     [clearTimers, counts, intervalMs, withTicks],
   )
 
+  const skip = useCallback(() => {
+    const done = onCompleteRef.current
+    if (!done) return
+    clearTimers()
+    onCompleteRef.current = null
+    setCount(0)
+    if (withTicks) playTick({ accent: true })
+    done()
+  }, [clearTimers, withTicks])
+
   // Clear any pending countdown when the owning component unmounts (e.g. navigating away).
   useEffect(() => cancel, [cancel])
 
-  return { count, isCounting: count > 0, start, cancel }
+  return { count, isCounting: count > 0, start, cancel, skip }
 }

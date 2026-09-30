@@ -161,6 +161,21 @@ test.describe('Tonight’s practice home', () => {
     await expect(page.getByTestId('setlist-songs').getByTestId('difficulty-easy')).toBeVisible()
   })
 
+  test('tonight’s pick changes: "Another song" spins the next easy song', async ({ authenticatedPage: page }) => {
+    await mockApi(page, { tier: 'pro' })
+    const picks = ['First pick', 'Second pick', 'Third pick'].map((title, i) => ({ ...song, id: `pick-${i}`, title }))
+    await page.route(/\/api\/v1\/songs\/setlists\/first-songs(\?.*)?$/, (route) =>
+      route.fulfill({ json: { items: picks, total: picks.length, offset: 0, limit: 30 } }))
+    await page.goto('/songs')
+
+    const record = page.getByTestId('first-song-card')
+    await expect(record).toContainText(/pick/i)
+    const before = await record.innerText()
+    await page.getByTestId('tonights-pick-another').click()
+    await expect(record).not.toHaveText(before)
+    await expect(record).toContainText(/pick/i)
+  })
+
   test('the hits: a top ten, a second chart, and the full chart one tap away', async ({ authenticatedPage: page }) => {
     await mockApi(page, { tier: 'pro' })
     const charts: string[] = []

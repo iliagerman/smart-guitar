@@ -9,6 +9,8 @@ interface NextUpRecordProps {
   song: Song
   /** Present when the user already started this song. */
   progress: PracticeProgress | null
+  /** The line above the title; defaults by whether the song was started. */
+  eyebrow?: string
 }
 
 function Tonearm() {
@@ -26,7 +28,7 @@ function Tonearm() {
  * The next song on a spinning record, with its album art as the label — the
  * one thing to press tonight.
  */
-export function NextUpRecord({ song, progress }: NextUpRecordProps) {
+export function NextUpRecord({ song, progress, eyebrow }: NextUpRecordProps) {
   const [artFailed, setArtFailed] = useState(false)
   const art = getThumbnailUrl(song)
   const started = progress !== null && (progress.completed_steps.length > 0 || progress.current_step > 1)
@@ -55,7 +57,7 @@ export function NextUpRecord({ song, progress }: NextUpRecordProps) {
 
       <div className="min-w-0 text-center sm:text-left lg:text-center">
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-fire-400">
-          {started ? 'Next up · keep playing' : 'Start here · your first song'}
+          {eyebrow ?? (started ? 'Next up · keep playing' : 'Start here · your first song')}
         </p>
         <p className="mt-2 font-display text-[2.4rem] leading-[0.9] tracking-wide text-smoke-100 sm:text-6xl" dir="auto">
           {displaySongTitle(song)}

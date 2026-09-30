@@ -40,7 +40,7 @@ import { simplifyChords, transposeForCapo } from '@/lib/chord-simplifier'
 import { SongHeader } from './SongHeader'
 import { AudioStatusBanner, FocusToggles, PlayerControls, PlayerTools, SheetPickers } from './PlayerControls'
 import { SongContent } from './SongContent'
-import { RecommendedSongs } from '../../components/RecommendedSongs'
+import { SongFinishedDialog } from '../../components/SongFinishedDialog'
 import { TutorialOverlay } from './TutorialOverlay'
 import { SongStage } from './SongStage'
 import { SheetSourceTabs } from '../../components/SheetSourceTabs'
@@ -167,7 +167,7 @@ export function SongDetailPage() {
     onInstrumentalSkip: showInstrumentalSkipToast,
   })
   const countInEnabled = usePlayerPrefsStore((s) => s.countInEnabled)
-  const { count: countInValue, isCounting, start: startCountIn, cancel: cancelCountIn } = useCountIn()
+  const { count: countInValue, isCounting, start: startCountIn, cancel: cancelCountIn, skip: skipCountIn } = useCountIn()
   const hasRecordedPlayRef = useRef(false)
   const activeStems = usePlaybackStore((s) => s.activeStems)
   const currentSongId = usePlaybackStore((s) => s.currentSongId)
@@ -180,6 +180,8 @@ export function SongDetailPage() {
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   // Within a second of the end (an ended song parks at its duration).
   const atSongEnd = usePlaybackStore((s) => s.currentTime >= s.duration - 1)
+  // The end-of-song card, once closed, stays closed until the song plays again.
+  const [finishClosed, setFinishClosed] = useState(false)
   useWakeLock(isPlaying)
   const {
     data: detail,
@@ -452,6 +454,7 @@ export function SongDetailPage() {
   const musicStartRef = useRef(0)
 
   const beginPlayback = useCallback(() => {
+    setFinishClosed(false)
     // Record the play only when audio actually starts (after any count-in), so a
     // cancelled count-in is not counted as a play.
     if (songId && !hasRecordedPlayRef.current) {
@@ -466,9 +469,9 @@ export function SongDetailPage() {
 
   const handleTogglePlay = useCallback(() => {
     if (isLoadingStemAudio || isWaitingForSelectedStems) return
-    // A second press while counting in aborts the count-in instead of stacking another.
+    // A second press while counting in starts the song now instead of stacking another count.
     if (isCounting) {
-      cancelCountIn()
+      skipCountIn()
       return
     }
     // Pausing is always immediate — the count-in only precedes starting playback.
@@ -493,7 +496,7 @@ export function SongDetailPage() {
     isLoadingStemAudio,
     isWaitingForSelectedStems,
     isCounting,
-    cancelCountIn,
+    skipCountIn,
     isPlaying,
     prepareForPlaybackGesture,
     primeForDelayedStart,
@@ -815,7 +818,12 @@ export function SongDetailPage() {
       data-testid="song-detail-page"
       data-focus={focusMode}
     >
-      <CountInOverlay count={countInValue} onCancel={cancelCountIn} />
+      <CountInOverlay
+        count={countInValue}
+        capoFret={chordDisplayMode === 'capo' ? chordCapoFret : 0}
+        onSkip={skipCountIn}
+        onCancel={cancelCountIn}
+      />
       {isPlaying && beatBpm ? <BeatGlow beatTimes={songBeatTimes(detail)} bpm={beatBpm} /> : null}
       {/* The stage: the home page's backstage lights, held still, tinted by the album art */}
       <TourBackdrop active="backstage" scenes={STAGE_SCENES} still />
@@ -923,8 +931,17 @@ export function SongDetailPage() {
         focusMode={focusMode}
       />
 
-      {/* Recommendations once the song is over; a pause to practise keeps the sheet */}
-      {!isPlaying && hasPlaybackOccurred && atSongEnd && <RecommendedSongs songId={songId!} />}
+      {/* Once the song is over: the next song to play (a pause to practise keeps the sheet) */}
+      <SongFinishedDialog
+        songId={songId!}
+        open={!isPlaying && hasPlaybackOccurred && atSongEnd && !finishClosed}
+        onReplay={() => {
+          setFinishClosed(true)
+          handleSeek(0)
+          handleTogglePlay()
+        }}
+        onClose={() => setFinishClosed(true)}
+      />
 
       {/* Bottom: the player dock */}
       <div className="relative z-30 shrink-0 border-t border-fire-500/15 bg-stage-950/85 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">

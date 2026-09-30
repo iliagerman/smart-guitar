@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Globe, Search, X } from 'lucide-react'
+import { ChevronDown, Globe, RefreshCw, Search, X } from 'lucide-react'
 import { SongLibrary } from '@/features/library/components/SongLibrary'
 import { UnifiedSearchResults } from '@/features/songs/components/UnifiedSearchResults'
 import { SearchPreviewDialog } from '@/features/search/components/SearchPreviewDialog'
@@ -17,6 +17,7 @@ import { HitsSection, HitsTeaser } from '@/features/songs/components/tour/HitsSe
 import { TourRail, type TourStop } from '@/features/songs/components/tour/TourRail'
 import { BACKSTAGE, STADIUM, worldFor } from '@/features/songs/components/tour/tour-worlds'
 import { useActiveStop } from '@/features/songs/hooks/use-tour'
+import { seededShuffle, visitSeed } from '@/features/songs/lib/rotation'
 import { usePracticeSummary, useSetSkillLevel } from '@/features/practice/hooks/use-practice-summary'
 import { useProAccess } from '@/features/subscription/hooks/use-pro-access'
 import { PageContainer } from '@/components/shared/PageContainer'
@@ -25,7 +26,7 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { songsApi } from '@/api/songs.api'
 import { queryKeys } from '@/api/query-keys'
 import { songDetailPath } from '@/router/routes'
-import type { SearchResult } from '@/types/song'
+import type { SearchResult, Song } from '@/types/song'
 import type { SkillLevel } from '@/types/practice'
 
 const DOWNLOAD_PHRASES = ['Fetching the music…', 'Getting it…', 'Almost there…']
@@ -34,15 +35,56 @@ const HITS = 'hits'
 /** A stop needs enough covers to feel like a place; thinner setlists stay on their own pages. */
 const MIN_STOP_SONGS = 4
 
-/** The record for a brand-new user: the easiest song to start with. */
-function FirstSongRecord() {
-  const { data } = useQuery({
-    queryKey: queryKeys.songs.setlist('first-songs', 0, 1),
-    queryFn: () => songsApi.setlistSongs('first-songs', { skip: 0, limit: 1 }),
+/** How many easy songs tonight's pick is drawn from. */
+const PICK_POOL = 30
+const NO_SONGS: Song[] = []
+
+/**
+ * The record: tonight's pick from the easy songs, different on every visit and
+ * never one you just played. "Another song" spins the next one.
+ */
+function TonightsPick() {
+  const [seed] = useState(visitSeed)
+  const [turn, setTurn] = useState(0)
+  const pool = useQuery({
+    queryKey: queryKeys.songs.setlist('first-songs', 0, PICK_POOL),
+    queryFn: () => songsApi.setlistSongs('first-songs', { skip: 0, limit: PICK_POOL }),
   })
-  const song = data?.items[0]
-  if (!song) return null
-  return <NextUpRecord song={song} progress={null} />
+  const recent = useQuery({
+    queryKey: queryKeys.songs.recent(10),
+    queryFn: () => songsApi.recent(10),
+  })
+  const played = recent.data ?? NO_SONGS
+  const picks = useMemo(() => {
+    const all = pool.data?.items ?? []
+    const playedIds = new Set(played.map((song) => song.id))
+    const fresh = all.filter((song) => !playedIds.has(song.id))
+    return seededShuffle(fresh.length > 0 ? fresh : all, seed)
+  }, [pool.data, played, seed])
+
+  // Wait for what you've played, so the pick doesn't jump once it arrives.
+  if (picks.length === 0 || (recent.isPending && !recent.isError)) return null
+  const song = picks[turn % picks.length]
+  return (
+    <div className="flex flex-col items-center sm:items-start lg:items-center">
+      <NextUpRecord
+        key={song.id}
+        song={song}
+        progress={null}
+        eyebrow={played.length === 0 ? 'Start here · your first song' : 'Tonight’s pick'}
+      />
+      {picks.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setTurn((value) => value + 1)}
+          className="mt-3 flex items-center gap-1.5 rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-smoke-300 transition-colors hover:border-fire-400/40 hover:text-smoke-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/60"
+          data-testid="tonights-pick-another"
+        >
+          <RefreshCw size={13} aria-hidden="true" /> Another song
+        </button>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -134,7 +176,8 @@ export function SongsPage() {
   const handleLevel = (next: SkillLevel) => setSkillLevel.mutate(next)
 
   const continueSongs = summary?.continue_songs ?? []
-  const [nextUp, ...alsoInProgress] = continueSongs
+  // The record always offers something new; songs already started sit below it.
+  const alsoInProgress = continueSongs
   // Charts get their own stadium stop; themed setlists each become a world.
   const tourStops = (setlists.data ?? []).filter((s) => s.kind !== 'chart' && s.song_count >= MIN_STOP_SONGS)
   const stops: TourStop[] = [
@@ -259,7 +302,7 @@ export function SongsPage() {
                 </div>
 
                 <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1" data-testid="continue-section">
-                  {nextUp ? <NextUpRecord song={nextUp.song} progress={nextUp.progress} /> : summary && <FirstSongRecord />}
+                  {summary && <TonightsPick />}
                   {alsoInProgress.length > 0 && (
                     <div className="mt-8">
                       <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.24em] text-smoke-400">Also on your music stand</p>

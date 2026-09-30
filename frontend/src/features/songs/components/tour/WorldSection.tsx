@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { songsApi } from '@/api/songs.api'
@@ -6,11 +6,14 @@ import { queryKeys } from '@/api/query-keys'
 import { setlistPath, songDetailPath } from '@/router/routes'
 import { displayArtistName, displaySongTitle, getThumbnailUrl } from '@/lib/format-song'
 import { useArrived } from '@/features/songs/hooks/use-tour'
+import { hashString, seededShuffle, visitSeed } from '@/features/songs/lib/rotation'
 import type { Setlist } from '@/types/practice'
 import type { Song } from '@/types/song'
 import { MODE_LABEL, type WorldTheme } from './tour-worlds'
 
 const STRIP_SIZE = 12
+/** The strip is drawn from this many of the setlist's songs, a different mix each visit. */
+const STRIP_POOL = STRIP_SIZE * 3
 
 interface AlbumCardProps {
   song: Song
@@ -66,12 +69,16 @@ interface WorldSectionProps {
  */
 export function WorldSection({ setlist, world, stop, observe }: WorldSectionProps) {
   const { ref: arrivalRef, arrived } = useArrived<HTMLElement>('600px 0px')
+  const [seed] = useState(visitSeed)
   const { data } = useQuery({
-    queryKey: queryKeys.songs.setlist(setlist.id, 0, STRIP_SIZE),
-    queryFn: () => songsApi.setlistSongs(setlist.id, { skip: 0, limit: STRIP_SIZE }),
+    queryKey: queryKeys.songs.setlist(setlist.id, 0, STRIP_POOL),
+    queryFn: () => songsApi.setlistSongs(setlist.id, { skip: 0, limit: STRIP_POOL }),
     enabled: arrived,
   })
-  const songs = data?.items ?? []
+  const songs = useMemo(
+    () => seededShuffle(data?.items ?? [], seed ^ hashString(setlist.id)).slice(0, STRIP_SIZE),
+    [data, seed, setlist.id],
+  )
   const sectionRef = useCallback(
     (el: HTMLElement | null) => {
       const unobserve = observe(el)

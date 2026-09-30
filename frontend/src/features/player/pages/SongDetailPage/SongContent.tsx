@@ -17,6 +17,7 @@ import { TabsSheet } from '../../components/TabsSheet'
 import { ChordMap } from '../../components/ChordMap'
 import { StrumStrip } from '../../components/StrumStrip'
 import { SongMetronome } from '../../components/SongMetronome'
+import { CapoBanner } from '../../components/CapoBanner'
 import { CurrentChordPanel } from './CurrentChordPanel'
 import type { SongDetail, LyricsSegment, ChordEntry } from '@/types/song'
 import type { StrumSymbol, SectionStrumPattern } from '../../lib/strum-pattern'
@@ -175,6 +176,9 @@ export function SongContent({
                         </button>
                       </div>
                     </Collapse>
+
+                    {/* Stays up while playing too: a capo is easy to miss otherwise */}
+                    {sheetMode !== 'tabs' && <CapoBanner />}
 
                     {metronomeOpen && <SongMetronome detail={detail} onClose={() => setMetronomeOpen(false)} />}
 

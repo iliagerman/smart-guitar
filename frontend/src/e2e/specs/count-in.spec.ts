@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/auth'
 
-// NOTE: This validates the count-in OVERLAY, its timing, and cancellation only.
+// NOTE: This validates the count-in OVERLAY, its timing, skipping and cancellation only.
 // It runs on desktop Chromium, which does NOT enforce the mobile gesture-activation
 // autoplay policy — so it does NOT verify the iOS Safari single-track audio unlock.
 // That path (muted play()->pause() prime) must be checked on a real iOS device.
@@ -66,7 +66,28 @@ test.describe('Playback count-in', () => {
     await expect(overlay).toBeHidden({ timeout: 4000 })
   })
 
-  test('tapping the overlay cancels the count-in', async ({ authenticatedPage: page }) => {
+  test('tapping the overlay starts the song right away instead of calling it off', async ({ authenticatedPage: page }) => {
+    let plays = 0
+    await page.route('**/api/v1/songs/*/play', (route) => {
+      plays++
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+    await page.goto(`/songs/${SONG_ID}`)
+    const playButton = page.getByTestId('player-play-button')
+    await expect(playButton).toBeVisible()
+
+    await playButton.click()
+    const overlay = page.getByTestId('count-in-overlay')
+    await expect(overlay).toBeVisible()
+    await expect(overlay).toContainText(/tap to start now/i)
+
+    await overlay.click()
+    await expect(overlay).toBeHidden()
+    // The song starts at once, well before the 3-second count would have ended.
+    await expect.poll(() => plays, { timeout: 1000 }).toBe(1)
+  })
+
+  test('Escape calls the count-in off', async ({ authenticatedPage: page }) => {
     await page.goto(`/songs/${SONG_ID}`)
     const playButton = page.getByTestId('player-play-button')
     await expect(playButton).toBeVisible()
@@ -75,7 +96,7 @@ test.describe('Playback count-in', () => {
     const overlay = page.getByTestId('count-in-overlay')
     await expect(overlay).toBeVisible()
 
-    await overlay.click()
+    await page.keyboard.press('Escape')
     await expect(overlay).toBeHidden()
 
     // It stays cancelled — playback never auto-starts past the (cancelled) countdown.

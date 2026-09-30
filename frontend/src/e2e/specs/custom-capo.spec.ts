@@ -40,15 +40,25 @@ test('a song that suggests a capo opens in that capo view, until you pick anothe
   const trigger = page.getByTestId('sheet-selector-trigger')
   await expect(trigger).toContainText('Capo 2')
   await expect(sheet.getByRole('button', { name: 'F/C', exact: true })).toBeVisible()
+  // Hard to miss: a banner over the chords.
+  await expect(page.getByTestId('capo-banner')).toContainText('Capo 2')
 
   // Your own choice for the song wins over the suggestion, also after a reload.
-  await trigger.click()
-  await page.getByTestId('sheet-selector-view-standard').click()
+  await page.getByTestId('capo-banner-off').click()
+  await expect(page.getByTestId('capo-banner')).toHaveCount(0)
   await expect(trigger).toContainText('Chords')
   await expect(sheet.getByRole('button', { name: 'G/D', exact: true })).toBeVisible()
   await page.reload()
   await expect(trigger).toContainText('Chords')
   await expect(sheet.getByRole('button', { name: 'G/D', exact: true })).toBeVisible()
+})
+
+test('the count-in shows the capo, and a tap starts the song instead of calling it off', async ({ authenticatedPage: page }) => {
+  await openCapoSong(page, { easy_capo: 2, easy_chords: ['F', 'C', 'A#'] })
+  await page.getByTestId(test.info().project.name === 'mobile' ? 'mobile-play-button' : 'player-play-button').click()
+  await expect(page.getByTestId('count-in-capo')).toHaveText('Capo on fret 2')
+  await page.getByTestId('count-in-overlay').click()
+  await expect(page.getByTestId('count-in-overlay')).toHaveCount(0)
 })
 
 test('custom capo transposes shapes, persists, and restores no capo', async ({ authenticatedPage: page }) => {
