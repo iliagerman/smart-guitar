@@ -85,12 +85,12 @@ export function ChordDisplayControls({ className }: { className?: string }) {
             : 'text-smoke-300 hover:bg-white/10',
         )}
         onClick={toggleShowBeatCounts}
-        aria-label="Toggle beat counts under the chords"
+        aria-label="Toggle how long to hold each chord"
         aria-pressed={showBeatCounts}
-        title={showBeatCounts ? 'Hide the beat counts under the chords' : 'Count the beats under each chord (1 2 3 4)'}
+        title={showBeatCounts ? 'Hide how long to hold each chord' : 'Show how long to hold each chord (½ bar, 1 bar, 2 bars)'}
         data-testid="chord-beat-count-toggle"
       >
-        1234
+        bars
       </button>
     </div>
   )

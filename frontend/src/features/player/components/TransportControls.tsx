@@ -43,6 +43,8 @@ export function TransportControls({
   // <PlaybackProgress>, so the transport buttons don't reconcile ~20x/sec during
   // playback. Skip handlers read the latest time/duration imperatively at click.
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
+  // Phones: "start over" sits by the seek bar once the song is under way.
+  const underWay = usePlaybackStore((s) => s.isPlaying || s.currentTime > 0.5)
   const skipClass = cn(
     'grid size-10 place-items-center rounded-full text-smoke-300 transition-colors',
     isPlaybackDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-white/[0.07] hover:text-smoke-100',
@@ -68,6 +70,19 @@ export function TransportControls({
       <PlaybackProgress
         onSeek={onSeek}
         isPlaybackDisabled={isPlaybackDisabled}
+        leading={!toggleInRow && underWay && (
+          <button
+            type="button"
+            onClick={() => onSeek(0)}
+            className={cn(skipClass, 'size-9 shrink-0 bg-white/[0.045]')}
+            aria-label="Start over"
+            title="Start over"
+            data-testid="mobile-player-restart"
+            disabled={isPlaybackDisabled}
+          >
+            <RotateCcw size={17} aria-hidden="true" />
+          </button>
+        )}
         trailing={focusControls ?? (toggleInRow ? null : moreToggle)}
       />
 
@@ -153,6 +168,8 @@ export function TransportControls({
 interface PlaybackProgressProps {
   onSeek: (time: number) => void
   isPlaybackDisabled: boolean
+  /** Before the clock ("start over" on phones). */
+  leading?: React.ReactNode
   /** After the clock (the settings toggle on phones). */
   trailing?: React.ReactNode
 }
@@ -161,7 +178,7 @@ interface PlaybackProgressProps {
  * Seek bar + clock, isolated so the high-frequency currentTime subscription only
  * re-renders this leaf on each playback tick — not the whole transport bar.
  */
-function PlaybackProgress({ onSeek, isPlaybackDisabled, trailing }: PlaybackProgressProps) {
+function PlaybackProgress({ onSeek, isPlaybackDisabled, leading, trailing }: PlaybackProgressProps) {
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const duration = usePlaybackStore((s) => s.duration)
   const loopStart = usePlaybackStore((s) => s.loopStart)
@@ -169,7 +186,8 @@ function PlaybackProgress({ onSeek, isPlaybackDisabled, trailing }: PlaybackProg
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
+      {leading}
       <span className="w-9 shrink-0 text-right font-mono text-[11px] text-smoke-400 sm:w-[4.5rem]">
         {formatDuration(currentTime)}<span className="text-smoke-600 max-sm:hidden">.{String(Math.floor((currentTime % 1) * 1000)).padStart(3, '0')}</span>
       </span>

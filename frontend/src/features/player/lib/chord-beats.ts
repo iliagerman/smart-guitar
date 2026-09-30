@@ -28,25 +28,12 @@ export function chordBeats(beatTimes: readonly number[] | null | undefined, star
   return { first, count: Math.max(1, nearestBeatIndex(beatTimes, end) - first) }
 }
 
-/** "1 beat", "3 beats", "1 bar", "2½ bars". */
+/** How long to hold a chord, as a player says it: "½ bar", "1 bar", "2 bars", or "3 beats" when it's not a half. */
 export function holdLabel(beats: number, beatsPerBar: number): string {
+  if (beats * 2 === beatsPerBar) return '½ bar'
   if (beats < beatsPerBar) return `${beats} ${beats === 1 ? 'beat' : 'beats'}`
   const halves = Math.round((beats / beatsPerBar) * 2)
   const whole = Math.floor(halves / 2)
   const bars = `${whole > 0 ? whole : ''}${halves % 2 ? '½' : ''}`
   return `${bars} ${halves === 2 ? 'bar' : 'bars'}`
-}
-
-/**
- * The count drawn under a chord: one number per beat it's held ("1 2 3").
- * A hold longer than a bar counts one bar and says how many bars ("2", "1½").
- * It counts from the change, not from the bar line, so a grid whose bar lines
- * are off still counts the hold right.
- */
-export function beatCount(beats: ChordBeats, beatsPerBar: number): { counts: number[]; bars: string | null } {
-  const repeat = beats.count > beatsPerBar
-  const counts = Array.from({ length: repeat ? beatsPerBar : beats.count }, (_, i) => i + 1)
-  if (!repeat) return { counts, bars: null }
-  const halves = Math.round((beats.count / beatsPerBar) * 2)
-  return { counts, bars: `${Math.floor(halves / 2) || ''}${halves % 2 ? '½' : ''}` }
 }

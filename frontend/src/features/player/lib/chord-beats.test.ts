@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { beatCount, chordBeats, holdLabel, nearestBeatIndex } from './chord-beats'
+import { chordBeats, holdLabel, nearestBeatIndex } from './chord-beats'
 
 const beats = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
@@ -31,24 +31,15 @@ describe('chordBeats', () => {
 })
 
 describe('holdLabel', () => {
-  it('names short holds in beats and long ones in bars', () => {
+  it('names holds in bars, half a bar included, and odd short ones in beats', () => {
+    expect(holdLabel(2, 4)).toBe('½ bar')
+    expect(holdLabel(3, 6)).toBe('½ bar')
     expect(holdLabel(1, 4)).toBe('1 beat')
     expect(holdLabel(3, 4)).toBe('3 beats')
+    expect(holdLabel(2, 3)).toBe('2 beats')
     expect(holdLabel(4, 4)).toBe('1 bar')
     expect(holdLabel(6, 4)).toBe('1½ bars')
     expect(holdLabel(8, 4)).toBe('2 bars')
     expect(holdLabel(3, 3)).toBe('1 bar')
-  })
-})
-
-describe('beatCount', () => {
-  it('numbers the beats the chord is held, from the change', () => {
-    expect(beatCount({ first: 0, count: 4 }, 4)).toEqual({ counts: [1, 2, 3, 4], bars: null })
-    expect(beatCount({ first: 6, count: 2 }, 4)).toEqual({ counts: [1, 2], bars: null })
-  })
-
-  it('shows one bar and how many bars for a longer hold', () => {
-    expect(beatCount({ first: 4, count: 8 }, 4)).toEqual({ counts: [1, 2, 3, 4], bars: '2' })
-    expect(beatCount({ first: 0, count: 6 }, 4)).toEqual({ counts: [1, 2, 3, 4], bars: '1½' })
   })
 })

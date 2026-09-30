@@ -42,7 +42,7 @@ export interface PlayerPrefsState {
   showStrums: boolean
   /** Show slash bass notes on chords (e.g. C/G) when detected. */
   showBassNotes: boolean
-  /** Count the beats to hold each chord ("1 2 3 4") under its name in the sheet. */
+  /** Show how long to hold each chord ("½ bar", "2 bars") under its name in the sheet. */
   showBeatCounts: boolean
   /** While playing on a phone or tablet: keep the strumming pattern above the sheet. */
   focusShowStrum: boolean

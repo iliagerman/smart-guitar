@@ -5,7 +5,7 @@ import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { readingScrollTop } from '../lib/scroll-to-center'
 import { chordBeats, holdLabel } from '../lib/chord-beats'
-import { ChordBeatCount } from './ChordBeatCount'
+import { ChordHold } from './ChordHold'
 import { ChordSheetLine } from './ChordSheetLine'
 import { ChordVoicingPopover } from './ChordVoicingPopover'
 import { getChordColor, formatChordWithBass } from '@/lib/chord-colors'
@@ -33,7 +33,7 @@ interface ChordSheetProps {
   onWordClick?: (startTime: number) => void
   onWordRename?: (segmentIndex: number, wordIndex: number, newText: string) => void
   onWordSelect?: (location: WordLocation) => void
-  /** The song's beat grid (first beat is a downbeat) for the chords' beat counts. */
+  /** The song's beat grid (first beat is a downbeat), for how long to hold each chord. */
   beatTimes?: readonly number[] | null
   beatsPerBar?: number
 }
@@ -62,7 +62,7 @@ interface ChordLabelProps {
   globalIndex?: number
   onDragStart?: (e: React.DragEvent<HTMLButtonElement>) => void
   onSeek?: (time: number) => void
-  /** The song's beat grid; counts the beats the chord is held for. */
+  /** The song's beat grid; shows how long the chord is held. */
   beatTimes?: readonly number[] | null
   beatsPerBar?: number
 }
@@ -161,7 +161,7 @@ function ChordLabel({
         {formatChordWithBass(chord.chord, chord.bass, showBassNotes)}
       </span>
       {beats && beatTimes && (
-        <ChordBeatCount beats={beats} beatsPerBar={beatsPerBar} beatTimes={beatTimes} live={isActive} rtl={isRtl} />
+        <ChordHold beats={beats} beatsPerBar={beatsPerBar} beatTimes={beatTimes} live={isActive} rtl={isRtl} />
       )}
     </button>
   )
@@ -480,8 +480,8 @@ export function ChordSheet({
 
   if (lines.length === 0) return null
 
-  // Every chord row makes room for the beat counts, so the words stay on one line.
-  const tickRowStyle = countBeatTimes ? ({ '--chord-row-h': '2.5rem' } as CSSProperties) : undefined
+  // Every chord row makes room for the hold pill, so the words stay on one line.
+  const tickRowStyle = countBeatTimes ? ({ '--chord-row-h': '3rem' } as CSSProperties) : undefined
 
   return (
     <div
