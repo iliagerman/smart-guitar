@@ -3,12 +3,16 @@ import { Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
+import type { SongSection } from '@/types/song'
 import type { SectionStrumPattern, StrumDirection } from '../lib/strum-pattern'
 import {
   STRUM_SEARCH_MS,
   beatLabels,
   guessStepsPerBeat,
   mainPattern,
+  patternForSection,
+  sectionIndexAt,
+  sectionLabel,
   starterPattern,
   strumStepAt,
 } from '../lib/strum-display'
@@ -28,16 +32,24 @@ interface StrumStripProps {
   beatsPerBar?: number
   /** The song's beats (the first is a downbeat), for following the song. */
   beatTimes: readonly number[] | null
+  /** The song's sections in time, so each section shows its own tab pattern. */
+  sections?: readonly SongSection[]
   loading?: boolean
 }
 
+const NO_SECTIONS: readonly SongSection[] = []
+
 /**
- * The strumming pattern on one line above the chord sheet, for screens without
- * the chord map beside it. While the song plays, the stroke being played lights
- * up; ▶ plays the pattern on its own.
+ * The strumming pattern on one line above the chord sheet. It follows the song:
+ * each section shows the pattern the tab gives it, and the stroke being played
+ * lights up. ▶ plays the pattern on its own.
  */
-export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, loading = false }: StrumStripProps) {
+export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, sections = NO_SECTIONS, loading = false }: StrumStripProps) {
   const searching = useBoundedLoading(loading && sectionPatterns.length === 0, STRUM_SEARCH_MS)
+  // Changes once per section, not on every playback tick.
+  const sectionIndex = usePlaybackStore((s) => sectionIndexAt(sections, s.currentTime))
+  const playingSection = sections[sectionIndex]
+  const sectionPattern = playingSection ? patternForSection(sectionPatterns, playingSection.name) : null
 
   if (searching) {
     return (
@@ -48,11 +60,13 @@ export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, l
     )
   }
 
-  const section = mainPattern(sectionPatterns) ?? starterPattern(beatsPerBar)
+  const section = sectionPattern ?? mainPattern(sectionPatterns) ?? starterPattern(beatsPerBar)
+  const label = sectionPattern && playingSection ? sectionLabel(playingSection.name) : sectionPatterns.length === 0 ? 'starter' : section.name
   return (
     <StripPattern
       key={section.name}
       section={section}
+      label={label}
       bpm={bpm}
       beatTimes={beatTimes}
       starter={sectionPatterns.length === 0}
@@ -62,12 +76,14 @@ export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, l
 
 interface StripPatternProps {
   section: SectionStrumPattern
+  /** The section playing, or the pattern's name when no section is. */
+  label: string
   bpm: number
   beatTimes: readonly number[] | null
   starter: boolean
 }
 
-function StripPattern({ section, bpm, beatTimes, starter }: StripPatternProps) {
+function StripPattern({ section, label: sectionName, bpm, beatTimes, starter }: StripPatternProps) {
   const directions = useMemo(() => section.pattern.map((step) => step.direction), [section.pattern])
   const stepsPerBeat = section.stepsPerBeat ?? guessStepsPerBeat(directions.length)
   const labels = beatLabels(directions.length, stepsPerBeat)
@@ -79,6 +95,7 @@ function StripPattern({ section, bpm, beatTimes, starter }: StripPatternProps) {
     s.isPlaying && beatTimes ? strumStepAt(beatTimes, s.currentTime, directions.length, stepsPerBeat) : -1,
   )
   const lit = previewing ? currentBeatIndex : songStep
+  const hasAccents = section.accents?.some(Boolean) ?? false
 
   // The song and the preview never strum over each other.
   useEffect(() => {
@@ -87,14 +104,14 @@ function StripPattern({ section, bpm, beatTimes, starter }: StripPatternProps) {
 
   return (
     <div
-      className="flex h-11 shrink-0 items-center gap-2.5 border-b border-white/[0.06] bg-black/15 pl-3 pr-2"
+      className="flex h-11 shrink-0 items-center gap-2.5 border-b border-white/[0.06] bg-black/15 pl-3 pr-2 lg:h-16 lg:gap-4 lg:pl-5 lg:pr-3"
       data-testid="strum-strip"
       data-starter={starter}
     >
-      <div className="flex w-12 shrink-0 flex-col gap-1 leading-none">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-fire-300">Strum</span>
-        <span className="truncate text-[9px] font-semibold text-smoke-500" title={section.name}>
-          {starter ? 'starter' : section.name}
+      <div className="flex w-12 shrink-0 flex-col gap-1 leading-none lg:w-20">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-fire-300 lg:text-[10px]">Strum</span>
+        <span className="truncate text-[9px] font-semibold text-smoke-500 lg:text-xs" title={section.name} data-testid="strum-strip-section">
+          {sectionName}
         </span>
       </div>
       <ol
@@ -105,24 +122,32 @@ function StripPattern({ section, bpm, beatTimes, starter }: StripPatternProps) {
           const glyph = GLYPH[step.direction]
           const label = labels[index] ?? ''
           const on = index === lit
+          const accent = section.accents?.[index] ?? false
           return (
             // Steps are positional and never reorder.
             // oxlint-disable-next-line react-doctor/no-array-index-key
             <li key={index}
               className={cn(
-                'flex min-w-[1.15rem] flex-col items-center rounded-md px-0.5 pt-0.5 transition-[background-color,transform] duration-100 motion-reduce:transition-none',
+                'flex min-w-[1.15rem] flex-col items-center rounded-md px-0.5 pt-0.5 transition-[background-color,transform] duration-100 motion-reduce:transition-none lg:min-w-[1.75rem] lg:py-0.5',
                 on && 'scale-110 bg-flame-400/20',
               )}
               data-testid="strum-strip-step"
               data-direction={step.direction}
+              data-accent={accent}
               data-on={on}
+              title={accent ? 'Accent: hit this stroke harder' : undefined}
             >
-              <span className={cn('text-base font-bold leading-none', glyph.className, step.direction !== 'miss' && !on && 'opacity-80')} aria-hidden="true">
+              {hasAccents && (
+                <span className={cn('text-[8px] font-black leading-[7px] lg:text-[10px] lg:leading-[9px]', accent ? 'text-flame-300' : 'text-transparent')} aria-hidden="true">
+                  &gt;
+                </span>
+              )}
+              <span className={cn('text-base font-bold leading-none lg:text-2xl', glyph.className, step.direction !== 'miss' && !on && 'opacity-80')} aria-hidden="true">
                 {glyph.symbol}
               </span>
               <span
                 className={cn(
-                  'mt-0.5 font-mono text-[8px] leading-none',
+                  'mt-0.5 font-mono text-[8px] leading-none lg:text-[10px]',
                   on ? 'text-flame-300' : /^\d+$/.test(label) ? 'text-smoke-400' : 'text-smoke-600',
                 )}
                 aria-hidden="true"

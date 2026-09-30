@@ -155,3 +155,25 @@ test('without a tab pattern the card offers the starter pattern, not tutorial-si
   await expect(steps.nth(1)).toHaveAttribute('data-direction', 'miss')
   await expect(steps.nth(4)).toHaveAttribute('data-direction', 'miss')
 })
+
+test('the strum strip above the chords shows the pattern of the section being played', async ({ authenticatedPage: page }) => {
+  // The tab plays the verse one way (most bars) and the chorus another; the song opens on the chorus.
+  const chorusSteps = ['down', 'down', 'down', 'down'].map((direction) => ({ direction, accent: false }))
+  await mockSong(page, {
+    ...syncedBeats,
+    songsterr_status: 'ready',
+    tab_rhythm: {
+      ...tabRhythm,
+      strum_patterns: [...tabRhythm.strum_patterns, { name: 'Intro / Chorus', subdivision: 1, bar_share: 0.5, steps: chorusSteps }],
+    },
+    sections: [
+      { name: 'Chorus 1', start_time: 0, end_time: 9, strum_pattern: [], llm_pattern: null },
+      { name: 'Verse 1', start_time: 9, end_time: 18, strum_pattern: [], llm_pattern: null },
+    ],
+  })
+  // Shown on every screen size, not only where the chord map is hidden.
+  const strip = page.getByTestId('strum-strip')
+  await expect(strip).toBeVisible()
+  await expect(strip.getByTestId('strum-strip-section')).toHaveText('Chorus')
+  await expect(strip.getByTestId('strum-strip-step')).toHaveCount(4)
+})

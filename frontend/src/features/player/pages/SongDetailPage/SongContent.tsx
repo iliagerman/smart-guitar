@@ -178,14 +178,15 @@ export function SongContent({
 
                     {metronomeOpen && <SongMetronome detail={detail} onClose={() => setMetronomeOpen(false)} />}
 
-                    {/* Without the chord map beside the sheet, the strumming sits above it */}
+                    {/* The strumming, live: what to strum right now, above the chords */}
                     {hasChords && !isEditMode && sheetMode !== 'tabs' && (
-                      <Collapse open={!focusMode || focusShowStrum} className="shrink-0 lg:hidden">
+                      <Collapse open={!focusMode || focusShowStrum} className="shrink-0">
                         <StrumStrip
                           sectionPatterns={sectionStrumPatterns}
                           bpm={songTempoBpm(detail) ?? 120}
                           beatsPerBar={detail.time_signature?.[0]}
                           beatTimes={songBeatTimes(detail)}
+                          sections={detail.sections}
                           loading={!detail.songsterr_status}
                         />
                       </Collapse>

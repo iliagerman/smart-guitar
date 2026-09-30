@@ -1,4 +1,5 @@
 import { beatIndexAt } from '@/features/metronome/lib/song-beat-grid'
+import type { SongSection } from '@/types/song'
 import { directionToSymbol, type SectionStrumPattern } from './strum-pattern'
 
 /** How long to show "looking for the pattern" before settling on the starter. */
@@ -41,6 +42,27 @@ export function mainPattern(sectionPatterns: readonly SectionStrumPattern[]): Se
     if (!best || (section.barShare ?? 0) > (best.barShare ?? 0)) best = section
   }
   return best
+}
+
+/** "[A] Verse 2: drums enter" -> "Verse": a section name as the tab names its patterns. */
+export function sectionLabel(name: string): string {
+  const bare = name.replace(/^\[[^\]]*\]\s*/, '').split(/[:(]/)[0]
+  return bare.replace(/\s*\d+$/, '').trim()
+}
+
+/** The tab pattern for a section; tab patterns are named after the sections they cover ("Intro / Chorus"). */
+export function patternForSection(
+  sectionPatterns: readonly SectionStrumPattern[],
+  sectionName: string,
+): SectionStrumPattern | null {
+  const key = sectionLabel(sectionName).toLowerCase()
+  if (!key) return null
+  return sectionPatterns.find((pattern) => pattern.name.split(' / ').some((part) => sectionLabel(part).toLowerCase() === key)) ?? null
+}
+
+/** Index of the section playing at `time`, or -1 between or outside sections. */
+export function sectionIndexAt(sections: readonly Pick<SongSection, 'start_time' | 'end_time'>[], time: number): number {
+  return sections.findIndex((section) => time >= section.start_time && time < section.end_time)
 }
 
 /**
