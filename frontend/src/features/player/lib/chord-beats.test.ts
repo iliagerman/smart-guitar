@@ -13,13 +13,21 @@ describe('nearestBeatIndex', () => {
 })
 
 describe('chordBeats', () => {
-  it('counts the beats a chord is held for, snapping slightly early changes', () => {
+  it('counts a chord in half bars, snapping changes that land early or late', () => {
     expect(chordBeats(beats, 0.97, 2.98)).toEqual({ first: 0, count: 4 })
-    expect(chordBeats(beats, 3.04, 3.52)).toEqual({ first: 4, count: 1 })
+    // Held 1.2 s from beat 2: half a bar.
+    expect(chordBeats(beats, 1.4, 2.6)).toEqual({ first: 2, count: 2 })
+    // Detected a beat short of the bar line (3.6 s for 4 beats of 0.5 s): still a bar.
+    expect(chordBeats(beats, 1.1, 2.6)).toEqual({ first: 0, count: 4 })
   })
 
-  it('never shows a chord as lasting no beats', () => {
-    expect(chordBeats(beats, 2.01, 2.1)).toEqual({ first: 2, count: 1 })
+  it('never shows a chord as lasting less than half a bar', () => {
+    expect(chordBeats(beats, 2.01, 2.1)).toEqual({ first: 2, count: 2 })
+    expect(chordBeats(beats, 3.04, 3.52)).toEqual({ first: 4, count: 2 })
+  })
+
+  it('counts whole beats in a three-beat bar', () => {
+    expect(chordBeats(beats, 0.97, 2.0, 3)).toEqual({ first: 0, count: 2 })
   })
 
   it('is null without a beat grid or outside it', () => {

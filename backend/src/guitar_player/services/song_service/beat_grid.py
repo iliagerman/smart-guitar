@@ -9,6 +9,7 @@ import bisect
 import math
 import statistics
 from dataclasses import dataclass
+from fractions import Fraction
 
 from guitar_player.schemas.song import ChordEntry
 
@@ -22,6 +23,12 @@ _ON_BAR_TOLERANCE_S = 0.08
 # 148), so count every other beat. A truly fast song then gets a half-time
 # grid, which still lands on its beats.
 _MAX_UNNOTATED_BPM = 135.0
+# Trackers also lock onto a tuplet of the beat: Wonderwall (88 BPM) tracked at
+# 117 counts four beats where three are played; Stairway (71) at 103 counts
+# three for two. These are corrected only on a close match with the tab tempo:
+# a near miss (Wicked Game tracked at 112, tabbed at 90) means the tab is off.
+_TUPLET_RATIOS = (Fraction(3, 2), Fraction(4, 3), Fraction(3, 4), Fraction(2, 3))
+_TUPLET_TOLERANCE = 0.04
 
 
 @dataclass(frozen=True)
@@ -38,7 +45,7 @@ class BeatGridSource:
     guitar_beats: list[float]  # tabs pipeline, guitar stem
     chords: list[ChordEntry]
     time_signature: list[int] | None
-    notated_bpm: float | None  # tab tempo; only picks the tempo octave
+    notated_bpm: float | None  # tab tempo; only picks the tempo octave or tuplet
 
 
 def build_beat_grid(source: BeatGridSource, *, half_time: bool = True) -> BeatGrid | None:
@@ -52,32 +59,65 @@ def build_beat_grid(source: BeatGridSource, *, half_time: bool = True) -> BeatGr
     if beats is None:
         return None
 
-    # Beat trackers often lock onto double or half time; keep the octave
-    # closest to the tab tempo.
-    beat_step = 1
+    # Tracked beats per played beat. Beat trackers often lock onto double or
+    # half time, or a tuplet of the beat; the tab tempo tells which.
+    step = Fraction(1)
     if source.notated_bpm:
-        ratio = _bpm(beats) / source.notated_bpm
-        if ratio > math.sqrt(2):
-            beat_step = 2
-        elif ratio < 1 / math.sqrt(2):
-            beats = _with_half_beats(beats)
+        step = _tempo_step(_bpm(beats) / source.notated_bpm)
     elif half_time and _bpm(beats) > _MAX_UNNOTATED_BPM:
-        beat_step = 2
+        step = Fraction(2)
+    if step < 1 and step.numerator == 1:
+        beats = _with_half_beats(beats)
+        step *= 2
 
-    bar_step = beat_step * _beats_per_bar(source.time_signature)
+    beats_per_bar = _beats_per_bar(source.time_signature)
     change_times = [c.start_time for c in source.chords if c.chord != "N"]
-    phase = 0
+    # Where the played beats fall between tracked ones, and which beat is the
+    # downbeat: the choice that puts the most chord changes on bar lines.
+    offsets = [Fraction(k, step.denominator) for k in range(step.numerator)]
+    grids = {offset: _resample(beats, step, offset) for offset in offsets}
+    candidates = [(offset, phase) for phase in range(beats_per_bar) for offset in offsets]
+    offset, phase = candidates[0]
     if change_times:
-        phase = max(range(bar_step), key=lambda p: _on_bar_count(beats[p::bar_step], change_times))
+        offset, phase = max(
+            candidates,
+            key=lambda c: _on_bar_count(grids[c[0]][c[1]::beats_per_bar], change_times),
+        )
 
-    beat_times = [round(b, 3) for b in beats[phase::beat_step]]
+    played = grids[offset]
+    beat_times = [round(b, 3) for b in played[phase:]]
     if len(beat_times) < 2:
         return None
     return BeatGrid(
         beat_times=beat_times,
-        bar_starts=[round(b, 3) for b in beats[phase::bar_step]],
+        bar_starts=[round(b, 3) for b in played[phase::beats_per_bar]],
         bpm=round(_bpm(beat_times), 2),
     )
+
+
+def _tempo_step(ratio: float) -> Fraction:
+    """Tracked beats per played beat, from the tracked-to-tab tempo ratio."""
+    tuplet = min(_TUPLET_RATIOS, key=lambda r: abs(math.log(ratio / r)))
+    if abs(math.log(ratio / tuplet)) <= math.log1p(_TUPLET_TOLERANCE):
+        return tuplet
+    if ratio > math.sqrt(2):
+        return Fraction(2)
+    if ratio < 1 / math.sqrt(2):
+        return Fraction(1, 2)
+    return Fraction(1)
+
+
+def _resample(beats: list[float], step: Fraction, offset: Fraction) -> list[float]:
+    """Played beats every ``step`` tracked beats from ``offset``, between tracked beats where they fall."""
+    out: list[float] = []
+    last = len(beats) - 1
+    k = 0
+    while (position := offset + k * step) <= last:
+        i = int(position)
+        fraction = float(position - i)
+        out.append(beats[i] if fraction == 0 else beats[i] + fraction * (beats[i + 1] - beats[i]))
+        k += 1
+    return out
 
 
 def _detected_beats(source: BeatGridSource) -> list[float] | None:

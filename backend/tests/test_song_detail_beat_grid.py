@@ -146,6 +146,50 @@ async def test_halved_detected_tempo_gets_half_beats(settings, storage):
 
 
 @pytest.mark.asyncio
+async def test_four_tracked_beats_per_three_played_follow_the_tab_tempo(settings, storage):
+    """Wonderwall: tracked at 117 BPM, tabbed at 88. Bars span three tracked beats' worth of four."""
+    tracked = 60 / 120
+    played = 60 / 90
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": [1.0 + i * tracked for i in range(64)]},
+        # Chords change on the played bars: every four played beats from 1.0 s.
+        CHORDS: _chord_changes(*(1.0 + 4 * played * i for i in range(6))),
+        SONGSTERR: {"source_bpm": 90, "time_signature": [4, 4]},
+    })
+
+    assert detail.detected_bpm == pytest.approx(90.0, abs=0.1)
+    assert detail.bar_starts[0] == pytest.approx(1.0, abs=0.01)
+    assert detail.bar_starts[1] - detail.bar_starts[0] == pytest.approx(4 * played, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_three_tracked_beats_per_two_played_follow_the_tab_tempo(settings, storage):
+    """Stairway: tracked at 103 BPM, tabbed at 71: three tracked beats per two played."""
+    tracked = 60 / 150
+    played = 60 / 100
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 150.0, "beat_times": [i * tracked for i in range(64)]},
+        CHORDS: _chord_changes(*(4 * played * i for i in range(5))),
+        SONGSTERR: {"source_bpm": 100, "time_signature": [4, 4]},
+    })
+
+    assert detail.detected_bpm == pytest.approx(100.0, abs=0.1)
+    assert detail.bar_starts[1] - detail.bar_starts[0] == pytest.approx(4 * played, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_a_tab_tempo_that_is_a_near_miss_leaves_the_tracked_tempo(settings, storage):
+    """Wicked Game: tracked at 112 BPM, tabbed at 90 (not a clean 4:3). The tab is off; keep 112."""
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 112.3, "beat_times": [i * 60 / 112.3 for i in range(48)]},
+        CHORDS: _chord_changes(0.0, 2.14, 4.27),
+        SONGSTERR: {"source_bpm": 90, "time_signature": [4, 4]},
+    })
+
+    assert detail.detected_bpm == pytest.approx(112.3, abs=0.1)
+
+
+@pytest.mark.asyncio
 async def test_older_songs_split_their_stored_bars_into_beats(settings, storage):
     """Songs processed before beats were stored rebuild beats from 4/4 bar starts."""
     detail = await _fetch_detail(settings, storage, {

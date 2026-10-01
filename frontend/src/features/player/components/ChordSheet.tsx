@@ -126,7 +126,7 @@ function ChordLabel({
     )
   }
 
-  const beats = !isEditMode && beatTimes ? chordBeats(beatTimes, chord.start_time, chord.end_time) : null
+  const beats = !isEditMode && beatTimes ? chordBeats(beatTimes, chord.start_time, chord.end_time, beatsPerBar) : null
 
   const chordButton = (
     <button
