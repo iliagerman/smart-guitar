@@ -1,0 +1,8 @@
+.venv
+models
+local_bucket
+tests
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.DS_Store

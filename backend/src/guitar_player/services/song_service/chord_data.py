@@ -17,7 +17,9 @@ class ChordData:
     recommended_capo: int | None
     song_key: str | None
     beat_times: list[float]  # full-mix beats; empty for songs processed before beats were stored
-    bar_starts: list[float]  # stored 4/4 bar starts
+    downbeat_times: list[float]  # tracked bar starts; empty for songs processed before downbeats were tracked
+    beats_per_bar: int | None  # meter the tracked downbeats imply
+    bar_starts: list[float]  # stored bar starts
 
 
 def load_chord_data(storage: StorageBackend, song: SongRecord) -> ChordData:
@@ -29,6 +31,8 @@ def load_chord_data(storage: StorageBackend, song: SongRecord) -> ChordData:
         recommended_capo=meta.get("capo") or None,
         song_key=meta.get("key") or None,
         beat_times=_float_list(meta.get("beat_times")),
+        downbeat_times=_float_list(meta.get("downbeat_times")),
+        beats_per_bar=meta["beats_per_bar"] if isinstance(meta.get("beats_per_bar"), int) else None,
         bar_starts=_float_list(meta.get("bar_starts")),
     )
 

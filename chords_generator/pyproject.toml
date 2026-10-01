@@ -1,15 +1,17 @@
 [project]
 name = "guitar-player-chords-generator"
 version = "0.1.0"
-description = "Chord recognition service using autochord"
+description = "Chord recognition service: BTC chords on Beat This! beats"
 requires-python = ">=3.11"
 dependencies = [
     "runtime-observer @ git+https://github.com/germanilia/runtime-observer.git#subdirectory=python-sdk",
     "setuptools==80.10.2",
     "numpy==2.2.6",
     "librosa==0.11.0",
-    "tf-keras==2.20.1",
-    "autochord==0.1.4",
+    "torch==2.11.0",
+    "torchaudio==2.11.0",
+    "beat-this @ git+https://github.com/CPJKU/beat_this.git@b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c",
+    "soundfile==0.13.1",
     "fastapi==0.129.0",
     "uvicorn[standard]==0.41.0",
     "boto3==1.42.53",
@@ -38,10 +40,16 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/chords_generator"]
 
-# vamp's setup.py imports numpy/setuptools at build time without declaring
-# them as build deps. Disable build isolation so it uses the environment's.
-[tool.uv]
-no-build-isolation-package = ["vamp"]
+# CPU-only PyTorch on Linux: the service runs on Lambda, with no GPU. macOS
+# wheels from PyPI are CPU/MPS already.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

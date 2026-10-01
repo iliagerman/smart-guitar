@@ -79,6 +79,45 @@ async def test_bars_follow_the_songs_three_four_time_signature(settings, storage
 
 
 @pytest.mark.asyncio
+async def test_bars_start_on_the_tracked_downbeats(settings, storage):
+    """Tracked downbeats place the bar lines, even where chord changes would suggest another phase."""
+    beats = [i * 0.5 for i in range(32)]
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": beats, "downbeat_times": beats[1::4], "beats_per_bar": 4},
+        CHORDS: _chord_changes(1.0, 3.0, 5.0, 7.0),
+    })
+
+    assert detail.bar_starts[:3] == [0.5, 2.5, 4.5]
+    assert detail.time_signature is None
+
+
+@pytest.mark.asyncio
+async def test_a_tracked_three_four_meter_is_used_without_a_tab(settings, storage):
+    """With no tab, a song whose downbeats come every three beats gets 3/4 bars."""
+    beats = [i * 0.5 for i in range(30)]
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": beats, "downbeat_times": beats[::3], "beats_per_bar": 3},
+        CHORDS: _chord_changes(0.0, 1.5, 3.0, 4.5),
+    })
+
+    assert detail.bar_starts[:3] == [0.0, 1.5, 3.0]
+    assert detail.time_signature == [3, 4]
+
+
+@pytest.mark.asyncio
+async def test_the_tab_meter_wins_over_the_tracked_one(settings, storage):
+    beats = [i * 0.5 for i in range(32)]
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": beats, "downbeat_times": beats[::3], "beats_per_bar": 3},
+        CHORDS: _chord_changes(0.0, 2.0, 4.0),
+        SONGSTERR: {"source_bpm": 120, "time_signature": [4, 4]},
+    })
+
+    assert detail.time_signature == [4, 4]
+    assert detail.bar_starts[1] - detail.bar_starts[0] == 2.0
+
+
+@pytest.mark.asyncio
 async def test_doubled_detected_tempo_is_halved_to_the_tab_tempo(settings, storage):
     """Beat tracking at 240 BPM for a song tabbed at 120 keeps every other beat."""
     detail = await _fetch_detail(settings, storage, {

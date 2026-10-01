@@ -1,6 +1,6 @@
 """Tests for the /enhance endpoint (beat-align + slash bass on existing chords).
 
-Mocks the librosa-backed functions so no audio/model is required.
+Mocks the beat tracker and bass detection so no audio/model is required.
 """
 
 import json
@@ -29,7 +29,7 @@ async def test_enhance_beat_aligns_and_adds_bass(client, monkeypatch, tmp_path):
     open(audio_path, "wb").write(b"x")
     open(bass_path, "wb").write(b"x")
 
-    monkeypatch.setattr(api_mod, "detect_beats", lambda p: ([0.0, 1.0, 2.0, 3.0, 4.0], 120.0))
+    monkeypatch.setattr(api_mod, "track_file_beats", lambda p: ([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 4.0]))
 
     def fake_bass(_bass_path, chords):
         for c in chords:
@@ -67,7 +67,7 @@ async def test_enhance_beat_aligns_without_bass_when_no_bass_path(client, monkey
     _write_chords(chords_path, [{"start_time": 0.07, "end_time": 1.9, "chord": "C:maj"}])
     open(audio_path, "wb").write(b"x")
 
-    monkeypatch.setattr(api_mod, "detect_beats", lambda p: ([0.0, 1.0, 2.0], 120.0))
+    monkeypatch.setattr(api_mod, "track_file_beats", lambda p: ([0.0, 1.0, 2.0], [0.0]))
 
     def _should_not_run(*_a, **_k):
         raise AssertionError("detect_bass_for_chords must not run without a bass path")
@@ -97,7 +97,7 @@ async def test_enhance_regenerates_simplified_variants(client, monkeypatch, tmp_
     ])
     open(audio_path, "wb").write(b"x")
 
-    monkeypatch.setattr(api_mod, "detect_beats", lambda p: ([0.0, 1.0, 2.0, 3.0, 4.0], 120.0))
+    monkeypatch.setattr(api_mod, "track_file_beats", lambda p: ([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 4.0]))
 
     resp = await client.post("/enhance", json={
         "audio_path": audio_path, "chords_path": chords_path, "bass_path": "",
@@ -115,9 +115,9 @@ async def test_enhance_regenerates_simplified_variants(client, monkeypatch, tmp_
 
 @pytest.mark.asyncio
 async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
-    """Enhance must persist bpm, raw beats and bar starts to chord_meta.json
-    (merging any existing meta fields like capo/key) so the player can render
-    bars in the song's own meter."""
+    """Enhance must persist bpm, beats, downbeats and bar starts to
+    chord_meta.json (merging any existing meta fields like capo/key) so the
+    player can render bars in the song's own meter."""
     song_dir = tmp_path / "song4"
     song_dir.mkdir()
     chords_path = str(song_dir / "chords.json")
@@ -131,7 +131,7 @@ async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
         json.dump({"capo": 2, "key": "G"}, f)
 
     beats = [i * 0.5 for i in range(20)]
-    monkeypatch.setattr(api_mod, "detect_beats", lambda p: (beats, 120.0))
+    monkeypatch.setattr(api_mod, "track_file_beats", lambda p: (beats, beats[::4]))
 
     resp = await client.post("/enhance", json={
         "audio_path": audio_path, "chords_path": chords_path, "bass_path": "",
@@ -145,9 +145,10 @@ async def test_enhance_writes_bar_grid_meta(client, monkeypatch, tmp_path):
     assert meta["key"] == "G"
     assert meta["bpm"] == 120.0
     assert meta["beat_times"] == beats
-    assert len(meta["bar_starts"]) >= 4
-    # Chords change at 1.0/3.0 → bar phase anchors there.
-    assert meta["bar_starts"][0] == 1.0
+    # Bars start on the tracked downbeats.
+    assert meta["downbeat_times"] == beats[::4]
+    assert meta["bar_starts"] == beats[::4]
+    assert meta["beats_per_bar"] == 4
 
 
 @pytest.mark.asyncio

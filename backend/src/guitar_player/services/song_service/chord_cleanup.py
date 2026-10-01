@@ -103,7 +103,9 @@ def _triad(name: str) -> tuple[int, bool] | None:
     letter, accidental, quality = match.groups()
     root = _PITCH_CLASSES[letter] + {"#": 1, "b": -1, "": 0}[accidental]
     quality = quality.lstrip(":")
-    is_minor = quality.startswith("min") or (quality.startswith("m") and not quality.startswith("maj"))
+    is_minor = quality.startswith(("min", "dim", "hdim")) or (
+        quality.startswith("m") and not quality.startswith("maj")
+    )
     return root % 12, is_minor
 
 

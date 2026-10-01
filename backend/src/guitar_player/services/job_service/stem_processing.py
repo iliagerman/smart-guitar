@@ -709,8 +709,8 @@ def _all_core_stems_present(existing_stems: dict[str, str]) -> bool:
     )
 
 
-# Non-vocal, non-drum stems mixed into the "accompaniment" chord recognition
-# input -- closer to what autochord was trained on than the full mix.
+# Non-vocal, non-drum stems mixed into an "accompaniment" the chord model
+# hears alongside the full mix.
 _ACCOMPANIMENT_STEM_NAMES = ("bass", "guitar", "piano", "other")
 
 

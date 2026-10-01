@@ -31,6 +31,8 @@ _MIREX_TO_PYCHORD_QUALITY: dict[str, str] = {
     "sus2": "sus2",
     "min6": "m6",
     "maj6": "6",
+    "hdim7": "m7b5",
+    "minmaj7": "mM7",
     "9": "9",
     "min9": "m9",
     "maj9": "maj9",
@@ -80,6 +82,8 @@ _QUALITY_TO_TRIAD: dict[str, str] = {
     "m6": "m",
     "m9": "m",
     "m11": "m",
+    "m7b5": "m",
+    "mM7": "m",
     "dim": "m",
     "dim7": "m",
 }

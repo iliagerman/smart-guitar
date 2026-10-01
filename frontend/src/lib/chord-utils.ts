@@ -39,6 +39,8 @@ const QUALITY_MAP: Record<string, string> = {
   dim7: 'dim7',
   hdim7: 'm7b5',
   minmaj7: 'mM7',
+  min6: 'm6',
+  maj6: '6',
   aug7: 'aug7',
   '9': '9',
   maj9: 'maj9',

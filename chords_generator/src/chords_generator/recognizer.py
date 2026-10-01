@@ -1,90 +1,97 @@
-"""Chord recognition wrapper around autochord.
+"""Chord recognition: BTC chord probabilities decided on the Beat This! beat grid.
 
-Lazy-imports autochord to avoid loading TensorFlow at import time
-and to enable easy test mocking.
+The beats come from the full mix (drums included). The chord model hears the
+full mix and, when the separated stems are available, the accompaniment mix
+too; averaging the two is more accurate than either alone. Every chord change
+lands on a tracked beat, so the bar layout needs no snapping afterwards.
 """
 
 import json
 import logging
 import os
+import time
 
-from chords_generator.bars import compute_bar_starts
-from chords_generator.beat_align import detect_beats, snap_chords_to_beats
+from chords_generator.beat_decode import beats_per_bar, decode_chords_on_beats
+from chords_generator.beat_tracking import tempo_bpm, track_beats
+from chords_generator.chord_model import FRAME_S, LABELS, SAMPLE_RATE, chord_log_probs, load_mono
 from chords_generator.schemas import ChordResult
 from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
 
 logger = logging.getLogger(__name__)
 
+CHORD_MODEL = "btc-large-voca"
+BEAT_MODEL = "beat_this-final0"
 
-def recognize_chords(audio_path: str, output_dir: str) -> list[ChordResult]:
-    """Run chord recognition on an audio file.
+
+def recognize_chords(
+    audio_path: str, output_dir: str, accompaniment_path: str | None = None,
+) -> list[ChordResult]:
+    """Recognize chords and write chords.json, chords.lab, chord_meta.json and the simplified variants.
 
     Args:
-        audio_path: Path to the input audio file.
-        output_dir: Directory to write chords.lab and chords.json.
-
-    Returns:
-        List of ChordResult with start_time, end_time, and chord label.
+        audio_path: The full mix.
+        output_dir: Where the outputs are written.
+        accompaniment_path: Optional mix of the non-vocal, non-drum stems.
     """
-    import autochord
-
     os.makedirs(output_dir, exist_ok=True)
 
-    lab_path = os.path.join(output_dir, "chords.lab")
-    logger.info("Running autochord on: %s", audio_path)
-    autochord.recognize(audio_path, lab_fn=lab_path)
+    timings: dict[str, float] = {}
+    clock = time.monotonic()
 
-    # Parse the .lab file (MIREX format: start_time end_time chord)
-    results: list[ChordResult] = []
-    if os.path.isfile(lab_path):
-        with open(lab_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split()
-                if len(parts) >= 3:
-                    results.append(
-                        ChordResult(
-                            start_time=float(parts[0]),
-                            end_time=float(parts[1]),
-                            chord=parts[2],
-                        )
-                    )
+    def lap(step: str) -> None:
+        nonlocal clock
+        now = time.monotonic()
+        timings[step] = round(now - clock, 1)
+        clock = now
 
-    # Beat-align chord changes to the detected beat grid so changes land on the
-    # beat instead of autochord's ~190ms feature-frame grid. Non-fatal.
-    beats, bpm = detect_beats(audio_path)
-    if beats:
-        before = len(results)
-        results = snap_chords_to_beats(results, beats)
-        logger.info(
-            "Beat-aligned chords: %d -> %d segments (%.1f bpm, %d beats)",
-            before, len(results), bpm, len(beats),
-        )
+    y = load_mono(audio_path)
+    duration = len(y) / SAMPLE_RATE
+    lap("load")
+    log_probs = chord_log_probs(y)
+    lap("chords")
+    if accompaniment_path:
+        accompaniment = load_mono(accompaniment_path)
+        lap("load_accompaniment")
+        accompaniment_log_probs = chord_log_probs(accompaniment)
+        lap("chords_accompaniment")
+        frames = min(len(log_probs), len(accompaniment_log_probs))
+        log_probs = (log_probs[:frames] + accompaniment_log_probs[:frames]) / 2
 
-    # Also save as JSON for easy consumption
-    json_path = os.path.join(output_dir, "chords.json")
-    with open(json_path, "w") as f:
+    beats, downbeats = track_beats(y, SAMPLE_RATE)
+    lap("beats")
+    results = decode_chords_on_beats(log_probs, LABELS, FRAME_S, beats, downbeats, duration)
+    bpm = tempo_bpm(beats)
+    logger.info(
+        "Recognized %d chords on %d beats (%.1f bpm, %d downbeats); seconds: %s",
+        len(results), len(beats), bpm, len(downbeats), timings,
+    )
+
+    with open(os.path.join(output_dir, "chords.lab"), "w") as f:
+        for r in results:
+            f.write(f"{r.start_time:.3f}\t{r.end_time:.3f}\t{r.chord}\n")
+    with open(os.path.join(output_dir, "chords.json"), "w") as f:
         json.dump(
             [{"start_time": r.start_time, "end_time": r.end_time, "chord": r.chord} for r in results],
             f,
             indent=2,
         )
 
-    # Generate simplified chord options (difficulty levels + capo variations)
-    options = generate_simplified_options(results)
-    write_simplified_outputs(options, output_dir)
+    write_simplified_outputs(generate_simplified_options(results), output_dir)
 
-    # Bar grid for the player's measures view (4/4, phase-aligned to chord
-    # changes). Fresh recognition has no prior chord_meta to merge.
-    if beats:
-        with open(os.path.join(output_dir, "chord_meta.json"), "w") as f:
-            json.dump(
-                {"bpm": round(bpm, 2), "bar_starts": compute_bar_starts(beats, results)},
-                f,
-                indent=2,
-            )
+    with open(os.path.join(output_dir, "chord_meta.json"), "w") as f:
+        json.dump(beat_meta(beats, downbeats), f, indent=2)
 
-    logger.info("Recognized %d chords, output in: %s", len(results), output_dir)
     return results
+
+
+def beat_meta(beats: list[float], downbeats: list[float]) -> dict:
+    """chord_meta.json beat fields. ``bar_starts`` are the tracked downbeats."""
+    meta: dict = {"chord_model": CHORD_MODEL, "beat_model": BEAT_MODEL}
+    if beats:
+        meta["bpm"] = round(tempo_bpm(beats), 2)
+        meta["beat_times"] = [round(b, 3) for b in beats]
+        meta["downbeat_times"] = [round(d, 3) for d in downbeats]
+        meta["beats_per_bar"] = beats_per_bar(beats, downbeats)
+        meta["bar_starts"] = [round(d, 3) for d in downbeats]
+    return meta
+

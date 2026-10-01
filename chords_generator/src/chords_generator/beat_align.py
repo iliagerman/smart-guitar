@@ -1,9 +1,8 @@
 """Beat alignment for recognized chords.
 
-Autochord emits chord-change boundaries on a ~190 ms feature-frame grid, which
-makes timing feel mechanical and off the beat. Here we detect the song's beats
-and snap each chord change to the nearest beat, so chord changes land on the
-beat the way a player reads a chord sheet.
+/enhance uses this for chords that weren't decided on the beat grid (older
+recognitions, edited sheets): each chord change snaps to the nearest tracked
+beat, so changes land on the beat the way a player reads a chord sheet.
 """
 
 from __future__ import annotations
@@ -144,20 +143,3 @@ def snap_chords_to_beats(
             )
     return _remove_short_chord_blips(result)
 
-
-def detect_beats(audio_path: str) -> tuple[list[float], float]:
-    """Detect beat times (seconds) and tempo (BPM) for an audio file.
-
-    Returns ``([], 0.0)`` on failure so callers can fall back to raw timing.
-    """
-    try:
-        import librosa
-
-        y, sr = librosa.load(audio_path, mono=True)
-        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        beats = librosa.frames_to_time(beat_frames, sr=sr)
-        bpm = float(tempo) if tempo is not None else 0.0
-        return [float(b) for b in beats], bpm
-    except Exception:
-        logger.warning("Beat detection failed for %s (non-fatal)", audio_path, exc_info=True)
-        return [], 0.0

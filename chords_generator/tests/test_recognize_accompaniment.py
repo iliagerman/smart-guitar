@@ -1,8 +1,8 @@
 """Tests /recognize's optional accompaniment-stem mixing.
 
 Mocks recognize_chords and mix_audio_files so no real audio/model is needed —
-these tests verify the plumbing (which file gets recognized), not autochord
-itself (covered by the real end-to-end test in test_api.py).
+these tests verify the plumbing (which files get recognized), not the models
+themselves (covered by the real end-to-end test in test_api.py).
 """
 
 import pytest
@@ -12,7 +12,7 @@ from chords_generator.recognizer import ChordResult
 
 
 @pytest.mark.asyncio
-async def test_recognize_uses_accompaniment_mix_when_stems_given(
+async def test_recognize_adds_accompaniment_mix_when_stems_given(
     client, monkeypatch, tmp_path,
 ):
     song_dir = tmp_path / "song"
@@ -25,8 +25,10 @@ async def test_recognize_uses_accompaniment_mix_when_stems_given(
 
     recognized_paths: list[str] = []
 
-    def fake_recognize_chords(input_path, output_dir):
-        recognized_paths.append(input_path)
+    def fake_recognize_chords(input_path, output_dir, accompaniment_path=None):
+        recognized_paths.append((input_path, accompaniment_path))
+        with open(f"{output_dir}/chord_meta.json", "w") as f:
+            f.write("{}")
         return [ChordResult(start_time=0.0, end_time=1.0, chord="C:maj")]
 
     mixed_calls: list[tuple[list[str], str]] = []
@@ -46,9 +48,8 @@ async def test_recognize_uses_accompaniment_mix_when_stems_given(
     assert resp.status_code == 200
     assert len(mixed_calls) == 1
     assert mixed_calls[0][0] == [bass_path, guitar_path]
-    # The recognizer ran on the mixed accompaniment file, not the full mix.
-    assert recognized_paths == [mixed_calls[0][1]]
-    assert recognized_paths[0] != audio_path
+    # The recognizer heard the full mix and the mixed accompaniment.
+    assert recognized_paths == [(audio_path, mixed_calls[0][1])]
 
 
 @pytest.mark.asyncio
@@ -63,8 +64,10 @@ async def test_recognize_falls_back_to_full_mix_when_stems_missing(
 
     recognized_paths: list[str] = []
 
-    def fake_recognize_chords(input_path, output_dir):
-        recognized_paths.append(input_path)
+    def fake_recognize_chords(input_path, output_dir, accompaniment_path=None):
+        recognized_paths.append((input_path, accompaniment_path))
+        with open(f"{output_dir}/chord_meta.json", "w") as f:
+            f.write("{}")
         return [ChordResult(start_time=0.0, end_time=1.0, chord="C:maj")]
 
     def fake_mix_audio_files(input_paths, output_path):
@@ -79,7 +82,7 @@ async def test_recognize_falls_back_to_full_mix_when_stems_missing(
     })
 
     assert resp.status_code == 200
-    assert recognized_paths == [audio_path]
+    assert recognized_paths == [(audio_path, None)]
 
 
 @pytest.mark.asyncio
@@ -94,8 +97,10 @@ async def test_recognize_without_stem_paths_uses_full_mix_unchanged(
 
     recognized_paths: list[str] = []
 
-    def fake_recognize_chords(input_path, output_dir):
-        recognized_paths.append(input_path)
+    def fake_recognize_chords(input_path, output_dir, accompaniment_path=None):
+        recognized_paths.append((input_path, accompaniment_path))
+        with open(f"{output_dir}/chord_meta.json", "w") as f:
+            f.write("{}")
         return [ChordResult(start_time=0.0, end_time=1.0, chord="C:maj")]
 
     monkeypatch.setattr(api_mod, "recognize_chords", fake_recognize_chords)
@@ -103,4 +108,4 @@ async def test_recognize_without_stem_paths_uses_full_mix_unchanged(
     resp = await client.post("/recognize", json={"input_path": audio_path})
 
     assert resp.status_code == 200
-    assert recognized_paths == [audio_path]
+    assert recognized_paths == [(audio_path, None)]

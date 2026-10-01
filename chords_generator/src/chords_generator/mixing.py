@@ -2,8 +2,8 @@
 
 Demucs stems sum back to the original mix, so summing a subset of them (e.g.
 bass + guitar + piano/other, excluding vocals and drums) reconstructs an
-"accompaniment" mix — closer to what autochord was trained to recognize than
-the full mix with vocals and drums layered on top.
+"accompaniment" mix. The chord model hears it alongside the full mix: the
+harmony without vocals and drums layered on top.
 """
 
 from __future__ import annotations

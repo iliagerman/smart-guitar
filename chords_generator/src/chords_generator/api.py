@@ -1,4 +1,4 @@
-"""FastAPI application wrapping autochord chord recognition.
+"""FastAPI application wrapping chord recognition.
 
 Provides /health and /recognize endpoints. Storage backend (local or S3)
 is selected via config, initialized on startup.
@@ -16,13 +16,13 @@ from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
 
-from chords_generator.bars import compute_bar_starts
 from chords_generator.bass_detect import detect_bass_for_chords
-from chords_generator.beat_align import detect_beats, snap_chords_to_beats
+from chords_generator.beat_align import snap_chords_to_beats
+from chords_generator.beat_tracking import track_file_beats
 from chords_generator.config import get_settings
 from chords_generator.mixing import mix_audio_files
 from chords_generator.observability import instrument_runtime_observer
-from chords_generator.recognizer import recognize_chords
+from chords_generator.recognizer import beat_meta, recognize_chords
 from chords_generator.request_context import RequestContextFilter, RequestContextMiddleware
 from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
 from chords_generator.schemas import (
@@ -81,6 +81,35 @@ instrument_runtime_observer(app, service_name="chords-generator")
 app.add_middleware(RequestContextMiddleware)
 
 
+# Fields chord recognition owns in chord_meta.json; anything else (capo, key)
+# was written by another pipeline and is kept.
+_BEAT_META_FIELDS = (
+    "bpm", "beat_times", "downbeat_times", "beats_per_bar", "bar_starts", "chord_model", "beat_model",
+)
+
+
+def _read_existing_meta(song_file_path: str) -> dict:
+    meta_key = os.path.join(os.path.dirname(song_file_path), "chord_meta.json")
+    if not _storage.file_exists(meta_key):
+        return {}
+    try:
+        with open(_storage.resolve_input(meta_key)) as f:
+            existing = json.load(f)
+    except Exception:
+        logger.warning("Unreadable chord_meta.json at %s — rewriting", meta_key)
+        return {}
+    return existing if isinstance(existing, dict) else {}
+
+
+def _merge_existing_meta(meta_path: str, song_file_path: str) -> None:
+    """Keep the song's other chord_meta.json fields around the freshly written beat fields."""
+    with open(meta_path) as f:
+        fresh = json.load(f)
+    kept = {k: v for k, v in _read_existing_meta(song_file_path).items() if k not in _BEAT_META_FIELDS}
+    with open(meta_path, "w") as f:
+        json.dump({**kept, **fresh}, f, indent=2)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "chords_generator-api"}
@@ -104,11 +133,10 @@ def recognize(request: RecognizeRequest):
         # Get local path (no-op for local storage, download for S3)
         local_input = _storage.resolve_input(request.input_path)
 
-        # Recognize on the accompaniment mix (bass/guitar/piano/other, no
-        # vocals or drums) when those stems are already available — closer to
-        # what autochord was trained on than the full mix. Falls back to the
-        # full mix when no listed stem exists.
-        recognition_input = local_input
+        # The chord model also hears the accompaniment mix (bass/guitar/piano/
+        # other, no vocals or drums) when those stems already exist; beats
+        # always come from the full mix.
+        accompaniment_path = None
         existing_stem_paths = [
             p for p in request.accompaniment_stem_paths if _storage.file_exists(p)
         ]
@@ -117,16 +145,15 @@ def recognize(request: RecognizeRequest):
             mix_audio_files(
                 [_storage.resolve_input(p) for p in existing_stem_paths], accompaniment_path,
             )
-            recognition_input = accompaniment_path
             logger.info(
-                "Recognizing chords on accompaniment mix (%d stems)",
+                "Recognizing chords with the accompaniment mix (%d stems)",
                 len(existing_stem_paths),
                 extra={"job_id": job_id, "event_type": "recognition_accompaniment_mix"},
             )
 
-        # Run chord recognition
         logger.info("Starting chord recognition", extra={"job_id": job_id, "input_path": request.input_path, "event_type": "recognition_start"})
-        results = recognize_chords(recognition_input, output_dir)
+        results = recognize_chords(local_input, output_dir, accompaniment_path)
+        _merge_existing_meta(os.path.join(output_dir, "chord_meta.json"), request.input_path)
 
         # Store outputs alongside the input file (same song directory)
         output_path = _storage.store_outputs(output_dir, request.input_path)
@@ -224,8 +251,9 @@ def enhance(request: EnhanceRequest):
     """Enhance an existing chords.json in place: snap chord changes to the
     detected beat grid and (if a bass stem is given) add slash bass notes.
 
-    Operates on the already-recognized chords — it does NOT re-run autochord or
-    demucs — so it's a cheap way to back-fill beat alignment + slash bass.
+    Operates on the already-recognized chords — it does NOT re-run chord
+    recognition or demucs — so it's a cheap way to back-fill beat alignment +
+    slash bass.
     """
     settings = get_settings()
     job_dir = os.path.join(settings.processing.temp_dir, str(uuid.uuid4()))
@@ -249,7 +277,7 @@ def enhance(request: EnhanceRequest):
 
         # Beat-align the existing chords.
         local_audio = _storage.resolve_input(request.audio_path)
-        beats, bpm = detect_beats(local_audio)
+        beats, downbeats = track_file_beats(local_audio)
         if beats:
             chord_results = snap_chords_to_beats(chord_results, beats)
 
@@ -278,25 +306,11 @@ def enhance(request: EnhanceRequest):
         options = generate_simplified_options(chord_results)
         write_simplified_outputs(options, job_dir)
 
-        # Persist the beat grid (bpm, raw beats, phase-aligned 4/4 bar starts).
-        # The backend regroups the raw beats into bars in the song's meter.
-        # Merge into any existing chord_meta.json so capo/key are preserved.
-        meta_neighbor = os.path.join(os.path.dirname(request.chords_path), "chord_meta.json")
-        meta: dict = {}
-        if _storage.file_exists(meta_neighbor):
-            try:
-                with open(_storage.resolve_input(meta_neighbor)) as f:
-                    existing = json.load(f)
-                if isinstance(existing, dict):
-                    meta = existing
-            except Exception:
-                logger.warning("Unreadable chord_meta.json at %s — rewriting", meta_neighbor)
-        if beats:
-            meta["bpm"] = round(bpm, 2)
-            meta["beat_times"] = [round(b, 3) for b in beats]
-            meta["bar_starts"] = compute_bar_starts(beats, chord_results)
-        with open(os.path.join(job_dir, "chord_meta.json"), "w") as f:
-            json.dump(meta, f, indent=2)
+        # Persist the beat grid, keeping the song's other chord_meta.json fields.
+        meta_path = os.path.join(job_dir, "chord_meta.json")
+        with open(meta_path, "w") as f:
+            json.dump(beat_meta(beats, downbeats), f, indent=2)
+        _merge_existing_meta(meta_path, request.chords_path)
 
         _storage.store_outputs(job_dir, request.chords_path)
 

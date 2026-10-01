@@ -31,7 +31,7 @@ from guitar_player.schemas.song import (
 from guitar_player.services.song_tags import ensure_song_tags
 from guitar_player.storage import StorageBackend
 
-from .beat_grid import BeatGridSource, build_beat_grid
+from .beat_grid import BeatGrid, BeatGridSource, build_beat_grid
 from .chord_cleanup import clean_detected_chords
 from .chord_data import load_chord_data
 from .chord_time_snap import build_anchor_times
@@ -102,6 +102,8 @@ async def build_song_detail(
     songsterr_data = _load_songsterr_data(storage, song)
     grid_source = BeatGridSource(
         detected_beats=chord_data.beat_times,
+        detected_downbeats=chord_data.downbeat_times,
+        detected_beats_per_bar=chord_data.beats_per_bar,
         stored_bar_starts=chord_data.bar_starts,
         guitar_beats=rhythm.beat_times if rhythm else [],
         chords=autochord_chords,
@@ -184,7 +186,7 @@ async def build_song_detail(
         rhythm=rhythm,
         sections=songsterr_data.get("sections", []),
         source_bpm=songsterr_data.get("source_bpm"),
-        time_signature=songsterr_data.get("time_signature"),
+        time_signature=songsterr_data.get("time_signature") or _detected_time_signature(beat_grid),
         strum_notes=songsterr_data.get("strum_notes"),
         tutorial_url=songsterr_data.get("tutorial_url"),
         tutorial_links=songsterr_data.get("tutorial_links", []),
@@ -205,6 +207,13 @@ async def build_song_detail(
             or not autochord_chords
         ),
     )
+
+
+def _detected_time_signature(beat_grid: BeatGrid | None) -> list[int] | None:
+    """The tracked meter when it isn't the 4/4 the player assumes without a tab."""
+    if beat_grid and beat_grid.beats_per_bar != 4:
+        return [beat_grid.beats_per_bar, 4]
+    return None
 
 
 def _resolve_url(storage: StorageBackend, key: str | None) -> str | None:

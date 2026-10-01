@@ -12,7 +12,7 @@ guitar_player/
 ├── frontend/             # React + TypeScript SPA (Vite)
 ├── lyrics_generator/     # WhisperX-based lyrics transcription service
 ├── inference_demucs/     # Demucs audio source separation service
-├── chords_generator/     # Autochord-based chord recognition service
+├── chords_generator/     # Chord recognition service (BTC chords on Beat This! beats)
 ├── tabs_generator/       # Basic-pitch guitar tablature service
 ├── homeserver/           # On-premises YouTube downloader
 ├── infra/                # Terraform AWS infrastructure
@@ -31,7 +31,7 @@ guitar_player/
 | Auth | AWS Cognito (email/password + Google OAuth), JWT |
 | Database | PostgreSQL 15+ (RDS) |
 | Storage | S3 (prod) / local filesystem (dev) |
-| Processing | Demucs, Autochord, WhisperX, basic-pitch |
+| Processing | Demucs, BTC + Beat This! (chords), WhisperX, basic-pitch |
 | AI/LLM | AWS Bedrock Nova Lite (metadata parsing), OpenAI Whisper |
 | Infra | AWS ECS Fargate, Lambda, SQS, CloudFront, Terraform |
 | Monitoring | CloudWatch, Grafana |
@@ -70,7 +70,7 @@ guitar_player/
 3. Backend creates a Job record (status=PENDING) in PostgreSQL
 4. Backend asynchronously invokes the Job Orchestrator Lambda
 5. Lambda calls Demucs for stem separation (vocals, guitar, drums, bass)
-6. Lambda calls Autochord for chord recognition
+6. Lambda calls the chords service for chord recognition on the song's beat grid
 7. Lambda calls WhisperX for lyrics transcription (word-level timestamps)
 8. Lambda calls Basic-Pitch for guitar tab generation
 9. Lambda merges vocals + guitar stems
@@ -158,7 +158,7 @@ guitar_player/
 | Service | Port | Technology | Input | Output |
 |---------|------|-----------|-------|--------|
 | **Demucs** | 8000 | Demucs 4, PyTorch | Audio file | Separated stems (vocals, guitar, drums, bass, piano, other) |
-| **Chords** | 8001 | Autochord, PyChord | Audio file | Chord timeline with simplification levels + capo suggestions |
+| **Chords** | 8001 | BTC, Beat This!, PyTorch, PyChord | Audio file (+ accompaniment stems) | Chord timeline on the beat grid, beats/downbeats/tempo, simplification levels + capo suggestions |
 | **Lyrics** | 8003 | WhisperX, Genius API | Audio file | Word-level timestamped lyrics |
 | **Tabs** | 8004 | basic-pitch, librosa | Guitar audio | String/fret mappings with confidence scores |
 

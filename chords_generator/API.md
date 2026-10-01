@@ -1,82 +1,18 @@
 # Chords Generator API
 
-HTTP API for chord recognition using [autochord](https://github.com/urinieto/autochord). Accepts a path to an audio file, runs chord detection, and stores a chord timeline (JSON + LAB) in the same directory as the input file.
-
-## Prerequisites (macOS Apple Silicon)
-
-The `autochord` library depends on `vamp` (C extension) and the `nnls-chroma` VAMP plugin. Both require native arm64 builds on Apple Silicon.
-
-### 1. Install system dependencies
-
-```bash
-brew install vamp-plugin-sdk boost
-```
-
-### 2. Build the nnls-chroma VAMP plugin
-
-The plugin bundled with `autochord` is a Linux ELF binary. You must build a native macOS `.dylib` from source:
-
-```bash
-cd /tmp
-git clone https://github.com/c4dm/nnls-chroma.git
-cd nnls-chroma
-
-CXXFLAGS="-arch arm64 -O3 -ffast-math \
-  -I/opt/homebrew/opt/vamp-plugin-sdk/include \
-  -I/opt/homebrew/include \
-  -Wall -fPIC -stdlib=libc++ \
-  -I$(xcrun --show-sdk-path)/usr/include/c++/v1" \
-CFLAGS="-arch arm64 -O3 -ffast-math \
-  -I/opt/homebrew/opt/vamp-plugin-sdk/include \
-  -Wall -fPIC" \
-make -f Makefile.osx \
-  VAMP_SDK_DIR=/opt/homebrew/opt/vamp-plugin-sdk/include \
-  BOOST_ROOT=/opt/homebrew/include \
-  ARCHFLAGS="" \
-  OPTFLAGS="" \
-  LDFLAGS="-arch arm64 -dynamiclib -install_name nnls-chroma.dylib \
-    /opt/homebrew/opt/vamp-plugin-sdk/lib/libvamp-sdk.a \
-    -exported_symbols_list vamp-plugin.list -framework Accelerate"
-```
-
-Install the built plugin:
-
-```bash
-mkdir -p ~/Library/Audio/Plug-Ins/Vamp
-cp nnls-chroma.dylib nnls-chroma.cat nnls-chroma.n3 ~/Library/Audio/Plug-Ins/Vamp/
-```
-
-### 3. Install Python dependencies
-
-```bash
-just setup-chords
-```
-
-This creates a Python 3.11 venv, pre-installs numpy+setuptools (needed by `vamp` at build time), sets `CPLUS_INCLUDE_PATH` and `ARCHFLAGS` for native arm64 compilation, then runs `uv sync`.
-
-### Known dependency issues
-
-| Issue                                         | Cause                                           | Fix                                                                                                     |
-| --------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `vamp` build fails: `'string' file not found` | Missing C++ headers on macOS                    | `export CPLUS_INCLUDE_PATH="$(xcrun --show-sdk-path)/usr/include/c++/v1"` (done by `just setup-chords`) |
-| `vamp` compiles as x86_64                     | Cached wheel or wrong arch flags                | `ARCHFLAGS="-arch arm64"` (done by `just setup-chords`)                                                 |
-| `No module named 'pkg_resources'`             | setuptools >= 82 removed it                     | `setuptools<81` pinned in pyproject.toml                                                                |
-| Keras 3 can't load autochord model            | TF 2.16+ ships Keras 3, autochord needs Keras 2 | `tf-keras` in dependencies + `TF_USE_LEGACY_KERAS=1` env var (set by all just recipes)                  |
-| `nnls-chroma` plugin not found                | Bundled `.so` is Linux ELF                      | Build from source (see above)                                                                           |
+HTTP API for chord recognition (BTC chords decided on Beat This! beats; see [README.md](README.md)). Accepts a path to an audio file, runs chord detection, and stores a chord timeline (JSON + LAB), the beat grid and simplified variants in the same directory as the input file.
 
 ## Running the service
 
 ```bash
-# Local development
+just setup-chords   # dependencies + pinned model weights
 just run-chords
 
 # Or manually
-TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001
+APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001
 ```
 
 The `APP_ENV` environment variable selects the config profile (`local` or `prod`). Defaults to `local`.
-
-`TF_USE_LEGACY_KERAS=1` is required to force TensorFlow to use Keras 2 (via `tf-keras`) instead of Keras 3, which is incompatible with autochord's saved model format.
 
 ## Endpoints
 
@@ -101,9 +37,10 @@ Runs chord recognition on the given audio file.
 
 **Request body:**
 
-| Field        | Type   | Required | Description                                                                   |
-| ------------ | ------ | -------- | ----------------------------------------------------------------------------- |
-| `input_path` | string | yes      | Path to the audio file. Local path in dev, S3 key in prod. Must be non-empty. |
+| Field                      | Type            | Required | Description                                                                                                                         |
+| -------------------------- | --------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `input_path`               | string          | yes      | The full mix. Local path in dev, S3 key in prod. Must be non-empty. Beats always come from it.                                      |
+| `accompaniment_stem_paths` | array of string | no       | Separated non-vocal, non-drum stems (bass, guitar, piano, other). Mixed and heard by the chord model alongside the full mix. Missing paths are skipped. |
 
 Supported input formats: MP3, WAV (any format supported by librosa).
 
@@ -128,7 +65,7 @@ Each entry in `chords`:
 | ------------ | ------ | ---------------------------------------------------------------------- |
 | `start_time` | float  | Start time in seconds.                                                 |
 | `end_time`   | float  | End time in seconds.                                                   |
-| `chord`      | string | Chord label in MIREX format (e.g. `G:maj`, `A:min`, `N` for no chord). |
+| `chord`      | string | Chord label in MIREX format (e.g. `G:maj`, `A:min7`, `E:sus4`, `N` for no chord). |
 
 Example:
 
@@ -156,12 +93,15 @@ Example:
 
 ## Output files
 
-Two files are written to the same directory as the input audio file:
+Written to the same directory as the input audio file:
 
-| File          | Description                                                          |
-| ------------- | -------------------------------------------------------------------- |
-| `chords.json` | JSON array of chord segments with `start_time`, `end_time`, `chord`. |
-| `chords.lab`  | MIREX LAB format (tab-separated: `start_time end_time chord`).       |
+| File                                  | Description                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `chords.json`                         | JSON array of chord segments with `start_time`, `end_time`, `chord`. Every change is on a tracked beat.                                                     |
+| `chords.lab`                          | The same chords in MIREX LAB format (tab-separated: `start_time end_time chord`).                                                                          |
+| `chord_meta.json`                     | `bpm`, `beat_times`, `downbeat_times`, `beats_per_bar`, `bar_starts` (the downbeats), `chord_model`, `beat_model`. Other fields already in the file (capo, key) are kept. |
+| `chords_intermediate.json`            | Triads only (extensions stripped).                                                                                                                          |
+| `chords_beginner.json`, `chords_beginner_capo_N.json` | Nearest open chords, without and with the two best capo positions.                                                                              |
 
 Output directory structure (local):
 
@@ -238,17 +178,9 @@ When `aws.use_iam_role` is `false` and storage backend is `s3`, AWS credentials 
 ## Testing
 
 ```bash
-# Integration test (starts server, sends request, cleans output)
-just test-chords
-
-# Integration test (keeps chords.json and chords.lab for inspection)
-just test-chords cleanup=false
-
-# With a custom audio file
-just test-chords /path/to/audio.mp3 cleanup=false
+just test-chords-unit   # unit tests, no audio or models
+cd chords_generator && APP_ENV=test uv run pytest tests   # everything, incl. a real recognition (needs the models)
 ```
-
-There are no unit tests for chords_generator. Testing is done via integration tests that start the API server, send a real recognition request, and verify the output.
 
 ## Interactive docs
 

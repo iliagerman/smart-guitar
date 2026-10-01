@@ -16,7 +16,7 @@ from guitar_player.schemas.song import ChordEntry
 # chords_generator/bars.py stores every 4th detected beat as a bar start.
 _BEATS_PER_STORED_BAR = 4
 _DEFAULT_BEATS_PER_BAR = 4
-# A chord change within this distance of a bar start counts as "on" it.
+# A chord change or tracked downbeat within this distance of a bar start counts as "on" it.
 _ON_BAR_TOLERANCE_S = 0.08
 # Without a tab tempo to check against, a faster detected tempo is almost
 # always the tracker locking onto eighth notes (a 74 BPM ballad detected at
@@ -36,11 +36,16 @@ class BeatGrid:
     beat_times: list[float]  # beat_times[0] is a downbeat
     bar_starts: list[float]
     bpm: float
+    beats_per_bar: int
 
 
 @dataclass(frozen=True)
 class BeatGridSource:
     detected_beats: list[float]  # chord pipeline, full mix
+    # Tracked bar starts among detected_beats, and the meter they imply; empty
+    # and None for songs processed before downbeats were tracked.
+    detected_downbeats: list[float]
+    detected_beats_per_bar: int | None
     stored_bar_starts: list[float]  # chord pipeline, 4/4 (songs processed before beats were stored)
     guitar_beats: list[float]  # tabs pipeline, guitar stem
     chords: list[ChordEntry]
@@ -70,18 +75,20 @@ def build_beat_grid(source: BeatGridSource, *, half_time: bool = True) -> BeatGr
         beats = _with_half_beats(beats)
         step *= 2
 
-    beats_per_bar = _beats_per_bar(source.time_signature)
-    change_times = [c.start_time for c in source.chords if c.chord != "N"]
+    beats_per_bar = _beats_per_bar(source.time_signature, source.detected_beats_per_bar)
     # Where the played beats fall between tracked ones, and which beat is the
-    # downbeat: the choice that puts the most chord changes on bar lines.
+    # downbeat: the choice that puts the most tracked downbeats on bar lines,
+    # or, for songs tracked without downbeats, the most chord changes.
+    anchors = source.detected_downbeats if len(source.detected_beats) >= 2 else []
+    anchors = anchors or [c.start_time for c in source.chords if c.chord != "N"]
     offsets = [Fraction(k, step.denominator) for k in range(step.numerator)]
     grids = {offset: _resample(beats, step, offset) for offset in offsets}
     candidates = [(offset, phase) for phase in range(beats_per_bar) for offset in offsets]
     offset, phase = candidates[0]
-    if change_times:
+    if anchors:
         offset, phase = max(
             candidates,
-            key=lambda c: _on_bar_count(grids[c[0]][c[1]::beats_per_bar], change_times),
+            key=lambda c: _on_bar_count(grids[c[0]][c[1]::beats_per_bar], anchors),
         )
 
     played = grids[offset]
@@ -92,6 +99,7 @@ def build_beat_grid(source: BeatGridSource, *, half_time: bool = True) -> BeatGr
         beat_times=beat_times,
         bar_starts=[round(b, 3) for b in played[phase::beats_per_bar]],
         bpm=round(_bpm(beat_times), 2),
+        beats_per_bar=beats_per_bar,
     )
 
 
@@ -147,10 +155,14 @@ def _with_half_beats(beats: list[float]) -> list[float]:
     return halves
 
 
-def _beats_per_bar(time_signature: list[int] | None) -> int:
+def _beats_per_bar(time_signature: list[int] | None, detected: int | None) -> int:
     # Songsterr data is external; ignore a malformed numerator.
     if time_signature and time_signature[0] > 0:
         return time_signature[0]
+    # Of the tracked meters only 3/4 is trusted: a tracked 2 or 6 is as often
+    # a 4/4 or 6/8 song counted in half or double time.
+    if detected == 3:
+        return 3
     return _DEFAULT_BEATS_PER_BAR
 
 

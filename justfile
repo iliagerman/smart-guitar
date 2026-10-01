@@ -205,31 +205,16 @@ test-demucs audio_file=default_audio cleanup='true':
 
 # ── Chords Generator ──────────────────────────────────────────
 
-# Install chords generator dependencies
-# Pre-installs numpy+setuptools because vamp needs them at build time (no-build-isolation)
-# Sets CPLUS_INCLUDE_PATH so vamp's C++ extension finds <string> header on macOS
-# Sets ARCHFLAGS to ensure native arm64 compilation on Apple Silicon
-# Copies nnls-chroma VAMP plugin to user plugin directory for autochord
-# Requires: brew install vamp-plugin-sdk
+# Install chords generator dependencies and the pinned model weights (BTC, Beat This!)
 setup-chords:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "{{project_dir}}/chords_generator"
-    uv venv --python 3.11
-    uv pip install numpy setuptools
-    export CPLUS_INCLUDE_PATH="$(xcrun --show-sdk-path)/usr/include/c++/v1"
-    export ARCHFLAGS="-arch arm64"
-    uv sync
-    # Copy nnls-chroma VAMP plugin for autochord (bundled .so is Linux-only;
-    # on macOS we rely on the brew vamp-plugin-sdk build or a native .dylib).
-    mkdir -p "$HOME/Library/Audio/Plug-Ins/Vamp"
+    cd "{{project_dir}}/chords_generator" && uv sync --extra dev && bash scripts/download_models.sh
 
 # Start the chords generator API server
 run-chords:
-    cd {{project_dir}}/chords_generator && TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001
+    cd {{project_dir}}/chords_generator && APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001
 
 # Run chords_generator unit tests (no audio/model/server). Optionally pass a file.
-test-chords-unit file='tests/test_simplifier.py tests/test_beat_align.py tests/test_bass_detect.py':
+test-chords-unit file='tests/test_simplifier.py tests/test_beat_align.py tests/test_beat_decode.py tests/test_bass_detect.py':
     cd "{{project_dir}}/chords_generator" && uv run pytest {{file}} -v
 
 # Run all chords tests with cleanup (removes chord output after tests)
@@ -239,7 +224,7 @@ test-chords audio_file=default_audio cleanup='true':
     cd "{{project_dir}}/chords_generator"
     SONG_DIR="$(dirname "{{audio_file}}")"
     echo "Starting API server..."
-    TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --host 0.0.0.0 --port 8001 &
+    APP_ENV=local uv run uvicorn chords_generator.api:app --host 0.0.0.0 --port 8001 &
     SERVER_PID=$!
     if [[ "{{cleanup}}" == "true" ]]; then
         trap "kill $SERVER_PID 2>/dev/null || true; rm -f \"$SONG_DIR/chords.json\" \"$SONG_DIR/chords.lab\" \"$SONG_DIR\"/chords_*.json" EXIT
@@ -1563,7 +1548,7 @@ start-app:
     ( cd "{{project_dir}}/inference_demucs" && unset VIRTUAL_ENV && APP_ENV=dev uv run uvicorn inference_demucs.api:app --reload --host 0.0.0.0 --port 8000 2>&1 | tee "{{project_dir}}/logs/demucs.log" | sed 's/^/[demucs]  /' ) &
     DEMUCS_PID=$!
 
-    ( cd "{{project_dir}}/chords_generator" && unset VIRTUAL_ENV && TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001 2>&1 | tee "{{project_dir}}/logs/chords.log" | sed 's/^/[chords]  /' ) &
+    ( cd "{{project_dir}}/chords_generator" && unset VIRTUAL_ENV && APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001 2>&1 | tee "{{project_dir}}/logs/chords.log" | sed 's/^/[chords]  /' ) &
     CHORDS_PID=$!
 
     ( cd "{{project_dir}}/lyrics_generator" && unset VIRTUAL_ENV && APP_ENV=local uv run uvicorn lyrics_generator.api:app --reload --host 0.0.0.0 --port 8003 2>&1 | tee "{{project_dir}}/logs/lyrics.log" | sed 's/^/[lyrics]  /' ) &
@@ -1618,7 +1603,7 @@ dev:
     DEMUCS_PID=$!
 
     echo "Starting Chords Generator on :8001..."
-    ( cd "{{project_dir}}/chords_generator" && TF_USE_LEGACY_KERAS=1 APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001 2>&1 | tee "{{project_dir}}/logs/chords.log" ) &
+    ( cd "{{project_dir}}/chords_generator" && APP_ENV=local uv run uvicorn chords_generator.api:app --reload --host 0.0.0.0 --port 8001 2>&1 | tee "{{project_dir}}/logs/chords.log" ) &
     CHORDS_PID=$!
 
     echo "Starting Lyrics Generator on :8003..."

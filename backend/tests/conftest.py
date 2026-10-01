@@ -276,7 +276,6 @@ def chords_server(project_root: Path):
         env={
             **os.environ,
             "APP_ENV": "test",
-            "TF_USE_LEGACY_KERAS": "1",
             # Prefer workspace sources over potentially-stale installed packages.
             "PYTHONPATH": "src",
         },

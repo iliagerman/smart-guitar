@@ -395,7 +395,9 @@ resource "aws_lambda_function" "chords_generator" {
   package_type  = "Image"
   image_uri     = "${module.ecr.chords_generator_repo_url}:latest"
   timeout       = 600
-  memory_size   = 3072
+  # 10 GB buys 6 vCPUs for the chord and beat models: a warm run takes ~15 s
+  # per song (Lambda bills memory x time).
+  memory_size   = 10240
   publish       = true
 
   logging_config {
