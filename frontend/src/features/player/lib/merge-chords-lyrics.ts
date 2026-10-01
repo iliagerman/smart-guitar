@@ -1,6 +1,7 @@
 import type { ChordEntry, LyricsSegment, LyricsWord } from '@/types/song'
 import { detectTextDirection, type TextDirection } from '@/lib/text-direction'
 import { normalizeWords } from './normalize-words'
+import type { BarChord, ChordBeats } from './chord-beats'
 
 export interface PositionedChord {
   chord: string
@@ -8,6 +9,9 @@ export interface PositionedChord {
   end_time: number
   charOffset: number
   bass?: string | null
+  hold?: ChordBeats
+  continued?: boolean
+  barStart?: boolean
 }
 
 export interface ChordSheetLine {
@@ -40,6 +44,11 @@ const MIN_PICKUP_S = 1.0
 /**
  * Filter out garbage lyrics segments (URLs, empty text, etc.)
  */
+function positioned(chord: BarChord, charOffset: number): PositionedChord {
+  const { chord: name, start_time, end_time, bass, hold, continued, barStart } = chord
+  return { chord: name, start_time, end_time, bass, hold, continued, barStart, charOffset }
+}
+
 function isValidLyricsSegment(segment: LyricsSegment): boolean {
   if (!segment.text || segment.text.trim().length === 0) return false
   if (URL_PATTERN.test(segment.text.trim())) return false
@@ -133,7 +142,7 @@ function getLineDirection(segment: LyricsSegment, words: LyricsWord[]): TextDire
  * - Output is sorted by startTime
  */
 export function mergeChordLyrics(
-  chords: ChordEntry[],
+  chords: BarChord[],
   lyrics: LyricsSegment[]
 ): ChordSheetLine[] {
   const lines: ChordSheetLine[] = []
@@ -177,13 +186,7 @@ export function mergeChordLyrics(
       const startsInSegment = chord.start_time >= segment.start && chord.start_time < segEnd
       if (startsInSegment || ci === carryInChordIndex) {
         assignedChordIndices.add(ci)
-        segmentChords.push({
-          chord: chord.chord,
-          start_time: chord.start_time,
-          end_time: chord.end_time,
-          bass: chord.bass,
-          charOffset: 0, // assigned by assignChordColumns below
-        })
+        segmentChords.push(positioned(chord, 0))
       }
     }
 
@@ -199,7 +202,7 @@ export function mergeChordLyrics(
   }
 
   // Collect unassigned chords (excluding 'N') into instrumental lines
-  const unassignedChords: ChordEntry[] = []
+  const unassignedChords: BarChord[] = []
   for (let ci = 0; ci < chords.length; ci++) {
     if (!assignedChordIndices.has(ci) && chords[ci].chord !== 'N') {
       unassignedChords.push(chords[ci])
@@ -208,7 +211,7 @@ export function mergeChordLyrics(
 
   if (unassignedChords.length > 0) {
     // Group unassigned chords by gap
-    const chordsByGap = new Map<number, ChordEntry[]>()
+    const chordsByGap = new Map<number, BarChord[]>()
     for (const chord of unassignedChords) {
       let gap = findGap(chord.start_time, validLyrics)
       if (gap === -1) {
@@ -252,13 +255,7 @@ export function mergeChordLyrics(
           const targetLine = lineBySegmentIndex.get(targetIndex)
           if (!targetLine) continue
           if (targetIndex === gap && isPickupBlip(chord, chords, targetLine.words)) continue
-          targetLine.chords.push({
-            chord: chord.chord,
-            start_time: chord.start_time,
-            end_time: chord.end_time,
-            bass: chord.bass,
-            charOffset: 0, // reassigned by assignChordColumns below
-          })
+          targetLine.chords.push(positioned(chord, 0))
           touched.add(targetLine)
         }
         // Re-lay out each line so the merged-in chords stay in time order and
@@ -272,13 +269,7 @@ export function mergeChordLyrics(
         const positionedChords: PositionedChord[] = []
         let currentOffset = 0
         for (const chord of gapChords) {
-          positionedChords.push({
-            chord: chord.chord,
-            start_time: chord.start_time,
-            end_time: chord.end_time,
-            bass: chord.bass,
-            charOffset: currentOffset,
-          })
+          positionedChords.push(positioned(chord, currentOffset))
           currentOffset += chord.chord.length + 2
         }
         lines.push({
@@ -303,8 +294,9 @@ export function mergeChordLyrics(
  * True for a short chord just before a line whose successor already starts by
  * the end of the line's first word — both would print over that first word.
  */
-function isPickupBlip(chord: ChordEntry, chords: ChordEntry[], words: LyricsWord[]): boolean {
-  if (chord.end_time - chord.start_time >= MIN_PICKUP_S || words.length === 0) return false
+function isPickupBlip(chord: BarChord, chords: ChordEntry[], words: LyricsWord[]): boolean {
+  // On the beat grid a short chord is a counted beat of its bar, not a blip.
+  if (chord.hold || chord.end_time - chord.start_time >= MIN_PICKUP_S || words.length === 0) return false
   const next = chords.find((c) => c.chord !== 'N' && c.start_time > chord.start_time)
   return !!next && next.start_time < words[0].end
 }

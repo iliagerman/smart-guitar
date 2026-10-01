@@ -13,7 +13,7 @@ Checks cover custom frets, chord and slash-bass transposition, voicing diagrams,
 
 Run `just test-song-metronome`. It uses the same sandboxed harness and `frontend/playwright.capo.config.ts` as `just test-capo` (disposable HOME/XDG/TMP, dedicated loopback server on port 5187, synthetic auth and song data, all non-loopback traffic blocked).
 
-Checks cover the song-page metronome tempo coming from the beats detected in the recording, falling back to the tab tempo and meter when no beats were detected, and the Bars view showing the song's meter. The beat-following click timing is covered by `just test-frontend src/features/metronome/lib/song-beat-grid.test.ts`; building the beat grid (bars in the song's meter, double/half tempo correction, older-song fallbacks) is covered by `just test-backend-file tests/test_song_detail_beat_grid.py`.
+Checks cover the song-page metronome tempo coming from the beats detected in the recording, falling back to the tab tempo and meter when no beats were detected, and the Bars view showing the song's meter, and the chord sheet marking each bar with a bar line and filling it with exactly one bar of chords (a chord held over a bar line shows again in the next bar). Laying chords out on the bars is covered by `just test-frontend src/features/player/lib/chord-beats.test.ts`. The beat-following click timing is covered by `just test-frontend src/features/metronome/lib/song-beat-grid.test.ts`; building the beat grid (bars in the song's meter, double/half tempo correction, older-song fallbacks) is covered by `just test-backend-file tests/test_song_detail_beat_grid.py`.
 
 # Isolated practice-path checks
 

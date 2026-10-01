@@ -177,3 +177,28 @@ test('the strum strip above the chords shows the pattern of the section being pl
   await expect(strip.getByTestId('strum-strip-section')).toHaveText('Chorus')
   await expect(strip.getByTestId('strum-strip-step')).toHaveCount(4)
 })
+
+test('chord sheet marks each bar and fills it with exactly one bar of chords', async ({ authenticatedPage: page }) => {
+  // 0.5 s beats, bars at 0.5 and 2.5 s. C is played across the bar line, so it shows again in bar 2.
+  const barChords = [
+    { start_time: 0.5, end_time: 1.5, chord: 'G', bass: null },
+    { start_time: 1.5, end_time: 3.5, chord: 'C', bass: null },
+    { start_time: 3.5, end_time: 4.5, chord: 'D', bass: null },
+  ]
+  const barLyrics = [{ start: 0.5, end: 4.5, text: 'Synthetic bars fixture', words: [
+    { word: 'Synthetic', start: 0.5, end: 2 },
+    { word: 'bars', start: 2, end: 3.5 },
+    { word: 'fixture', start: 3.5, end: 4.5 },
+  ] }]
+  await mockSong(page, {
+    ...syncedBeats,
+    chords: barChords,
+    lyrics: barLyrics,
+    chord_options: [{ name: 'Detected', description: 'Synthetic chords', capo: 0, hidden: false, is_variant: false, chords: barChords, lyrics: barLyrics, lyrics_source: 'detected' }],
+  })
+  const sheet = page.getByTestId('chord-sheet')
+  await expect(sheet.locator('[data-chord-index]')).toHaveCount(4)
+  await expect(sheet.getByTestId('chord-hold')).toHaveText(['½ bar', '½ bar', '½ bar', '½ bar'])
+  await expect(sheet.getByTestId('bar-line')).toHaveCount(2)
+  await expect(sheet.locator('[data-chord-index]').nth(2)).toHaveAttribute('title', 'Keep holding for ½ bar')
+})

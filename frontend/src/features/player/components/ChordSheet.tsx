@@ -4,7 +4,8 @@ import { mergeChordLyrics } from '../lib/merge-chords-lyrics'
 import { useChordSheetSync } from '../hooks/use-chord-sheet-sync'
 import { useAutoScroll } from '../hooks/use-auto-scroll'
 import { readingScrollTop } from '../lib/scroll-to-center'
-import { chordBeats, holdLabel } from '../lib/chord-beats'
+import { holdLabel, splitIntoBars, type ChordBeats } from '../lib/chord-beats'
+import { BarLine } from './BarLine'
 import { ChordHold } from './ChordHold'
 import { ChordSheetLine } from './ChordSheetLine'
 import { ChordVoicingPopover } from './ChordVoicingPopover'
@@ -48,6 +49,8 @@ interface ChordLabelChord {
   start_time: number
   end_time: number
   bass?: string | null
+  hold?: ChordBeats
+  continued?: boolean
 }
 
 interface ChordLabelProps {
@@ -65,6 +68,8 @@ interface ChordLabelProps {
   /** The song's beat grid; shows how long the chord is held. */
   beatTimes?: readonly number[] | null
   beatsPerBar?: number
+  /** Mark the bar line just before this chord. */
+  barLine?: boolean
 }
 
 // Leaf render component: the booleans are independent rendering states of a single chord
@@ -85,6 +90,7 @@ function ChordLabel({
   onSeek,
   beatTimes,
   beatsPerBar = DEFAULT_BEATS_PER_BAR,
+  barLine,
 }: ChordLabelProps) {
   const [isRenaming, setIsRenaming] = useState(false)
   // Draft value for the rename input, seeded from the prop and reset whenever rename mode
@@ -126,7 +132,8 @@ function ChordLabel({
     )
   }
 
-  const beats = !isEditMode && beatTimes ? chordBeats(beatTimes, chord.start_time, chord.end_time, beatsPerBar) : null
+  const beats = !isEditMode && beatTimes ? chord.hold : undefined
+  const holdTitle = beats ? `${chord.continued ? 'Keep holding' : 'Hold'} for ${holdLabel(beats.count, beatsPerBar)}` : undefined
 
   const chordButton = (
     <button
@@ -134,9 +141,9 @@ function ChordLabel({
       dir="ltr"
       draggable={isEditMode}
       onDragStart={onDragStart}
-      title={beats ? `Hold for ${holdLabel(beats.count, beatsPerBar)}` : undefined}
+      title={holdTitle}
       className={cn(
-        'inline-flex min-w-0 flex-col rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
+        'relative inline-flex min-w-0 flex-col rounded-md px-1 py-0.5 transition-colors whitespace-nowrap',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame-400/70',
         isRtl ? 'items-end justify-end text-right' : 'items-start justify-start text-left',
         isEditMode
@@ -153,9 +160,14 @@ function ChordLabel({
       aria-current={isActive ? 'true' : undefined}
       data-chord-index={globalIndex}
     >
+      {barLine && <BarLine className={isRtl ? '-right-1' : '-left-1'} />}
       <span
         dir="ltr"
-        className={cn(getChordColor(chord.chord, 'dark'), 'font-bold text-xl md:text-2xl leading-none')}
+        className={cn(
+          getChordColor(chord.chord, 'dark'),
+          'font-bold text-xl md:text-2xl leading-none',
+          !isEditMode && chord.continued && 'opacity-55',
+        )}
         style={{ unicodeBidi: 'isolate' }}
       >
         {formatChordWithBass(chord.chord, chord.bass, showBassNotes)}
@@ -306,9 +318,15 @@ export function ChordSheet({
   const showHighlight = usePlayerPrefsStore((s) => s.lyricsMode !== 'none')
   const showBeatCounts = usePlayerPrefsStore((s) => s.showBeatCounts)
   const countBeatTimes = showBeatCounts && !isEditMode && (beatTimes?.length ?? 0) > 1 ? beatTimes : null
+  const barsBeatsPerBar = beatsPerBar ?? DEFAULT_BEATS_PER_BAR
+  // With hold lengths on, chords are laid out bar by bar so each bar adds up to one.
+  const sheetChords = useMemo(
+    () => (countBeatTimes ? splitIntoBars(chords, countBeatTimes, barsBeatsPerBar) : chords),
+    [chords, countBeatTimes, barsBeatsPerBar],
+  )
   // Memoized: the merge is expensive (sorting, RTL detection, column layout) and the
   // sheet re-renders on every active word/chord change during playback.
-  const lines = useMemo(() => mergeChordLyrics(chords, lyrics), [chords, lyrics])
+  const lines = useMemo(() => mergeChordLyrics(sheetChords, lyrics), [sheetChords, lyrics])
   const { activeLineIndex, activeWordIndex, activeChordLineIndex, activeChordIndex } = useChordSheetSync(lines, {
     enabled: showHighlight,
   })
@@ -399,8 +417,8 @@ export function ChordSheet({
   // in the same sequential order as the original findIndex(i >= globalIdx) guard.
   const globalChordIndexMap = useMemo(() => {
     const chordKeyBuckets = new Map<string, number[]>()
-    for (let i = 0; i < chords.length; i++) {
-      const key = `${chords[i].start_time}_${chords[i].chord}`
+    for (let i = 0; i < sheetChords.length; i++) {
+      const key = `${sheetChords[i].start_time}_${sheetChords[i].chord}`
       const bucket = chordKeyBuckets.get(key)
       if (bucket) {
         bucket.push(i)
@@ -428,15 +446,16 @@ export function ChordSheet({
       }
     }
     return indexMap
-  }, [chords, lines])
+  }, [sheetChords, lines])
 
   const renderChordLabel = useCallback(
-    ({ chord, ci, gci, isChordActive, isRtl: rtl }: {
-      chord: { chord: string; start_time: number; end_time: number }
+    ({ chord, ci, gci, isChordActive, isRtl: rtl, barLine }: {
+      chord: ChordLabelChord
       ci: number
       gci: number
       isChordActive: boolean
       isRtl: boolean
+      barLine: boolean
     }) => (
       <ChordLabel
         key={ci}
@@ -452,10 +471,11 @@ export function ChordSheet({
         onDragStart={isEditMode ? handleDragStart(gci) : undefined}
         onSeek={isEditMode ? undefined : onSeek}
         beatTimes={countBeatTimes}
-        beatsPerBar={beatsPerBar}
+        beatsPerBar={barsBeatsPerBar}
+        barLine={barLine}
       />
     ),
-    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart, onSeek, countBeatTimes, beatsPerBar]
+    [isEditMode, selectedChordIndex, handleChordClick, onChordRename, onChordDelete, handleDragStart, onSeek, countBeatTimes, barsBeatsPerBar]
   )
 
   const renderEditableWord = useCallback(

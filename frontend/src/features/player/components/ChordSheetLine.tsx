@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn'
 import type { PositionedChord, ChordSheetLine as ChordSheetLineType } from '../lib/merge-chords-lyrics'
 import type { LyricsWord } from '@/types/song'
 import { formatChordName } from '@/lib/chord-colors'
+import { BarLine } from './BarLine'
 
 interface ChordSheetLineProps {
   line: ChordSheetLineType
@@ -31,6 +32,7 @@ interface ChordSheetLineProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
   renderEditableWord?: (props: {
     word: string
@@ -167,6 +169,7 @@ interface InstrumentalContentProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
 }
 
@@ -186,7 +189,7 @@ function InstrumentalContent({
       {line.chords.map((chord, ci) => {
         const gci = globalChordIndexMap.get(chord) ?? ci
         const isChordActive = !isEditMode && showHighlight && ci === activeChordIndex
-        return renderChordLabel({ chord, ci, gci, isChordActive, isRtl: false })
+        return renderChordLabel({ chord, ci, gci, isChordActive, isRtl: false, barLine: !!chord.barStart })
       })}
     </div>
   )
@@ -217,6 +220,7 @@ interface LyricsContentProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
   renderEditableWord?: (props: {
     word: string
@@ -284,6 +288,7 @@ interface WordsWithChordsProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
   renderEditableWord?: (props: {
     word: string
@@ -382,6 +387,7 @@ interface WordColumnProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
   renderEditableWord?: (props: {
     word: string
@@ -418,9 +424,10 @@ function WordColumn({
   return (
     <div
       ref={isActiveWord ? activeWordRef : undefined}
-      className="inline-flex flex-col align-top gap-1 px-1 pb-1"
+      className="relative inline-flex flex-col align-top gap-1 px-1 pb-1"
       style={{ minWidth: `${reservedWidthCh}ch` }}
     >
+      {wordChords[0]?.barStart && <BarLine className={isRtl ? 'right-0' : 'left-0'} />}
       {/* Click-to-add-chord is an edit-mode-only affordance; role, tabIndex, keyboard and
           click handlers are all gated together on isEditMode, so when this is interactive it
           always carries role="button". The conditional role is intentional. */}
@@ -451,7 +458,8 @@ function WordColumn({
         {wordChords.map((chord, ci) => {
           const gci = globalChordIndexMap.get(chord) ?? lineChords.indexOf(chord)
           const isChordActive = !isEditMode && showHighlight && lineChords.indexOf(chord) === activeChordIndex
-          return renderChordLabel({ chord, ci, gci, isChordActive, isRtl })
+          // A bar opening on the word's first chord is marked across the whole column.
+          return renderChordLabel({ chord, ci, gci, isChordActive, isRtl, barLine: ci > 0 && !!chord.barStart })
         })}
       </div>
 
@@ -512,6 +520,7 @@ interface ChordsOnlyLineProps {
     gci: number
     isChordActive: boolean
     isRtl: boolean
+    barLine: boolean
   }) => React.ReactNode
 }
 
@@ -535,7 +544,7 @@ function ChordsOnlyLine({
         {line.chords.map((chord, ci) => {
           const gci = globalChordIndexMap.get(chord) ?? ci
           const isChordActive = !isEditMode && showHighlight && ci === activeChordIndex
-          return renderChordLabel({ chord, ci, gci, isChordActive, isRtl })
+          return renderChordLabel({ chord, ci, gci, isChordActive, isRtl, barLine: !!chord.barStart })
         })}
       </div>
       {/* Inline clickable line text; a <button>'s inline-block box model would disrupt
