@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from chords_generator.strum_accents import pick_accents
+
 SR = 22050
 BEAT_S = 0.5
 BARS = 24
@@ -76,3 +78,11 @@ async def test_404_without_the_beat_grid(client, tmp_path):
     resp = await client.post("/practice-audio", json=request)
 
     assert resp.status_code == 404
+
+
+def test_a_second_accent_needs_less_to_stand_out_than_the_first():
+    """Losing My Religion (YouTube recording): the "&" of 3 at 1.26, beat 2 at 1.12, the "&" of 4 at 1.10."""
+    strength = [0.862, 0.5, 1.124, 0.606, 1.007, 1.262, 0.981, 1.103]
+    assert pick_accents(strength) == [False, False, True, False, False, True, False, False]
+    # Nothing at 1.15 or more: no accent, however the rest compare.
+    assert pick_accents([1.12, 0.9, 1.11, 0.9, 1.0, 0.95, 1.0, 1.02]) == [False] * 8

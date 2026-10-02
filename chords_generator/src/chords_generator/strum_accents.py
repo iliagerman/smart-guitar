@@ -7,9 +7,9 @@ so loud and quiet passages count alike. The flux is taken on the linear
 magnitude spectrum: on a dB spectrum (librosa's default onset strength) a
 stroke five times as hard barely registers as stronger. The quietest quarter of the bars
 (intros, breaks) is left out, and each slot's typical strength is its
-median over the rest. A slot is an accent when it is typically at least
-ACCENT_STRENGTH times the bar's average; at most MAX_ACCENTS of them, the
-strongest. An even strum has none.
+median over the rest. The strongest slot is an accent when it is typically at
+least ACCENT_STRENGTH times the bar's average, and the runner-up too when it
+reaches SECOND_ACCENT_STRENGTH. An even strum has none.
 
 Checked by ear on Losing My Religion (2 and the "&" of 3), Wonderwall (2),
 Let It Be (1 and 3) and When I Come Around (the "&" of 1).
@@ -26,7 +26,9 @@ SAMPLE_RATE = 22050
 HOP = 256
 STEPS_PER_BEAT = 2
 ACCENT_STRENGTH = 1.15
-MAX_ACCENTS = 2
+# Once one stroke stands out, a second needs less: Losing My Religion's beat 2
+# measures 1.12 next to its "&" of 3 at 1.26 on one of its recordings.
+SECOND_ACCENT_STRENGTH = 1.10
 _SLOT_WINDOW_S = 0.035
 _DOWNBEAT_TOLERANCE_S = 0.05
 _QUIET_BAR_PERCENTILE = 25
@@ -69,12 +71,22 @@ def detect_strum_accents(
     if loud.sum() < _MIN_BARS:
         return None
     strength = np.median(bars[loud] / energy[loud, None], axis=0)
-    strongest = set(np.argsort(-strength)[:MAX_ACCENTS])
-    accents = [bool(s >= ACCENT_STRENGTH and i in strongest) for i, s in enumerate(strength)]
     return StrumAccents(
         beats_per_bar=beats_per_bar, steps_per_beat=STEPS_PER_BEAT,
-        accents=accents, strength=[float(s) for s in strength], bars=int(loud.sum()),
+        accents=pick_accents([float(x) for x in strength]), strength=[float(x) for x in strength], bars=int(loud.sum()),
     )
+
+
+def pick_accents(strength: list[float]) -> list[bool]:
+    """The strongest slot when it reaches ACCENT_STRENGTH, and the runner-up when it reaches SECOND_ACCENT_STRENGTH."""
+    order = sorted(range(len(strength)), key=lambda i: -strength[i])
+    accents = [False] * len(strength)
+    if not order or strength[order[0]] < ACCENT_STRENGTH:
+        return accents
+    accents[order[0]] = True
+    if len(order) > 1 and strength[order[1]] >= SECOND_ACCENT_STRENGTH:
+        accents[order[1]] = True
+    return accents
 
 
 def _mixed(stem_paths: list[str]) -> np.ndarray:

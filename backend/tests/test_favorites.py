@@ -214,3 +214,31 @@ async def test_remove_does_not_affect_other_user(session_factory, storage):
         assert user_b_favs[0].song_id == song_1.id
 
         await _cleanup_favorites(session, user_a.id, user_b.id)
+
+
+# ── Your plays ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(30)
+async def test_list_counts_only_your_own_plays(session_factory, storage):
+    """Each favorite carries how often this user played it, not the song's global count."""
+    from guitar_player.dao.analytics_dao import AnalyticsDAO
+
+    async with session_factory() as session:
+        user_a, user_b, song_1, song_2 = await _setup(session)
+        svc = FavoriteService(session, storage)
+        await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_1.id)
+        await svc.add_favorite(TEST_USER_A_SUB, TEST_USER_A_EMAIL, song_2.id)
+        analytics = AnalyticsDAO(session)
+        plays = [(TEST_USER_A_SUB, song_1.id)] * 3 + [(TEST_USER_A_SUB, song_2.id)] + [(TEST_USER_B_SUB, song_2.id)] * 5
+        await analytics.record_events([
+            {"event_type": "song_played", "event_category": "player", "user_sub": sub, "song_id": song_id}
+            for sub, song_id in plays
+        ])
+        await session.commit()
+
+        favorites = {f.song_id: f.my_play_count for f in await svc.list_favorites(TEST_USER_A_SUB)}
+
+        assert favorites == {song_1.id: 3, song_2.id: 1}
+        await _cleanup_favorites(session, user_a.id)

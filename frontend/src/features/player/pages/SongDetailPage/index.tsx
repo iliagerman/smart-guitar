@@ -195,6 +195,10 @@ export function SongDetailPage() {
   const hasPlaybackOccurred = usePlaybackStore((s) => s.hasPlaybackOccurred)
   // Within a second of the end (an ended song parks at its duration).
   const atSongEnd = usePlaybackStore((s) => s.currentTime >= s.duration - 1)
+  // Playing the song again after it reached the end is another play.
+  useEffect(() => {
+    if (atSongEnd) hasRecordedPlayRef.current = false
+  }, [atSongEnd])
   // The end-of-song card, once closed, stays closed until the song plays again.
   const [finishClosed, setFinishClosed] = useState(false)
   useWakeLock(isPlaying)
@@ -475,9 +479,12 @@ export function SongDetailPage() {
     if (songId && !hasRecordedPlayRef.current) {
       hasRecordedPlayRef.current = true
       trackCustomEvent('PlaySong', { song_id: songId })
-      void songsApi.recordPlay(songId).catch(() => {
-        hasRecordedPlayRef.current = false
-      })
+      void songsApi
+        .recordPlay(songId)
+        .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.favorites.all }))
+        .catch(() => {
+          hasRecordedPlayRef.current = false
+        })
     }
     togglePlay()
   }, [songId, togglePlay])

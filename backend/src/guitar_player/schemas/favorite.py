@@ -18,6 +18,8 @@ class FavoriteResponse(BaseModel):
     song_id: uuid.UUID
     created_at: datetime | None = None
     song: SongResponse | None = None
+    # How often this user played the song; the song's play_count is everyone's.
+    my_play_count: int = 0
 
     model_config = {"from_attributes": True}
 

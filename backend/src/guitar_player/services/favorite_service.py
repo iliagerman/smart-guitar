@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from guitar_player.dao.analytics_dao import AnalyticsDAO
 from guitar_player.dao.favorite_dao import FavoriteDAO
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.dao.user_dao import UserDAO
@@ -18,6 +19,7 @@ class FavoriteService:
         self._favorite_dao = FavoriteDAO(session)
         self._song_dao = SongDAO(session)
         self._user_dao = UserDAO(session)
+        self._analytics_dao = AnalyticsDAO(session)
 
     async def add_favorite(
         self, user_sub: str, user_email: str, song_id: uuid.UUID
@@ -56,7 +58,11 @@ class FavoriteService:
             return []
 
         favorites = await self._favorite_dao.list_by_user(user.id, offset, limit)
-        return [self._enrich(FavoriteResponse.model_validate(f)) for f in favorites]
+        plays = await self._analytics_dao.play_counts_for_user(user_sub, [f.song_id for f in favorites])
+        return [
+            self._enrich(FavoriteResponse.model_validate(f).model_copy(update={"my_play_count": plays.get(f.song_id, 0)}))
+            for f in favorites
+        ]
 
     def _enrich(self, resp: FavoriteResponse) -> FavoriteResponse:
         """Resolve thumbnail_key into a presigned thumbnail_url on the nested song."""

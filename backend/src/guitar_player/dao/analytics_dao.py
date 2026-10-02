@@ -69,6 +69,24 @@ class AnalyticsDAO(BaseDAO[AnalyticsEvent, AnalyticsEventRecord]):
             await self._session.refresh(obj)
         return [self._to_record(obj) for obj in objects]
 
+    async def play_counts_for_user(
+        self, user_sub: str, song_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """How often the user played each of the songs (song_played events)."""
+        if not song_ids:
+            return {}
+        stmt = (
+            select(AnalyticsEvent.song_id, func.count())
+            .where(
+                AnalyticsEvent.event_type == "song_played",
+                AnalyticsEvent.user_sub == user_sub,
+                AnalyticsEvent.song_id.in_(song_ids),
+            )
+            .group_by(AnalyticsEvent.song_id)
+        )
+        result = await self._session.execute(stmt)
+        return {song_id: int(count) for song_id, count in result.all()}
+
     async def count_events(
         self,
         *,

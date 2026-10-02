@@ -6,7 +6,7 @@ function byRecentlyAdded(a: Favorite, b: Favorite): number {
 }
 
 function byMostPlayed(a: Favorite, b: Favorite): number {
-  const playCountDiff = (b.song?.play_count ?? 0) - (a.song?.play_count ?? 0)
+  const playCountDiff = (b.my_play_count ?? 0) - (a.my_play_count ?? 0)
   return playCountDiff !== 0 ? playCountDiff : byRecentlyAdded(a, b)
 }
 

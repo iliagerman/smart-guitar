@@ -9,6 +9,7 @@ function makeFavorite(id: string, createdAt: string, playCount: number): Favorit
     song_id: `song-${id}`,
     created_at: createdAt,
     updated_at: createdAt,
+    my_play_count: playCount,
     song: {
       id: `song-${id}`,
       youtube_id: null,
@@ -19,7 +20,8 @@ function makeFavorite(id: string, createdAt: string, playCount: number): Favorit
       thumbnail_key: null,
       thumbnail_url: null,
       audio_key: null,
-      play_count: playCount,
+      // Everyone's plays, ordered against this user's own: the sort must ignore them.
+      play_count: 1000 - playCount,
       created_at: createdAt,
     },
   }
@@ -36,7 +38,7 @@ describe('sortFavorites', () => {
     expect(result.map((f) => f.id)).toEqual(['c', 'b', 'a'])
   })
 
-  it('sorts by song play_count descending in "most_played" mode', () => {
+  it('sorts by your own plays, most first, in "most_played" mode', () => {
     const lowPlays = makeFavorite('a', '2024-01-01T00:00:00Z', 5)
     const highPlays = makeFavorite('b', '2024-02-01T00:00:00Z', 50)
     const midPlays = makeFavorite('c', '2024-03-01T00:00:00Z', 20)
@@ -55,8 +57,8 @@ describe('sortFavorites', () => {
     expect(result.map((f) => f.id)).toEqual(['b', 'a'])
   })
 
-  it('treats a missing play_count as zero', () => {
-    const noSong = { ...makeFavorite('a', '2024-01-01T00:00:00Z', 0), song: undefined }
+  it('treats a missing play count as zero', () => {
+    const noSong = { ...makeFavorite('a', '2024-01-01T00:00:00Z', 0), my_play_count: undefined, song: undefined }
     const withPlays = makeFavorite('b', '2023-01-01T00:00:00Z', 3)
 
     const result = sortFavorites([noSong, withPlays], 'most_played')
