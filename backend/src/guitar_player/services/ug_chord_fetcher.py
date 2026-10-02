@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from curl_cffi.requests import AsyncSession
 
-from guitar_player.services.source_match import accept_match, match_components
+from guitar_player.services.source_match import accept_sheet_match, match_components
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +198,7 @@ def _find_matching_tabs(
         artist_score, title_score = match_components(
             artist, title, r_artist, r_title,
         )
-        if not accept_match(artist_score, title_score):
+        if not accept_sheet_match(artist, title, r_artist, r_title):
             logger.info(
                 "UG: rejecting %s match for %r/%r against %r/%r "
                 "(artist=%.2f, title=%.2f)",

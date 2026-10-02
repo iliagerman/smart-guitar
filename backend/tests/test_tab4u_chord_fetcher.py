@@ -44,3 +44,8 @@ def test_ultimate_guitar_searches_try_plainer_spellings():
 
     assert _query_variants("AC/DC", "T.N.T.") == ["AC/DC T.N.T.", "AC DC TNT"]
     assert _query_variants("Cat Stevens", "Moon Shadow") == ["Cat Stevens Moon Shadow", "Cat Stevens MoonShadow"]
+
+
+def test_an_exact_title_matches_when_we_do_not_know_the_artist():
+    assert accept_sheet_match("Unknown", "Ring Of Fire", "Johnny Cash", "Ring Of Fire")
+    assert not accept_sheet_match("Unknown", "Ring Of Fire", "Johnny Cash", "Ring Of Fire Medley")

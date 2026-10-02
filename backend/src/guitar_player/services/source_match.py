@@ -93,10 +93,17 @@ CROSS_SCRIPT_MIN_TITLE_SCORE = 0.95
 _HEBREW = re.compile(r"[֐-׿]")
 
 
+# Our placeholder when the uploader's metadata had no artist.
+_UNKNOWN_ARTISTS = {"", "unknown", "unknown artist"}
+
+
 def accept_sheet_match(query_artist: str, query_title: str, result_artist: str, result_title: str) -> bool:
-    """accept_match, plus an exact title when the artist names are in different scripts."""
+    """accept_match, plus an exact title when the artist names are in different
+    scripts, or when we don't know the artist ("Unknown - Ring Of Fire")."""
     artist_score, title_score = match_components(query_artist, query_title, result_artist, result_title)
     if accept_match(artist_score, title_score):
+        return True
+    if normalize(query_artist) in _UNKNOWN_ARTISTS and title_score == 1.0:
         return True
     scripts_differ = bool(_HEBREW.search(query_artist)) != bool(_HEBREW.search(result_artist))
     return scripts_differ and title_score >= CROSS_SCRIPT_MIN_TITLE_SCORE
