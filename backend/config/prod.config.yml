@@ -29,12 +29,21 @@ telegram:
   errors_chat_id: "-1003706403829"
   feedback_chat_id: "-1003510144145"
 
+# Internal accounts: admin tools, the analytics dashboard, and full access
+# without a subscription.
 admin_users:
   - "iliagerman@gmail.com"
+  - "iliag@sela.co.il"
+
+analytics:
+  allowed_emails:
+    - "iliagerman@gmail.com"
+    - "iliag@sela.co.il"
 
 subscription_bypass_emails:
   - "iliagerman@gmail.com"
   - "Shmulik.segal@gmail.com"
+  - "iliag@sela.co.il"
 
 cors:
   allowed_origins:
