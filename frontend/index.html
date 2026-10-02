@@ -27,18 +27,24 @@
          you can confirm which deployment is actually running — a stale PWA cache
          shows an old stamp. -->
     <div id="boot-splash"
-      style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0a0a0a;color:#e5e5e5;font-family:system-ui,-apple-system,sans-serif">
-      <div style="font-size:20px;font-weight:700;letter-spacing:0.02em">Smart Guitar</div>
-      <div
-        style="width:22px;height:22px;border:2px solid #3f3f46;border-top-color:#facc15;border-radius:9999px;animation:boot-spin 0.8s linear infinite">
-      </div>
+      style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#000;color:#e5e5e5;font-family:system-ui,-apple-system,sans-serif">
+      <img src="/art/logo-flame.jpg" alt="" width="1024" height="1024" fetchpriority="high"
+        style="width:min(72vw,320px);height:auto;-webkit-mask-image:radial-gradient(circle,#000 52%,transparent 71%);mask-image:radial-gradient(circle,#000 52%,transparent 71%);animation:boot-pulse 1.6s ease-in-out infinite">
+      <div style="font-size:22px;font-weight:700;letter-spacing:0.04em">Smart Guitar</div>
       <div style="font-size:11px;color:#71717a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">__BUILD_STAMP__</div>
     </div>
   </div>
   <style>
-    @keyframes boot-spin {
-      to {
-        transform: rotate(360deg)
+    @keyframes boot-pulse {
+      50% {
+        transform: scale(1.04);
+        opacity: 0.85
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #boot-splash img {
+        animation: none !important
       }
     }
   </style>

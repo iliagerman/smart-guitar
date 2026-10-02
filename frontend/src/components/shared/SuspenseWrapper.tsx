@@ -49,7 +49,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, RouteErrorBo
 export function SuspenseWrapper({ children }: SuspenseWrapperProps) {
   return (
     <RouteErrorBoundary>
-      <Suspense fallback={<LoadingSpinner size="sm" />}>{children}</Suspense>
+      <Suspense fallback={<LoadingSpinner size="lg" className="flex-1 min-h-screen" />}>{children}</Suspense>
     </RouteErrorBoundary>
   )
 }

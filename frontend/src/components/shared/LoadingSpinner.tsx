@@ -13,7 +13,8 @@ const sizeClasses = {
   xs: 'h-4 w-4',
   sm: 'h-8 w-8',
   md: 'h-24 w-24',
-  lg: 'h-105 w-105',
+  // Fits a phone's width; full size from sm up.
+  lg: 'size-72 sm:size-105',
 }
 
 export function LoadingSpinner({ className, label, size = 'md', fullScreen = false, inline = false }: LoadingSpinnerProps) {
