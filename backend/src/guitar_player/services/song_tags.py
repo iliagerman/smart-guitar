@@ -35,6 +35,9 @@ _BARRE_CHORD_NAMES = (
     "B", "Db", "Eb", "Ab", "Gb", "Bbm", "Ebm",
 )
 
+# Open shapes the beginner variants use for barre triads at the same pitch.
+_OPEN_SUBSTITUTES = {"Fmaj7", "Bm7", "B7"}
+
 # Detected (MIREX) quality -> readable suffix; anything else is dropped.
 _QUALITY_SUFFIX = {"maj": "", "min": "m", "7": "7", "min7": "m7"}
 
@@ -79,7 +82,7 @@ _BARRE_TRIADS = {_triad(name) for name in _BARRE_CHORD_NAMES}
 
 
 def is_barre_chord(name: str) -> bool:
-    return _triad(name) in _BARRE_TRIADS
+    return name not in _OPEN_SUBSTITUTES and _triad(name) in _BARRE_TRIADS
 
 
 def chord_vocabulary(chords: Iterable[tuple[str, float]]) -> list[str]:

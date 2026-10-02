@@ -2,13 +2,14 @@
 
 Generates multiple playback options from recognized chords:
 - Intermediate: basic major/minor triads (extensions stripped)
-- Beginner: open chords only (no barre chords)
+- Beginner: triads, with open shapes at the same pitch where one exists
 - Capo variations: transposed to maximize open chords
 """
 
 import json
 import logging
 import os
+import re
 
 from pychord import Chord
 
@@ -89,54 +90,47 @@ _QUALITY_TO_TRIAD: dict[str, str] = {
 }
 
 
+_ROOT_AND_SUFFIX = re.compile(r"([A-G][#b]?)(.*)")
+
+
 def simplify_to_triad(pychord_name: str) -> str:
     """Simplify a chord to its basic major or minor triad.
 
-    Uses pychord to parse the chord, then maps the quality to
-    either major or minor.  Returns the original string if pychord
-    cannot parse it.
+    Uses pychord to parse the chord, then maps the quality to either
+    major or minor. Sheet names pychord doesn't know (D7sus2, Cadd9/G)
+    go by their root and whether they're minor; anything without a root
+    is returned as is.
     """
     try:
         chord = Chord(pychord_name)
         quality_str = str(chord.quality)
-        simplified_quality = _QUALITY_TO_TRIAD.get(quality_str, "")
+        simplified_quality = _QUALITY_TO_TRIAD.get(quality_str, "m" if _is_minor(quality_str) else "")
         return f"{chord.root}{simplified_quality}"
     except ValueError:
-        return pychord_name
+        match = _ROOT_AND_SUFFIX.fullmatch(pychord_name.split("/")[0])
+        if not match:
+            return pychord_name
+        root, suffix = match.groups()
+        return f"{root}m" if _is_minor(suffix) else root
 
 
-# ── Open-chord mapping (beginner) ───────────────────────────────
+def _is_minor(quality: str) -> bool:
+    return (quality.startswith("m") and not quality.startswith("maj")) or quality.startswith("dim")
+
+
+# ── Easy chords (beginner) ──────────────────────────────────────
 
 OPEN_CHORDS: set[str] = {"C", "D", "E", "G", "A", "Am", "Dm", "Em"}
 
-# Maps any triad to its nearest open-chord equivalent (by semitone distance).
-_OPEN_CHORD_MAP: dict[str, str] = {
-    # Major → nearest open major
-    "C": "C", "D": "D", "E": "E", "G": "G", "A": "A",
-    "C#": "D", "Db": "D",
-    "D#": "D", "Eb": "E",
-    "F": "E",
-    "F#": "G", "Gb": "G",
-    "G#": "A", "Ab": "A",
-    "A#": "A", "Bb": "A",
-    "B": "C",
-    # Minor → nearest open minor
-    "Am": "Am", "Dm": "Dm", "Em": "Em",
-    "A#m": "Am", "Bbm": "Am",
-    "Bm": "Am",
-    "Cm": "Dm",
-    "C#m": "Dm", "Dbm": "Dm",
-    "D#m": "Em", "Ebm": "Em",
-    "Fm": "Em",
-    "F#m": "Em", "Gbm": "Em",
-    "Gm": "Am",
-    "G#m": "Am", "Abm": "Am",
-}
+# Barre triads with an open shape at the same pitch. Other barre chords stay
+# as they are: swapping them for a nearby open chord (F -> E) sounds wrong
+# against the recording, so the capo variants are how those get easy.
+_EASY_SUBSTITUTES: dict[str, str] = {"F": "Fmaj7", "Bm": "Bm7", "B": "B7"}
 
 
 def to_open_chord(chord_name: str) -> str:
-    """Map a chord to its nearest open-chord equivalent."""
-    return _OPEN_CHORD_MAP.get(chord_name, chord_name)
+    """The easy shape of a triad at the same pitch: F -> Fmaj7, Bm -> Bm7, B -> B7; others unchanged."""
+    return _EASY_SUBSTITUTES.get(chord_name, chord_name)
 
 
 # ── Capo transposition ──────────────────────────────────────────
@@ -252,7 +246,7 @@ def generate_simplified_options(results: list[ChordResult]) -> dict:
         },
         {
             "name": "beginner",
-            "description": "Open chords only",
+            "description": "Easy shapes at the same pitch",
             "capo": 0,
             "chords": beginner_chords,
         },

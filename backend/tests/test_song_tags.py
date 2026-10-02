@@ -59,7 +59,8 @@ def test_vocabulary_drops_no_chord_and_detector_blips_in_first_appearance_order(
         (["G", "C", "D", "Em", "Am"], SongDifficulty.EASY),
         (["G", "C", "D", "F"], SongDifficulty.MEDIUM),  # F is a barre shape
         (["A", "E", "Gbm"], SongDifficulty.MEDIUM),  # Gbm == F#m
-        (["Bm7", "G", "D"], SongDifficulty.MEDIUM),  # a Bm-quality chord
+        (["Bm", "G", "D"], SongDifficulty.MEDIUM),  # Bm is a barre shape
+        (["Bm7", "G", "D", "Fmaj7", "B7"], SongDifficulty.EASY),  # open shapes at the same pitch
         (["G", "C", "D", "Em", "Am", "E"], SongDifficulty.MEDIUM),
         (["C", "G", "Am", "F", "Dm", "Em", "E"], SongDifficulty.MEDIUM),
         (["C", "G", "Am", "F", "Dm", "Em", "E", "A"], SongDifficulty.HARD),

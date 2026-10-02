@@ -577,7 +577,7 @@ export function SongDetailPage() {
   const displayChords = useMemo(() => {
     if (activeChords.length === 0) return activeChords
     let chords = activeChords
-    // Beginner mode approximates harmony; capo mode preserves it, including bass.
+    // Beginner mode keeps the pitch but drops slash basses; capo mode keeps both.
     const simplified = chordDisplayMode === 'beginner'
     if (chordDisplayMode === 'beginner') {
       chords = simplifyChords(chords)

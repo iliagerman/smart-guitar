@@ -66,6 +66,11 @@ def test_simplify_m7_to_minor():
     assert simplify_to_triad("Dm7") == "Dm"
 
 
+def test_simplify_sheet_names_pychord_does_not_know():
+    assert simplify_to_triad("D7sus2") == "D"
+    assert simplify_to_triad("F#m7add11/E") == "F#m"
+
+
 def test_simplify_unparseable_returns_original():
     assert simplify_to_triad("XYZ123") == "XYZ123"
 
@@ -81,12 +86,18 @@ def test_open_chord_am_stays():
     assert to_open_chord("Am") == "Am"
 
 
-def test_open_chord_f_maps_to_e():
-    assert to_open_chord("F") == "E"
+def test_open_chord_keeps_the_pitch():
+    assert to_open_chord("F") == "Fmaj7"
+    assert to_open_chord("Bm") == "Bm7"
+    assert to_open_chord("B") == "B7"
+    assert to_open_chord("Bb") == "Bb"
+    assert to_open_chord("F#m") == "F#m"
 
 
-def test_open_chord_bm_maps_to_am():
-    assert to_open_chord("Bm") == "Am"
+def test_beginner_option_never_changes_a_chords_root():
+    results = [ChordResult(start_time=i, end_time=i + 1, chord=c) for i, c in enumerate(["F:maj", "A#:maj", "F#:min", "B:min7"])]
+    beginner = next(o for o in generate_simplified_options(results)["options"] if o["name"] == "beginner")
+    assert [c["chord"] for c in beginner["chords"]] == ["Fmaj7", "A#", "F#m", "Bm7"]
 
 
 # ── transpose_for_capo ───────────────────────────────────────

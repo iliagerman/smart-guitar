@@ -3,17 +3,10 @@ import { transposeChordLabel, normalizeNoteToSharps, formatChordDisplayName } fr
 
 const OPEN_CHORDS = new Set(['C', 'D', 'E', 'G', 'A', 'Am', 'Dm', 'Em'])
 
-const OPEN_MAJOR_MAP: Record<string, string> = {
-  C: 'C', 'C#': 'D', D: 'D', 'D#': 'E', E: 'E',
-  F: 'E', 'F#': 'G', G: 'G', 'G#': 'A', A: 'A',
-  'A#': 'A', B: 'C',
-}
-
-const OPEN_MINOR_MAP: Record<string, string> = {
-  C: 'Am', 'C#': 'Am', D: 'Dm', 'D#': 'Em', E: 'Em',
-  F: 'Em', 'F#': 'Em', G: 'Am', 'G#': 'Am', A: 'Am',
-  'A#': 'Am', B: 'Am',
-}
+// Barre triads with an open shape at the same pitch. Other barre chords stay
+// as they are — swapping them for a nearby open chord (F -> E) sounds wrong
+// against the recording; a capo is how those get easy.
+const EASY_SUBSTITUTES: Record<string, string> = { F: 'Fmaj7', Bm: 'Bm7', B: 'B7' }
 
 /**
  * Strip chord extensions (7, 9, sus, etc.) to basic major or minor.
@@ -33,19 +26,13 @@ function simplifyToTriad(chord: string): string {
 }
 
 /**
- * Map any chord to the nearest beginner-friendly open chord.
+ * Beginner shape of a chord at the same pitch: its triad, or an open
+ * substitute for it ("F" -> "Fmaj7", "Bm7" -> "Bm7", "Bb" -> "A#").
  */
-function toOpenChord(chord: string): string {
+export function toOpenChord(chord: string): string {
   const triad = simplifyToTriad(chord)
   if (!triad || triad === 'N') return triad
-
-  const m = /^([A-G][#b]?)(m?)$/.exec(triad)
-  if (!m) return triad
-  const root = normalizeNoteToSharps(m[1])
-  const isMinor = m[2] === 'm'
-
-  const map = isMinor ? OPEN_MINOR_MAP : OPEN_MAJOR_MAP
-  return map[root] ?? triad
+  return EASY_SUBSTITUTES[triad] ?? triad
 }
 
 /**
@@ -98,7 +85,7 @@ export function transposeForCapo(chords: ChordEntry[], capoFret: number): ChordE
 }
 
 /**
- * Apply beginner simplification to all chords (map to open chords).
+ * Apply beginner simplification to all chords (easy shapes, same pitch).
  */
 export function simplifyChords(chords: ChordEntry[]): ChordEntry[] {
   return chords.map((c) => ({
