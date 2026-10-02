@@ -9,6 +9,7 @@ from guitar_player.app_state import get_storage
 from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
 from guitar_player.services.processing_service import ProcessingService
+from guitar_player.services.sheet_reading_order import READING_ORDER, to_reading_order
 
 from .helpers import (
     find_stem,
@@ -358,6 +359,7 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
 
         output: dict = {
             "source": "community",
+            "chord_order": READING_ORDER,
             "matched_artist": top_artist,
             "matched_title": top_title,
             "versions": [
@@ -368,7 +370,7 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                     "matched_artist": sheet.matched_artist,
                     "matched_title": sheet.matched_title,
                     "source_url": sheet.source_url,
-                    "lines": [
+                    "lines": to_reading_order([
                         {
                             "type": line.type,
                             "text": line.text,
@@ -378,7 +380,7 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                             ],
                         }
                         for line in sheet.lines
-                    ],
+                    ]),
                 }
                 for sheet in result.chord_sheets
             ],

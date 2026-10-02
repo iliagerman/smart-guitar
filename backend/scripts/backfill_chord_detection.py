@@ -17,6 +17,9 @@ For each song folder holding an audio.mp3:
 3. Deletes capo variants the new run didn't rewrite: the recommended capo
    positions can change, and stale files would still be offered as variants.
 4. Re-adds slash bass with /detect-bass, as new songs get after recognition.
+5. Lines the song's community chord sheet (static_chords.json) up with the
+   new beats with /align, when it has one — recognition just replaced the
+   aligned chords.
 
 Progress goes to a JSONL state file; rerunning skips songs already done.
 
@@ -156,12 +159,25 @@ def detect_bass(folder: str, files: dict[str, datetime], qualifier: str) -> None
         raise RuntimeError(f"detect-bass failed: {str(out)[:300]}")
 
 
+def align(folder: str, files: dict[str, datetime], qualifier: str) -> None:
+    if "static_chords.json" not in files:
+        return
+    resp = _lambda.invoke(
+        FunctionName=FUNCTION, Qualifier=qualifier,
+        Payload=_event("/align", {"chords_path": f"{folder}/chords.json", "sheet_path": f"{folder}/static_chords.json"}),
+    )
+    out = json.loads(resp["Payload"].read())
+    if "FunctionError" in resp or int(out.get("statusCode", 0)) != 200:
+        raise RuntimeError(f"align failed: {str(out)[:300]}")
+
+
 def process(folder: str, files: dict[str, datetime], qualifier: str, state_file: Path) -> str:
     started = time.monotonic()
     try:
         back_up(folder, files)
         recognize(folder, files, qualifier)
         detect_bass(folder, files, qualifier)
+        align(folder, files, qualifier)
         status, detail = "done", ""
     except Exception as e:  # one bad song must not stop the run
         status, detail = "failed", f"{type(e).__name__}: {e}"
