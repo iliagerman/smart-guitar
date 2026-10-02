@@ -105,16 +105,30 @@ async def test_a_tracked_three_four_meter_is_used_without_a_tab(settings, storag
 
 
 @pytest.mark.asyncio
-async def test_the_tab_meter_wins_over_the_tracked_one(settings, storage):
-    beats = [i * 0.5 for i in range(32)]
+async def test_a_tracked_three_four_meter_wins_over_a_tabs_four_four(settings, storage):
+    """Stored tabs all read 4/4 (see beat_grid._beats_per_bar), so they don't overrule a tracked 3/4."""
+    beats = [i * 0.5 for i in range(30)]
     detail = await _fetch_detail(settings, storage, {
         CHORD_META: {"bpm": 120.0, "beat_times": beats, "downbeat_times": beats[::3], "beats_per_bar": 3},
-        CHORDS: _chord_changes(0.0, 2.0, 4.0),
+        CHORDS: _chord_changes(0.0, 1.5, 3.0),
         SONGSTERR: {"source_bpm": 120, "time_signature": [4, 4]},
     })
 
-    assert detail.time_signature == [4, 4]
-    assert detail.bar_starts[1] - detail.bar_starts[0] == 2.0
+    assert detail.time_signature == [3, 4]
+    assert detail.bar_starts[:3] == [0.0, 1.5, 3.0]
+
+
+@pytest.mark.asyncio
+async def test_a_tabs_other_meter_wins_over_the_tracked_one(settings, storage):
+    beats = [i * 0.5 for i in range(32)]
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": beats, "downbeat_times": beats[::4], "beats_per_bar": 4},
+        CHORDS: _chord_changes(0.0, 1.5, 3.0),
+        SONGSTERR: {"source_bpm": 120, "time_signature": [3, 4]},
+    })
+
+    assert detail.time_signature == [3, 4]
+    assert detail.bar_starts[1] - detail.bar_starts[0] == 1.5
 
 
 @pytest.mark.asyncio

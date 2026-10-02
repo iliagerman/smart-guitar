@@ -17,7 +17,8 @@ def mix_audio_files(input_paths: list[str], output_path: str) -> None:
     """Sum multiple audio files sample-for-sample and write the result.
 
     All inputs are expected to be separated stems of the same source track
-    (same sample rate and length). Normalizes only if the sum clips.
+    (same sample rate and channels); lengths may differ by a few frames and
+    the mix covers their common span. Normalizes only if the sum clips.
     """
     import numpy as np
     import soundfile as sf
@@ -35,7 +36,14 @@ def mix_audio_files(input_paths: list[str], output_path: str) -> None:
             raise ValueError(
                 f"Sample rate mismatch: {path} is {sr} Hz, expected {sample_rate} Hz"
             )
-        mixed = data if mixed is None else mixed + data
+        if mixed is None:
+            mixed = data
+            continue
+        if data.ndim != mixed.ndim:
+            raise ValueError(f"Channel mismatch: {path} has shape {data.shape}, expected {mixed.shape}")
+        # Encoders pad stems by a few frames differently; mix the common span.
+        frames = min(len(mixed), len(data))
+        mixed = mixed[:frames] + data[:frames]
 
     max_val = np.max(np.abs(mixed))
     if max_val > 1.0:

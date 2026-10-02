@@ -36,6 +36,10 @@ class StorageBackend(Protocol):
         """Store output files into the same directory as the input file. Returns output path/prefix."""
         ...
 
+    def release_inputs(self) -> None:
+        """Delete local copies made by resolve_input."""
+        ...
+
     def file_exists(self, path: str) -> bool:
         """Check if input file exists."""
         ...
@@ -55,6 +59,9 @@ class LocalStorage:
         if not os.path.isfile(input_path):
             raise FileNotFoundError(f"Input file not found: {input_path}")
         return input_path
+
+    def release_inputs(self) -> None:
+        pass
 
     def store_outputs(self, local_output_dir: str, input_path: str) -> str:
         """Copy output files into the parent directory of input_path."""
@@ -81,6 +88,9 @@ class S3Storage:
         self._create_bucket = settings.storage.create_bucket_if_missing
         self._region = settings.aws.region
         self._temp_dir = settings.processing.temp_dir
+        # Download dirs made by resolve_input. A warm Lambda serves request
+        # after request, and its /tmp would otherwise fill up with stems.
+        self._input_dirs: list[str] = []
 
         kwargs: dict = {"region_name": self._region}
         if not settings.aws.use_iam_role:
@@ -107,12 +117,17 @@ class S3Storage:
 
     def resolve_input(self, s3_key: str) -> str:
         local_dir = tempfile.mkdtemp(dir=self._temp_dir, prefix="input_")
+        self._input_dirs.append(local_dir)
         filename = os.path.basename(s3_key)
         local_path = os.path.join(local_dir, filename)
 
         logger.info("Downloading s3://%s/%s -> %s", self._bucket, s3_key, local_path)
         self._s3.download_file(self._bucket, s3_key, local_path)
         return local_path
+
+    def release_inputs(self) -> None:
+        while self._input_dirs:
+            shutil.rmtree(self._input_dirs.pop(), ignore_errors=True)
 
     def store_outputs(self, local_output_dir: str, input_path: str) -> str:
         """Upload output files to the same S3 prefix as the input file."""

@@ -186,7 +186,7 @@ async def build_song_detail(
         rhythm=rhythm,
         sections=songsterr_data.get("sections", []),
         source_bpm=songsterr_data.get("source_bpm"),
-        time_signature=songsterr_data.get("time_signature") or _detected_time_signature(beat_grid),
+        time_signature=_time_signature(songsterr_data.get("time_signature"), beat_grid),
         strum_notes=songsterr_data.get("strum_notes"),
         tutorial_url=songsterr_data.get("tutorial_url"),
         tutorial_links=songsterr_data.get("tutorial_links", []),
@@ -209,11 +209,11 @@ async def build_song_detail(
     )
 
 
-def _detected_time_signature(beat_grid: BeatGrid | None) -> list[int] | None:
-    """The tracked meter when it isn't the 4/4 the player assumes without a tab."""
-    if beat_grid and beat_grid.beats_per_bar != 4:
+def _time_signature(tab: list[int] | None, beat_grid: BeatGrid | None) -> list[int] | None:
+    """The tab's meter, or the tracked one when the beat grid counts bars in it instead."""
+    if beat_grid and beat_grid.beats_per_bar != (tab[0] if tab else 4):
         return [beat_grid.beats_per_bar, 4]
-    return None
+    return tab
 
 
 def _resolve_url(storage: StorageBackend, key: str | None) -> str | None:

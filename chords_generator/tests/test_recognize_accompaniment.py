@@ -109,3 +109,36 @@ async def test_recognize_without_stem_paths_uses_full_mix_unchanged(
 
     assert resp.status_code == 200
     assert recognized_paths == [(audio_path, None)]
+
+
+@pytest.mark.asyncio
+async def test_recognize_falls_back_to_full_mix_when_stems_cannot_be_mixed(
+    client, monkeypatch, tmp_path,
+):
+    song_dir = tmp_path / "song"
+    song_dir.mkdir()
+    audio_path = str(song_dir / "audio.mp3")
+    bass_path = str(song_dir / "bass.mp3")
+    for p in (audio_path, bass_path):
+        open(p, "wb").write(b"x")
+
+    recognized_paths: list = []
+
+    def fake_recognize_chords(input_path, output_dir, accompaniment_path=None):
+        recognized_paths.append((input_path, accompaniment_path))
+        with open(f"{output_dir}/chord_meta.json", "w") as f:
+            f.write("{}")
+        return [ChordResult(start_time=0.0, end_time=1.0, chord="C:maj")]
+
+    def fake_mix_audio_files(input_paths, output_path):
+        raise ValueError("Sample rate mismatch")
+
+    monkeypatch.setattr(api_mod, "recognize_chords", fake_recognize_chords)
+    monkeypatch.setattr(api_mod, "mix_audio_files", fake_mix_audio_files)
+
+    resp = await client.post("/recognize", json={
+        "input_path": audio_path, "accompaniment_stem_paths": [bass_path],
+    })
+
+    assert resp.status_code == 200
+    assert recognized_paths == [(audio_path, None)]

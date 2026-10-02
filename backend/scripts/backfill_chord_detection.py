@@ -53,10 +53,11 @@ ACCOMPANIMENT_STEMS = ("bass", "guitar", "piano", "other")
 RECOGNIZE_TIMEOUT_S = 900
 POLL_S = 10
 
-_s3 = boto3.client("s3", region_name=REGION)
+# Pools sized for --concurrency up to 64 workers.
+_s3 = boto3.client("s3", region_name=REGION, config=Config(max_pool_connections=64))
 _lambda = boto3.client(
     "lambda", region_name=REGION,
-    config=Config(read_timeout=300, connect_timeout=10, retries={"max_attempts": 2}),
+    config=Config(read_timeout=300, connect_timeout=10, retries={"max_attempts": 2}, max_pool_connections=64),
 )
 _state_lock = threading.Lock()
 
@@ -186,7 +187,7 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true", help="Actually back up and re-detect (default: dry run)")
     parser.add_argument("--only", nargs="*", help="Song folders to process (default: all)")
     parser.add_argument("--limit", type=int, help="Process at most this many songs")
-    parser.add_argument("--concurrency", type=int, default=20)
+    parser.add_argument("--concurrency", type=int, default=20, help="Songs in flight (at most 64)")
     parser.add_argument("--qualifier", default="live", help="Chords Lambda alias or version")
     parser.add_argument("--state-file", type=Path, default=Path("backfill_chord_detection.jsonl"))
     args = parser.parse_args()

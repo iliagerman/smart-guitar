@@ -157,13 +157,14 @@ def _with_half_beats(beats: list[float]) -> list[float]:
 
 def _beats_per_bar(time_signature: list[int] | None, detected: int | None) -> int:
     # Songsterr data is external; ignore a malformed numerator.
-    if time_signature and time_signature[0] > 0:
-        return time_signature[0]
+    tab = time_signature[0] if time_signature and time_signature[0] > 0 else None
     # Of the tracked meters only 3/4 is trusted: a tracked 2 or 6 is as often
-    # a 4/4 or 6/8 song counted in half or double time.
-    if detected == 3:
+    # a 4/4 or 6/8 song counted in half or double time. It also wins over a
+    # tab's 4/4: stored tabs all read 4/4, because the Songsterr parser counts
+    # a measure that doesn't restate its meter as 4/4.
+    if detected == 3 and tab in (None, 4):
         return 3
-    return _DEFAULT_BEATS_PER_BAR
+    return tab or _DEFAULT_BEATS_PER_BAR
 
 
 def _bpm(beats: list[float]) -> float:

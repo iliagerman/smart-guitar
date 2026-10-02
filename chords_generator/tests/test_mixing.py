@@ -57,3 +57,18 @@ def test_mix_audio_files_raises_on_sample_rate_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="ample rate"):
         mix_audio_files([str(path_a), str(path_b)], str(tmp_path / "mixed.wav"))
+
+
+def test_mix_audio_files_mixes_the_common_span_of_stems_a_few_frames_apart(tmp_path):
+    a = np.full(8000, 0.1, dtype=np.float32)
+    b = np.full(7990, 0.2, dtype=np.float32)
+    path_a, path_b = tmp_path / "a.wav", tmp_path / "b.wav"
+    _write_wav(path_a, a)
+    _write_wav(path_b, b)
+
+    out_path = tmp_path / "mixed.wav"
+    mix_audio_files([str(path_a), str(path_b)], str(out_path))
+
+    mixed, _ = sf.read(str(out_path))
+    assert len(mixed) == 7990
+    assert mixed == pytest.approx(0.3, abs=1e-3)

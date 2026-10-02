@@ -142,14 +142,20 @@ def recognize(request: RecognizeRequest):
         ]
         if existing_stem_paths:
             accompaniment_path = os.path.join(job_dir, "accompaniment.wav")
-            mix_audio_files(
-                [_storage.resolve_input(p) for p in existing_stem_paths], accompaniment_path,
-            )
-            logger.info(
-                "Recognizing chords with the accompaniment mix (%d stems)",
-                len(existing_stem_paths),
-                extra={"job_id": job_id, "event_type": "recognition_accompaniment_mix"},
-            )
+            try:
+                mix_audio_files(
+                    [_storage.resolve_input(p) for p in existing_stem_paths], accompaniment_path,
+                )
+                logger.info(
+                    "Recognizing chords with the accompaniment mix (%d stems)",
+                    len(existing_stem_paths),
+                    extra={"job_id": job_id, "event_type": "recognition_accompaniment_mix"},
+                )
+            except ValueError:
+                # Stems that don't line up (another sample rate) still leave
+                # the full mix to recognize.
+                logger.warning("Stems can't be mixed; recognizing the full mix only", exc_info=True)
+                accompaniment_path = None
 
         logger.info("Starting chord recognition", extra={"job_id": job_id, "input_path": request.input_path, "event_type": "recognition_start"})
         results = recognize_chords(local_input, output_dir, accompaniment_path)
@@ -177,6 +183,7 @@ def recognize(request: RecognizeRequest):
         logger.exception("Chord recognition failed", extra={"job_id": job_id, "event_type": "recognition_failed"})
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        _storage.release_inputs()
         if settings.processing.cleanup_temp and os.path.exists(job_dir):
             shutil.rmtree(job_dir, ignore_errors=True)
             logger.info("Cleaned up temp dir: %s", job_dir)
@@ -242,6 +249,7 @@ def detect_bass(request: DetectBassRequest):
         logger.exception("Bass detection failed", extra={"event_type": "detect_bass_failed"})
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        _storage.release_inputs()
         if settings.processing.cleanup_temp and os.path.exists(job_dir):
             shutil.rmtree(job_dir, ignore_errors=True)
 
@@ -333,6 +341,7 @@ def enhance(request: EnhanceRequest):
         logger.exception("Enhance failed", extra={"event_type": "enhance_failed"})
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        _storage.release_inputs()
         if settings.processing.cleanup_temp and os.path.exists(job_dir):
             shutil.rmtree(job_dir, ignore_errors=True)
 
