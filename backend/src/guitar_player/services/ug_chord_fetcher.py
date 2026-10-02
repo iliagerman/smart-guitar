@@ -244,6 +244,44 @@ async def _fetch_tab_content(
         return None
 
 
+def _query_variants(artist: str, title: str) -> list[str]:
+    """Search strings to try in turn: as given, without punctuation ("T.N.T." -> "TNT"), title unspaced."""
+    def plain(text: str) -> str:
+        text = re.sub(r"(?<=\w)\.(?=\w)|\.$", "", text)  # dotted acronyms
+        return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", text)).strip()
+
+    variants = [f"{artist} {title}", f"{plain(artist)} {plain(title)}"]
+    if " " in plain(title):
+        variants.append(f"{plain(artist)} {plain(title).replace(' ', '')}")  # "Moon Shadow" -> "Moonshadow"
+    return list(dict.fromkeys(variants))
+
+
+async def _search(session: AsyncSession, query: str, timeout: int) -> list[dict]:
+    """All tab/chord results UG lists for a search string ([] on failure)."""
+    logger.info("UG search: %r", query)
+    resp = await session.get(
+        "https://www.ultimate-guitar.com/search.php",
+        params={"search_type": "title", "value": query},
+        impersonate="chrome",
+        timeout=timeout,
+    )
+    if resp.status_code != 200:
+        logger.warning("UG search returned %d", resp.status_code)
+        return []
+    data = _extract_page_data(resp.text)
+    if not data:
+        logger.info("UG: could not extract page data from search results")
+        return []
+    tabs: list[dict] = []
+    for group in data.get("store", {}).get("page", {}).get("data", {}).get("results", []):
+        if isinstance(group, dict):
+            if "results" in group:
+                tabs.extend(group["results"])
+            elif "song_name" in group:
+                tabs.append(group)
+    return tabs
+
+
 async def fetch_ug_data(
     artist: str,
     title: str,
@@ -255,50 +293,21 @@ async def fetch_ug_data(
     Returns up to 3 chord versions and 1 tab, or None if no match found.
     """
     query = f"{artist} {title}"
-    logger.info("UG search: %r", query)
 
     try:
         async with AsyncSession() as session:
-            # Step 1: Search
-            search_resp = await session.get(
-                "https://www.ultimate-guitar.com/search.php",
-                params={"search_type": "title", "value": query},
-                impersonate="chrome",
-                timeout=timeout_seconds,
-            )
-            if search_resp.status_code != 200:
-                logger.warning("UG search returned %d", search_resp.status_code)
-                return None
-
-            search_data = _extract_page_data(search_resp.text)
-            if not search_data:
-                logger.info("UG: could not extract page data from search results")
-                return None
-
-            result_groups = (
-                search_data.get("store", {})
-                .get("page", {})
-                .get("data", {})
-                .get("results", [])
-            )
-
-            all_tabs: list[dict] = []
-            for group in result_groups:
-                if isinstance(group, dict):
-                    if "results" in group:
-                        all_tabs.extend(group["results"])
-                    elif "song_name" in group:
-                        all_tabs.append(group)
-
-            if not all_tabs:
-                logger.info("UG: no results for %r", query)
-                return None
-
-            # Step 2: Find top chord matches and best tab match
-            chord_matches = _find_matching_tabs(
-                all_tabs, artist, title, "Chords", _MAX_CHORD_VERSIONS,
-            )
-            tab_matches = _find_matching_tabs(all_tabs, artist, title, "Tabs", 1)
+            # Step 1: Search, trying spellings UG's fuzzy search handles
+            # better until one finds a matching sheet.
+            chord_matches: list[dict] = []
+            tab_matches: list[dict] = []
+            for variant in _query_variants(artist, title):
+                all_tabs = await _search(session, variant, timeout_seconds)
+                chord_matches = _find_matching_tabs(
+                    all_tabs, artist, title, "Chords", _MAX_CHORD_VERSIONS,
+                )
+                tab_matches = _find_matching_tabs(all_tabs, artist, title, "Tabs", 1)
+                if chord_matches:
+                    break
 
             if not chord_matches and not tab_matches:
                 logger.info("UG: no matching chords or tabs for %r", query)

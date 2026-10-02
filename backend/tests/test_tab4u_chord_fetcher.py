@@ -33,3 +33,14 @@ def test_an_exact_hebrew_title_matches_across_scripts():
     assert accept_sheet_match("Rafi Perski", "כמה פעמים", "רפי פרסקי", "כמה פעמים")
     assert not accept_sheet_match("Rafi Perski", "כמה פעמים", "רפי פרסקי", "טוב לי")
     assert not accept_sheet_match("Adele", "Hello", "Lionel Richie", "Hello")
+
+
+def test_titles_that_differ_only_in_spacing_match():
+    assert accept_sheet_match("Cat Stevens", "Moon Shadow", "Cat Stevens", "Moonshadow")
+
+
+def test_ultimate_guitar_searches_try_plainer_spellings():
+    from guitar_player.services.ug_chord_fetcher import _query_variants
+
+    assert _query_variants("AC/DC", "T.N.T.") == ["AC/DC T.N.T.", "AC DC TNT"]
+    assert _query_variants("Cat Stevens", "Moon Shadow") == ["Cat Stevens Moon Shadow", "Cat Stevens MoonShadow"]

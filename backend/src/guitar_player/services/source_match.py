@@ -46,7 +46,7 @@ def component_score(query: str, result: str) -> float:
     if not q or not r:
         return 0.0
 
-    if q == r:
+    if q == r or q.replace(" ", "") == r.replace(" ", ""):  # "Moon Shadow" / "Moonshadow"
         return 1.0
     if q in r or r in q:
         return 0.7
