@@ -66,6 +66,20 @@ class EnhanceResponse(BaseModel):
     bass_count: int = 0
 
 
+class AlignRequest(BaseModel):
+    chords_path: str = Field(..., min_length=1, description="chords.json path / S3 key; chord_probs.npz and chord_meta.json sit beside it")
+    sheet_path: str = Field(..., min_length=1, description="static_chords.json path / S3 key (community chord sheet versions)")
+
+
+class AlignResponse(BaseModel):
+    status: str = "done"
+    accepted: bool
+    loss_per_beat: float | None = None
+    transpose: int | None = None
+    source_url: str | None = None
+    chords: list[ChordInfo] = Field(default_factory=list)
+
+
 class ErrorResponse(BaseModel):
     status: str = "error"
     detail: str

@@ -19,6 +19,7 @@ class ChordData:
     beat_times: list[float]  # full-mix beats; empty for songs processed before beats were stored
     downbeat_times: list[float]  # tracked bar starts; empty for songs processed before downbeats were tracked
     beats_per_bar: int | None  # meter the tracked downbeats imply
+    from_sheet: bool  # chords.json carries a community sheet's chords on the detected beats
     bar_starts: list[float]  # stored bar starts
 
 
@@ -33,6 +34,7 @@ def load_chord_data(storage: StorageBackend, song: SongRecord) -> ChordData:
         beat_times=_float_list(meta.get("beat_times")),
         downbeat_times=_float_list(meta.get("downbeat_times")),
         beats_per_bar=meta["beats_per_bar"] if isinstance(meta.get("beats_per_bar"), int) else None,
+        from_sheet=meta.get("chord_source") == "sheet",
         bar_starts=_float_list(meta.get("bar_starts")),
     )
 

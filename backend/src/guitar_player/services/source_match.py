@@ -85,3 +85,18 @@ def accept_match(
     perfect title carry a missing artist over the line.
     """
     return artist_score >= min_artist and title_score >= min_title
+
+
+# A title matched this well carries the match alone when the two artist names
+# are written in different scripts: ours "Rafi Perski", Tab4U's "רפי פרסקי".
+CROSS_SCRIPT_MIN_TITLE_SCORE = 0.95
+_HEBREW = re.compile(r"[֐-׿]")
+
+
+def accept_sheet_match(query_artist: str, query_title: str, result_artist: str, result_title: str) -> bool:
+    """accept_match, plus an exact title when the artist names are in different scripts."""
+    artist_score, title_score = match_components(query_artist, query_title, result_artist, result_title)
+    if accept_match(artist_score, title_score):
+        return True
+    scripts_differ = bool(_HEBREW.search(query_artist)) != bool(_HEBREW.search(result_artist))
+    return scripts_differ and title_score >= CROSS_SCRIPT_MIN_TITLE_SCORE

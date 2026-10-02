@@ -12,6 +12,7 @@ import sys
 import uuid
 from contextlib import asynccontextmanager
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 from pythonjsonlogger.json import JsonFormatter
@@ -22,10 +23,14 @@ from chords_generator.beat_tracking import track_file_beats
 from chords_generator.config import get_settings
 from chords_generator.mixing import mix_audio_files
 from chords_generator.observability import instrument_runtime_observer
-from chords_generator.recognizer import beat_meta, recognize_chords
+from chords_generator.chord_model import LABELS
+from chords_generator.recognizer import CHORD_PROBS_FILE, beat_meta, recognize_chords, write_chord_files
+from chords_generator.sheet_align import best_alignment
 from chords_generator.request_context import RequestContextFilter, RequestContextMiddleware
 from chords_generator.simplifier import generate_simplified_options, write_simplified_outputs
 from chords_generator.schemas import (
+    AlignRequest,
+    AlignResponse,
     ChordInfo,
     ChordResult,
     DetectBassRequest,
@@ -187,6 +192,87 @@ def recognize(request: RecognizeRequest):
         if settings.processing.cleanup_temp and os.path.exists(job_dir):
             shutil.rmtree(job_dir, ignore_errors=True)
             logger.info("Cleaned up temp dir: %s", job_dir)
+
+
+@app.post("/align", response_model=AlignResponse)
+def align(request: AlignRequest):
+    """Line the song's community chord sheet up with its recognized beats and chords.
+
+    Reads chord_probs.npz and chord_meta.json beside chords_path (written by
+    /recognize). When a sheet version fits the audio, chords.json and the
+    simplified variants are rewritten with the sheet's chord names on the
+    detected timing; otherwise they are left as detected. chord_meta.json
+    records the outcome either way.
+    """
+    settings = get_settings()
+    job_dir = os.path.join(settings.processing.temp_dir, str(uuid.uuid4()))
+    os.makedirs(job_dir, exist_ok=True)
+    folder = os.path.dirname(request.chords_path)
+    probs_path = os.path.join(folder, CHORD_PROBS_FILE)
+    meta_path = os.path.join(folder, "chord_meta.json")
+    try:
+        for path in (request.sheet_path, probs_path, meta_path):
+            if not _storage.file_exists(path):
+                raise HTTPException(status_code=404, detail=f"Not found: {path}")
+        with np.load(_storage.resolve_input(probs_path)) as stored:
+            log_probs = stored["log_probs"].astype(np.float64)
+            frame_s = float(stored["frame_s"])
+        with open(_storage.resolve_input(meta_path)) as f:
+            meta = json.load(f)
+        with open(_storage.resolve_input(request.sheet_path)) as f:
+            versions = (json.load(f) or {}).get("versions") or []
+
+        best = best_alignment(log_probs, frame_s, meta, versions, LABELS)
+        for key in ("chord_source", "sheet_url", "sheet_transpose", "sheet_loss_per_beat"):
+            meta.pop(key, None)
+        response = AlignResponse(accepted=False)
+        if best:
+            alignment, version = best
+            meta.update(
+                sheet_url=version.get("source_url") or None,
+                sheet_transpose=alignment.transpose,
+                sheet_loss_per_beat=round(alignment.loss_per_beat, 3),
+            )
+            response = AlignResponse(
+                accepted=alignment.accepted, loss_per_beat=round(alignment.loss_per_beat, 3),
+                transpose=alignment.transpose, source_url=version.get("source_url") or None,
+            )
+        if best and best[0].accepted:
+            alignment, version = best
+            meta["chord_source"] = "sheet"
+            capo = int(version.get("capo") or 0)
+            if capo and alignment.transpose == capo:
+                meta["capo"] = capo
+            write_chord_files(alignment.chords, job_dir)
+            # Capo variants the previous chords had but these don't.
+            for n in range(1, 12):
+                name = f"chords_beginner_capo_{n}.json"
+                if not os.path.exists(os.path.join(job_dir, name)):
+                    _storage.delete(os.path.join(folder, name))
+            response.chords = [
+                ChordInfo(start_time=c.start_time, end_time=c.end_time, chord=c.chord, bass=c.bass)
+                for c in alignment.chords
+            ]
+        else:
+            meta["chord_source"] = "detected"
+        with open(os.path.join(job_dir, "chord_meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+        _storage.store_outputs(job_dir, request.chords_path)
+        logger.info(
+            "Align: accepted=%s loss=%s transpose=%s %s",
+            response.accepted, response.loss_per_beat, response.transpose, request.chords_path,
+            extra={"event_type": "align_done"},
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Align failed", extra={"event_type": "align_failed"})
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        _storage.release_inputs()
+        if settings.processing.cleanup_temp and os.path.exists(job_dir):
+            shutil.rmtree(job_dir, ignore_errors=True)
 
 
 @app.post("/detect-bass", response_model=DetectBassResponse)

@@ -607,13 +607,18 @@ async def process_job(job_id: uuid.UUID) -> None:
         )
     )
 
+    # Fetch the community chord sheet alongside separation (network only), so
+    # it can be lined up with the chords as soon as they are recognized.
+    sheet_task = asyncio.create_task(_fetch_sheet_if_missing(storage, song_id, song_name))
+
     sep_result, chords_result = await _run_separation_and_chords(
         processing, storage, audio_path, song_name, job_id,
         demucs_requested_outputs, job_start_time,
     )
     if sep_result is None:
         early_quick_lyrics_task.cancel()
-        await asyncio.gather(early_quick_lyrics_task, return_exceptions=True)
+        sheet_task.cancel()
+        await asyncio.gather(early_quick_lyrics_task, sheet_task, return_exceptions=True)
         return  # Job was failed inside the helper.
 
     # Stems exist now — run the full Whisper transcription on the isolated
@@ -640,6 +645,7 @@ async def process_job(job_id: uuid.UUID) -> None:
             _do_merge(storage, song_name, job_id, settings),
             _do_tabs(processing, storage, song_name, job_id),
             _check_quick_lyrics(storage, song_name, song_id, job_id),
+            _align_sheet_after(sheet_task, storage, song_name),
         )
 
     gather_task = asyncio.create_task(_remaining_subtasks())
@@ -679,6 +685,22 @@ async def process_job(job_id: uuid.UUID) -> None:
             "total_elapsed_s": round(time.monotonic() - job_start_time, 1),
         },
     )
+
+
+async def _fetch_sheet_if_missing(storage, song_id: uuid.UUID, song_name: str) -> None:
+    if storage.file_exists(f"{song_name}/static_chords.json"):
+        return
+    from .external_data import fetch_static_chords
+
+    await fetch_static_chords(song_id)
+
+
+async def _align_sheet_after(sheet_task: asyncio.Task, storage, song_name: str) -> None:
+    """Once the sheet fetch is done, put the sheet's chords on the recognized beats."""
+    from .external_data import align_song_chords
+
+    await asyncio.gather(sheet_task, return_exceptions=True)
+    await align_song_chords(storage, song_name)
 
 
 def _stem_storage_candidates(song_name: str, stem_name: str) -> list[str]:

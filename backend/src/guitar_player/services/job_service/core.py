@@ -32,7 +32,7 @@ from .constants import (
     STRUM_RETRY_COOLDOWN_SECONDS,
     TUTORIAL_RETRY_COOLDOWN_SECONDS,
 )
-from guitar_player.services.source_match import accept_match, match_components
+from guitar_player.services.source_match import accept_sheet_match, match_components
 
 from .helpers import (
     active_job_stale_reason,
@@ -685,10 +685,10 @@ class JobService:
             )
             return False
 
-        a_score, t_score = match_components(
-            song_artist, song_title, matched_artist, matched_title,
-        )
-        if not accept_match(a_score, t_score):
+        if not accept_sheet_match(song_artist, song_title, matched_artist, matched_title):
+            a_score, t_score = match_components(
+                song_artist, song_title, matched_artist, matched_title,
+            )
             logger.info(
                 "%s: %s mismatch — song=%r/%r vs stored=%r/%r "
                 "(artist=%.2f, title=%.2f); marking invalid for refetch",

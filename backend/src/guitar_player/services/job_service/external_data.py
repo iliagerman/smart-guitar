@@ -246,6 +246,48 @@ def extract_measure_pattern(
     return patterns[best_key]
 
 
+async def align_song_chords(storage, song_name: str) -> dict | None:
+    """Line the song's stored chord sheet up with its detected beats, when both exist.
+
+    Non-fatal: returns the chords service's verdict, or None when skipped or failed.
+    """
+    sheet_key = f"{song_name}/static_chords.json"
+    chords_key = f"{song_name}/chords.json"
+    if not storage.file_exists(sheet_key) or not storage.file_exists(f"{song_name}/chord_probs.npz"):
+        return None
+    try:
+        from guitar_player.config import get_settings
+        from guitar_player.services.processing_service import ProcessingService
+
+        verdict = await ProcessingService(get_settings()).align_chords(chords_key, sheet_key)
+        logger.info(
+            "Chord sheet alignment for %s: accepted=%s loss=%s",
+            song_name, verdict.get("accepted"), verdict.get("loss_per_beat"),
+            extra={"event_type": "align_chords_done", "song_name": song_name},
+        )
+        return verdict
+    except Exception as e:
+        logger.warning("Chord sheet alignment failed for %s: %s", song_name, e)
+        return None
+
+
+async def backfill_song_sheet(storage, song_id: uuid.UUID, song_name: str) -> str:
+    """Fetch a missing sheet, then align. Returns fetched/no_sheet plus accepted/rejected/not_aligned."""
+    sheet_key = f"{song_name}/static_chords.json"
+    outcome = []
+    if not storage.file_exists(sheet_key):
+        await fetch_static_chords(song_id)  # aligns on success
+        if not storage.file_exists(sheet_key):
+            return "no_sheet"
+        outcome.append("fetched")
+    verdict = await align_song_chords(storage, song_name)
+    if verdict is None:
+        outcome.append("not_aligned")
+    else:
+        outcome.append("accepted" if verdict.get("accepted") else "rejected")
+    return ",".join(outcome)
+
+
 async def fetch_static_chords(song_id: uuid.UUID) -> None:
     """Fetch chord sheets and tab from Ultimate Guitar and store them."""
     try:
@@ -284,6 +326,15 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
             },
         )
         result = await fetch_ug_data(artist, title)
+        if not result or not result.chord_sheets:
+            # Ultimate Guitar rarely has Hebrew songs; Tab4U is the fallback.
+            from guitar_player.services.tab4u_chord_fetcher import fetch_tab4u_data
+
+            tab4u = await fetch_tab4u_data(artist, title)
+            if tab4u:
+                if result:
+                    tab4u.tab_content, tab4u.tab_source_url = result.tab_content, result.tab_source_url
+                result = tab4u
         if not result or (not result.chord_sheets and not result.tab_content):
             elapsed_s = time.monotonic() - t0
             logger.info(
@@ -362,6 +413,8 @@ async def fetch_static_chords(song_id: uuid.UUID) -> None:
                 static_chords_attempted_at=None,
             )
             await song_dao.commit()
+
+        await align_song_chords(storage, song_name)
 
     except Exception as e:
         elapsed_s = time.monotonic() - t0

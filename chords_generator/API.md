@@ -91,6 +91,17 @@ Example:
 | `422`  | Empty or missing `input_path` | Pydantic validation error                    |
 | `500`  | Recognition or internal error | `{"detail": "<error message>"}`              |
 
+### `POST /align`
+
+Lines the song's community chord sheet up with its recognized beats. Needs `chord_probs.npz` and `chord_meta.json` beside `chords_path` (written by `/recognize`).
+
+| Field         | Type   | Required | Description                                        |
+| ------------- | ------ | -------- | -------------------------------------------------- |
+| `chords_path` | string | yes      | The song's `chords.json`.                          |
+| `sheet_path`  | string | yes      | `static_chords.json` with the sheet's `versions`.  |
+
+Response: `accepted`, `loss_per_beat`, `transpose` (semitones from the sheet as written to the recording), `source_url`, and the aligned `chords` when accepted. When accepted, `chords.json`, `chords.lab` and the simplified variants are rewritten with the sheet's chord names (slash basses in `bass`), stale capo variants are deleted, and `chord_meta.json` gets `chord_source: "sheet"`, `sheet_url`, `sheet_transpose`, `sheet_loss_per_beat` (and `capo` when the sheet's capo explains the transposition). Otherwise only `chord_meta.json` changes (`chord_source: "detected"`). `404` when the sheet or recognition outputs are missing.
+
 ## Output files
 
 Written to the same directory as the input audio file:
@@ -99,6 +110,7 @@ Written to the same directory as the input audio file:
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `chords.json`                         | JSON array of chord segments with `start_time`, `end_time`, `chord`. Every change is on a tracked beat.                                                     |
 | `chords.lab`                          | The same chords in MIREX LAB format (tab-separated: `start_time end_time chord`).                                                                          |
+| `chord_probs.npz`                     | Per-frame chord log-probabilities (float16) and `frame_s`, for `/align`.                                                                                      |
 | `chord_meta.json`                     | `bpm`, `beat_times`, `downbeat_times`, `beats_per_bar`, `bar_starts` (the downbeats), `chord_model`, `beat_model`. Other fields already in the file (capo, key) are kept. |
 | `chords_intermediate.json`            | Triads only (extensions stripped).                                                                                                                          |
 | `chords_beginner.json`, `chords_beginner_capo_N.json` | Nearest open chords, without and with the two best capo positions.                                                                              |

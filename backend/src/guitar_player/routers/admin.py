@@ -28,6 +28,7 @@ from guitar_player.dependencies import (
     get_storage,
 )
 from guitar_player.schemas.admin import (
+    AdminSheetBackfillResponse,
     AdminDownloadCompleteResponse,
     AdminDropSongsResponse,
     AdminRequiredSongsResponse,
@@ -82,6 +83,45 @@ async def list_admin_required_songs(
         limit=limit,
         check_storage=check_storage,
         max_scan=None if max_scan == 0 else max_scan,
+    )
+
+
+@router.post("/songs/sheets", response_model=AdminSheetBackfillResponse)
+async def admin_backfill_sheets(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    _: None = Depends(require_admin_token),
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> AdminSheetBackfillResponse:
+    """Fetch community chord sheets for songs without one, and line every sheet up with its song's beats.
+
+    Processes one window of songs, oldest first, a few at a time; call again
+    with next_offset until it is null.
+    """
+    import asyncio
+
+    from guitar_player.services.job_service.external_data import backfill_song_sheet
+
+    song_dao = SongDAO(session)
+    total = await song_dao.count()
+    songs = [s for s in await song_dao.list_by_creation(offset, limit) if s.song_name and s.artist]
+    gate = asyncio.Semaphore(4)
+
+    async def one(song: SongRecord) -> str:
+        async with gate:
+            try:
+                return await backfill_song_sheet(storage, song.id, song.song_name)
+            except Exception:
+                logger.exception("Sheet backfill failed for %s", song.song_name)
+                return "not_aligned"
+
+    outcomes = ",".join(await asyncio.gather(*(one(s) for s in songs))).split(",")
+    count = {k: outcomes.count(k) for k in ("fetched", "no_sheet", "accepted", "rejected", "not_aligned")}
+    next_offset = offset + limit
+    return AdminSheetBackfillResponse(
+        processed=len(songs), **count,
+        next_offset=next_offset if next_offset < total else None, total=total,
     )
 
 

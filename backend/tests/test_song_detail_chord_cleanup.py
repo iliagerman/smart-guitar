@@ -114,3 +114,14 @@ async def test_silence_around_a_chord_is_not_evidence_for_replacing_it(settings,
     })
 
     assert "C#:maj" in _names(detail.chords)
+
+
+@pytest.mark.asyncio
+async def test_chords_from_a_sheet_keep_their_one_beat_passing_chords(settings, storage):
+    """Sheet chords (chord_source "sheet") are what the song plays: no flash cleanup."""
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": BEATS, "chord_source": "sheet"},
+        CHORDS: _timeline(("Am", 2.0), ("Am/B", 0.5), ("Am/C", 0.5), ("Am/D", 0.5), ("Am", 2.5)),
+    })
+
+    assert _names(detail.chords) == ["Am", "Am/B", "Am/C", "Am/D", "Am"]

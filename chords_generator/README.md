@@ -16,7 +16,15 @@ accompaniment ──► BTC ──┴─► averaged chord probabilities ──�
 
 On those songs, compared with the autochord pipeline it replaced (as the player shows them): chords correct 64% → 72% (major/minor), 65% → 75% (root), 47% → 63% (sevenths); chord changes within ±0.15 s of the annotation 26% → 45%.
 
-Slash bass (`C/G`) is added afterwards by `/detect-bass` from the separated bass stem.
+Caveat: BTC was trained on the Isophonics and uspop2002 annotations, so on most of those songs it is recalling, and the numbers are optimistic. Only the Billboard songs are new to it; there it scores about 71% major/minor. Expect that, or lower, on modern and Hebrew songs.
+
+4. **Repeats** — before deciding, each beat also hears the same beat in the sections that sound like it (two bars either side, mean cosine ≥ 0.8), so a chorus played four times gets the same chords each time and a one-off mistake is outvoted (+1 point on chords).
+
+Slash bass (`C/G`) is added afterwards by `/detect-bass` from the separated bass stem. Recognition stores the per-frame probabilities (`chord_probs.npz`) for the next step.
+
+## Community chord sheets (`/align`)
+
+When the backend has a community sheet for the song (Ultimate Guitar, or Tab4U for Hebrew songs), `/align` lines it up with the audio (`sheet_align.py`): chord names come from the sheet, timing from the beats. Viterbi walks the song beat by beat through the sheet's chord sequence — stay, move on to the next chord, or jump to the start of any sheet line, so a chorus written once and played three times still lines up — over all 12 transpositions (capo). The best-fitting sheet version is used only when it explains the audio nearly as well as free detection (≤ 0.35 log-probability per beat worse); otherwise the detected chords stay. On the annotated songs the model wasn't trained on, sheets add +0.8 points major/minor and +3 points on sevenths, and they get the chords guitarists read (Losing My Religion's D7sus2, slash walk-downs).
 
 ## Setup
 

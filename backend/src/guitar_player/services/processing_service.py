@@ -197,6 +197,15 @@ class ProcessingService:
         url = f"{self._chords_host}/detect-bass"
         await self._request(url, {"bass_path": bass_path, "chords_path": chords_path})
 
+    async def align_chords(self, chords_path: str, sheet_path: str) -> dict:
+        """POST to chords /align: put the community sheet's chords on the detected beats.
+
+        Rewrites chords.json (and its variants) in storage when the sheet fits
+        the audio. Returns the service's verdict (accepted, loss_per_beat, ...).
+        """
+        url = f"{self._chords_host}/align"
+        return await self._request(url, {"chords_path": chords_path, "sheet_path": sheet_path})
+
     async def enhance_chords(
         self, audio_path: str, chords_path: str, bass_path: str = "",
     ) -> EnhanceResult:

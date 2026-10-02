@@ -117,7 +117,10 @@ async def build_song_detail(
     grid_beats = beat_grid.beat_times if beat_grid else []
     tracked_bars = tracked_grid.bar_starts if tracked_grid else []
     tracked_beats = tracked_grid.beat_times if tracked_grid else []
-    autochord_chords = clean_detected_chords(autochord_chords, tracked_beats)
+    # Sheet chords are what the song plays; cleanup would undo deliberate
+    # passing chords (a one-beat Am/B walking down).
+    if not chord_data.from_sheet:
+        autochord_chords = clean_detected_chords(autochord_chords, tracked_beats)
     t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
@@ -131,7 +134,7 @@ async def build_song_detail(
     chord_options = await _assemble_chord_options(
         storage, song, song_id, chord_vote_dao,
         autochord_chords, recommended_capo, lyrics_data,
-        community_options, tracked_beats,
+        community_options, tracked_beats, chord_data.from_sheet,
     )
     t8 = time.perf_counter()
 
@@ -886,6 +889,7 @@ async def _assemble_chord_options(
     lyrics_data: dict[str, Any],
     community_options: list[ChordOption],
     beat_times: list[float],
+    from_sheet: bool = False,
 ) -> list[ChordOption]:
     """Assemble chord options with detected chords as the default source."""
     chord_options: list[ChordOption] = []
@@ -942,7 +946,8 @@ async def _assemble_chord_options(
     # chords, so they get the same cleanup.
     for opt in variant_options:
         opt.is_variant = True
-        opt.chords = clean_detected_chords(opt.chords, beat_times)
+        if not from_sheet:
+            opt.chords = clean_detected_chords(opt.chords, beat_times)
     chord_options.extend(variant_options)
 
     return chord_options

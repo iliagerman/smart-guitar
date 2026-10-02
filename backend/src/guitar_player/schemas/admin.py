@@ -90,6 +90,19 @@ class AdminDownloadCompleteResponse(BaseModel):
     job_id: str
 
 
+class AdminSheetBackfillResponse(BaseModel):
+    """One window of POST /admin/songs/sheets; next_offset is None when done."""
+
+    processed: int
+    fetched: int  # sheet newly found (Ultimate Guitar or Tab4U)
+    no_sheet: int  # still no sheet anywhere
+    accepted: int  # sheet chords now on the song's beats
+    rejected: int  # a sheet exists but doesn't fit the audio
+    not_aligned: int  # no recognized chords to align with yet, or alignment failed
+    next_offset: int | None = None
+    total: int
+
+
 class AdminRetagResponse(BaseModel):
     """One window of POST /admin/songs/retag; next_offset is None when done."""
 

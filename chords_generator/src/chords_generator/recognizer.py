@@ -69,17 +69,7 @@ def recognize_chords(
         len(results), len(beats), bpm, len(downbeats), timings,
     )
 
-    with open(os.path.join(output_dir, "chords.lab"), "w") as f:
-        for r in results:
-            f.write(f"{r.start_time:.3f}\t{r.end_time:.3f}\t{r.chord}\n")
-    with open(os.path.join(output_dir, "chords.json"), "w") as f:
-        json.dump(
-            [{"start_time": r.start_time, "end_time": r.end_time, "chord": r.chord} for r in results],
-            f,
-            indent=2,
-        )
-
-    write_simplified_outputs(generate_simplified_options(results), output_dir)
+    write_chord_files(results, output_dir)
 
     # The model's view of every frame, so later steps (lining a chord sheet up
     # with the audio) don't re-run it.
@@ -91,6 +81,23 @@ def recognize_chords(
         json.dump(beat_meta(beats, downbeats), f, indent=2)
 
     return results
+
+
+def write_chord_files(chords: list[ChordResult], output_dir: str) -> None:
+    """chords.json, chords.lab and the simplified beginner/capo variants."""
+    with open(os.path.join(output_dir, "chords.lab"), "w") as f:
+        for c in chords:
+            f.write(f"{c.start_time:.3f}\t{c.end_time:.3f}\t{c.chord}\n")
+    with open(os.path.join(output_dir, "chords.json"), "w") as f:
+        json.dump(
+            [
+                {"start_time": c.start_time, "end_time": c.end_time, "chord": c.chord, **({"bass": c.bass} if c.bass else {})}
+                for c in chords
+            ],
+            f,
+            indent=2,
+        )
+    write_simplified_outputs(generate_simplified_options(chords), output_dir)
 
 
 def beat_meta(beats: list[float], downbeats: list[float]) -> dict:

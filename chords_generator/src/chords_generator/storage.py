@@ -40,6 +40,10 @@ class StorageBackend(Protocol):
         """Delete local copies made by resolve_input."""
         ...
 
+    def delete(self, path: str) -> None:
+        """Delete a stored file; a missing file is fine."""
+        ...
+
     def file_exists(self, path: str) -> bool:
         """Check if input file exists."""
         ...
@@ -62,6 +66,10 @@ class LocalStorage:
 
     def release_inputs(self) -> None:
         pass
+
+    def delete(self, path: str) -> None:
+        if os.path.isfile(path):
+            os.remove(path)
 
     def store_outputs(self, local_output_dir: str, input_path: str) -> str:
         """Copy output files into the parent directory of input_path."""
@@ -124,6 +132,9 @@ class S3Storage:
         logger.info("Downloading s3://%s/%s -> %s", self._bucket, s3_key, local_path)
         self._s3.download_file(self._bucket, s3_key, local_path)
         return local_path
+
+    def delete(self, s3_key: str) -> None:
+        self._s3.delete_object(Bucket=self._bucket, Key=s3_key)
 
     def release_inputs(self) -> None:
         while self._input_dirs:
