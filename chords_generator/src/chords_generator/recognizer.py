@@ -11,6 +11,8 @@ import logging
 import os
 import time
 
+import numpy as np
+
 from chords_generator.beat_decode import beats_per_bar, decode_chords_on_beats
 from chords_generator.beat_tracking import tempo_bpm, track_beats
 from chords_generator.chord_model import FRAME_S, LABELS, SAMPLE_RATE, chord_log_probs, load_mono
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 CHORD_MODEL = "btc-large-voca"
 BEAT_MODEL = "beat_this-final0"
+CHORD_PROBS_FILE = "chord_probs.npz"
 
 
 def recognize_chords(
@@ -77,6 +80,12 @@ def recognize_chords(
         )
 
     write_simplified_outputs(generate_simplified_options(results), output_dir)
+
+    # The model's view of every frame, so later steps (lining a chord sheet up
+    # with the audio) don't re-run it.
+    np.savez_compressed(
+        os.path.join(output_dir, CHORD_PROBS_FILE), log_probs=log_probs.astype(np.float16), frame_s=FRAME_S,
+    )
 
     with open(os.path.join(output_dir, "chord_meta.json"), "w") as f:
         json.dump(beat_meta(beats, downbeats), f, indent=2)

@@ -64,3 +64,24 @@ def test_without_a_beat_grid_chords_follow_the_frames():
     log_probs = _log_probs([(0.0, 1.0, 0), (1.0, 2.0, 1)], 2.0)
     chords = decode_chords_on_beats(log_probs, LABELS, FRAME_S, [], [], 2.0)
     assert [(c.start_time, c.end_time, c.chord) for c in chords] == [(0.0, 1.0, "C:maj"), (1.0, 2.0, "G:maj")]
+
+
+def test_a_mistake_in_one_repeat_of_a_progression_is_outvoted_by_the_others():
+    beats = [i * 0.5 for i in range(1, 64)]
+    downbeats = beats[::4]
+    # C G A:min G, one bar each, played four times (8 s per pass)...
+    progression = [(0, 2), (1, 2), (2, 2), (1, 2)]
+    segments, t = [(0.0, 0.5, 0)], 0.5
+    for _ in range(4):
+        for k, bars in progression:
+            segments.append((t, t + bars, k))
+            t += bars
+    log_probs = _log_probs(segments, 32.0, confidence=0.6)
+    # ...but the third pass's A:min bar sounds a little more like C.
+    a, b = int(round(20.5 / FRAME_S)), int(round(22.5 / FRAME_S))
+    log_probs[a:b] = np.log(np.array([0.45, 0.05, 0.4, 0.1]))
+
+    chords = decode_chords_on_beats(log_probs, LABELS, FRAME_S, beats, downbeats, 32.0)
+
+    third_pass = [c.chord for c in chords if 16.5 <= c.start_time < 24.5]
+    assert third_pass == ["C:maj", "G:maj", "A:min", "G:maj"]

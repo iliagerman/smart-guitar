@@ -24,6 +24,7 @@ async def test_recognize(client, test_song_path):
     output_files = [
         song_dir / "chords.json",
         song_dir / "chords.lab",
+        song_dir / "chord_probs.npz",
         song_dir / "chords_intermediate.json",
         song_dir / "chords_beginner.json",
     ]
