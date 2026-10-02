@@ -612,6 +612,33 @@ async def fetch_external_strums(song_id: uuid.UUID) -> None:
             )
 
 
+async def refresh_songsterr_meter(storage, song_name: str, artist: str, title: str) -> str:
+    """Re-read a stored Songsterr tab's meter and rhythm; the strum lookup and tutorials are kept.
+
+    Tabs fetched before the parser carried a measure's signature forward were
+    all stored as 4/4. Returns changed, unchanged, no_tab or no_data; the
+    first change saves the original as songsterr_data.pre_meter.json.
+    """
+    from guitar_player.config import get_settings
+
+    key = f"{song_name}/songsterr_data.json"
+    if not storage.file_exists(key):
+        return "no_data"
+    stored = storage.read_json(key)
+    result = await _fetch_songsterr_result(artist, title, get_settings().external_strums)
+    if not result:
+        return "no_tab"
+    tab_rhythm = result.tab_rhythm.model_dump(mode="json") if result.tab_rhythm else None
+    refreshed = {**stored, "time_signature": list(result.time_signature), "tab_rhythm": tab_rhythm}
+    if refreshed == stored:
+        return "unchanged"
+    backup = f"{song_name}/songsterr_data.pre_meter.json"
+    if not storage.file_exists(backup):
+        storage.write_json(backup, stored)
+    storage.write_json(key, refreshed)
+    return "changed"
+
+
 async def _fetch_songsterr_result(artist: str, title: str, ext_cfg):
     """Fetch and parse full tab data from Songsterr."""
     from guitar_player.services.external_strum_fetcher import fetch_songsterr_data

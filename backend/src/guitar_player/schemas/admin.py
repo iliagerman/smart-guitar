@@ -90,6 +90,19 @@ class AdminDownloadCompleteResponse(BaseModel):
     job_id: str
 
 
+class AdminSongsterrMeterResponse(BaseModel):
+    """One window of POST /admin/songs/songsterr-meter; next_offset is None when done."""
+
+    processed: int
+    changed: int  # meter or tab rhythm corrected
+    unchanged: int
+    no_tab: int  # Songsterr has no tab for the song any more
+    no_data: int  # no stored Songsterr file
+    failed: int
+    next_offset: int | None = None
+    total: int
+
+
 class AdminSheetBackfillResponse(BaseModel):
     """One window of POST /admin/songs/sheets; next_offset is None when done."""
 

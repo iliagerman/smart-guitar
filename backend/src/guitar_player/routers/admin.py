@@ -29,6 +29,7 @@ from guitar_player.dependencies import (
 )
 from guitar_player.schemas.admin import (
     AdminSheetBackfillResponse,
+    AdminSongsterrMeterResponse,
     AdminDownloadCompleteResponse,
     AdminDropSongsResponse,
     AdminRequiredSongsResponse,
@@ -121,6 +122,45 @@ async def admin_backfill_sheets(
     next_offset = offset + limit
     return AdminSheetBackfillResponse(
         processed=len(songs), **count,
+        next_offset=next_offset if next_offset < total else None, total=total,
+    )
+
+
+@router.post("/songs/songsterr-meter", response_model=AdminSongsterrMeterResponse)
+async def admin_refresh_songsterr_meter(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    _: None = Depends(require_admin_token),
+    session: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> AdminSongsterrMeterResponse:
+    """Re-read the meter of every stored Songsterr tab (they were all saved as 4/4).
+
+    Processes one window of songs, oldest first, a few at a time; call again
+    with next_offset until it is null.
+    """
+    import asyncio
+
+    from guitar_player.services.job_service.external_data import refresh_songsterr_meter
+
+    song_dao = SongDAO(session)
+    total = await song_dao.count()
+    songs = [s for s in await song_dao.list_by_creation(offset, limit) if s.song_name and s.artist and s.external_strums_key]
+    gate = asyncio.Semaphore(4)
+
+    async def one(song: SongRecord) -> str:
+        async with gate:
+            try:
+                return await refresh_songsterr_meter(storage, song.song_name, song.artist, song.title)
+            except Exception:
+                logger.exception("Songsterr meter refresh failed for %s", song.song_name)
+                return "failed"
+
+    outcomes = list(await asyncio.gather(*(one(s) for s in songs)))
+    next_offset = offset + limit
+    return AdminSongsterrMeterResponse(
+        processed=len(songs),
+        **{k: outcomes.count(k) for k in ("changed", "unchanged", "no_tab", "no_data", "failed")},
         next_offset=next_offset if next_offset < total else None, total=total,
     )
 

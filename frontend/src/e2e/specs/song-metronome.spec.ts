@@ -198,7 +198,12 @@ test('chord sheet marks each bar and fills it with exactly one bar of chords', a
   })
   const sheet = page.getByTestId('chord-sheet')
   await expect(sheet.locator('[data-chord-index]')).toHaveCount(4)
-  await expect(sheet.getByTestId('chord-hold')).toHaveText(['½ bar', '½ bar', '½ bar', '½ bar'])
+  // Two beats each, drawn as one block per beat.
+  await expect(sheet.getByTestId('chord-hold')).toHaveCount(4)
+  for (const hold of await sheet.getByTestId('chord-hold').all()) {
+    await expect(hold).toHaveAttribute('data-beats', '2')
+    await expect(hold.locator('span')).toHaveCount(2)
+  }
   await expect(sheet.getByTestId('bar-line')).toHaveCount(2)
   await expect(sheet.locator('[data-chord-index]').nth(2)).toHaveAttribute('title', 'Keep holding for ½ bar')
 })

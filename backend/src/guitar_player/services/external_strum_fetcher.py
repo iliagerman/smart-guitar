@@ -236,6 +236,8 @@ def _parse_tab_json(
     current_time = 0.0
     current_beat_pos = 0.0
     current_bpm = source_bpm
+    # Songsterr states the signature only on the measures where it changes.
+    signature = [4, 4]
 
     for measure_idx, measure in enumerate(measures):
         if measure_idx in tempo_changes:
@@ -247,7 +249,7 @@ def _parse_tab_json(
                 name=marker["text"], start_measure=measure_idx, start_time=current_time,
             ))
 
-        signature = measure.get("signature", [4, 4])
+        signature = measure.get("signature") or signature
         beat_unit = signature[1] if len(signature) > 1 else 4
         sig_counter[(signature[0] if signature else 4, beat_unit)] += 1
 

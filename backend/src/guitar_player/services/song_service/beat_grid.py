@@ -160,8 +160,8 @@ def _beats_per_bar(time_signature: list[int] | None, detected: int | None) -> in
     tab = time_signature[0] if time_signature and time_signature[0] > 0 else None
     # Of the tracked meters only 3/4 is trusted: a tracked 2 or 6 is as often
     # a 4/4 or 6/8 song counted in half or double time. It also wins over a
-    # tab's 4/4: stored tabs all read 4/4, because the Songsterr parser counts
-    # a measure that doesn't restate its meter as 4/4.
+    # tab's 4/4: tabs fetched before the parser carried a measure's signature
+    # forward were all stored as 4/4 (see refresh_songsterr_meter).
     if detected == 3 and tab in (None, 4):
         return 3
     return tab or _DEFAULT_BEATS_PER_BAR

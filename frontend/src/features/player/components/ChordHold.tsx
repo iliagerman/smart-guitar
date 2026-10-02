@@ -19,23 +19,44 @@ interface PillProps extends Omit<ChordHoldProps, 'live' | 'beatTimes'> {
 
 function Pill({ beats, beatsPerBar, rtl, played }: PillProps) {
   const live = played >= 0
+  // Up to two bars read best as a beat count you can see at a glance; longer holds as text.
+  const asBlocks = beats.count <= beatsPerBar * 2
   return (
     <span
-      className={cn(
-        'pointer-events-none relative mt-1 inline-flex overflow-hidden rounded-full px-1.5 font-sans text-[11px] font-bold leading-4 transition-colors sm:text-xs',
-        live ? 'bg-fire-500/20 text-flame-100 ring-1 ring-fire-400/50' : 'bg-white/[0.08] text-smoke-200',
-      )}
+      className={cn('pointer-events-none mt-1.5 inline-flex items-center', rtl && 'flex-row-reverse')}
       aria-hidden="true"
       data-testid="chord-hold"
       data-beats={beats.count}
     >
-      {live && (
+      {asBlocks ? (
+        Array.from({ length: beats.count }, (_, beat) => (
+          <span
+            // Beats are positional and never reorder.
+            // oxlint-disable-next-line react-doctor/no-array-index-key
+            key={beat}
+            className={cn(
+              'h-2 w-2.5 rounded-[3px] transition-colors sm:h-2.5 sm:w-3',
+              beat > 0 && (beat % beatsPerBar === 0 ? (rtl ? 'mr-2' : 'ml-2') : rtl ? 'mr-[3px]' : 'ml-[3px]'),
+              beat <= played ? 'bg-flame-400' : live ? 'bg-flame-200/45' : 'bg-smoke-300/70',
+            )}
+          />
+        ))
+      ) : (
         <span
-          className={cn('absolute inset-y-0 bg-fire-500/40 transition-[width] duration-150 ease-linear', rtl ? 'right-0' : 'left-0')}
-          style={{ width: `${((played + 1) / beats.count) * 100}%` }}
-        />
+          className={cn(
+            'relative overflow-hidden rounded-full px-2 font-sans text-[13px] font-bold leading-5',
+            live ? 'bg-fire-500/25 text-flame-100 ring-1 ring-fire-400/60' : 'bg-white/15 text-smoke-100',
+          )}
+        >
+          {live && (
+            <span
+              className={cn('absolute inset-y-0 bg-fire-500/40 transition-[width] duration-150 ease-linear', rtl ? 'right-0' : 'left-0')}
+              style={{ width: `${((played + 1) / beats.count) * 100}%` }}
+            />
+          )}
+          <span className="relative whitespace-nowrap">{holdLabel(beats.count, beatsPerBar)}</span>
+        </span>
       )}
-      <span className="relative whitespace-nowrap">{holdLabel(beats.count, beatsPerBar)}</span>
     </span>
   )
 }
@@ -47,8 +68,9 @@ function LivePill({ beatTimes, ...props }: Omit<ChordHoldProps, 'live'>) {
 }
 
 /**
- * How long to hold a chord — "½ bar", "1 bar", "2 bars" — in a pill under its
- * name. On the chord being played, the pill fills beat by beat.
+ * How long to hold a chord, under its name: one block per beat (a gap between
+ * bars) for up to two bars, "3 bars" and longer as text. On the chord being
+ * played, the blocks light up beat by beat.
  */
 export function ChordHold({ live, beatTimes, ...props }: ChordHoldProps) {
   return live ? <LivePill beatTimes={beatTimes} {...props} /> : <Pill {...props} played={-1} />

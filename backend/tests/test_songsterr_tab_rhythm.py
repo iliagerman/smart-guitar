@@ -217,3 +217,14 @@ async def test_bars_that_rest_on_beat_one_are_riffs_not_strumming(monkeypatch):
     result = await _fetch(monkeypatch, {0: _tab([_measure(offbeat, "Verse")] * 4)})
 
     assert result.tab_rhythm.strum_patterns == []
+
+
+def test_a_meter_stated_once_holds_for_the_measures_after_it():
+    """Songsterr writes the signature only where it changes: a 3/4 song states it on bar 1."""
+    beat = {"duration": [1, 4], "type": 4, "notes": [{"string": 0, "fret": 3}]}
+    measures = [{"signature": [3, 4], "voices": [{"beats": [beat] * 3}]}] + [{"voices": [{"beats": [beat] * 3}]}] * 7
+    measures.append({})  # an empty bar lasts a 3/4 bar too
+
+    *_, signature = fetcher._parse_tab_json({"measures": measures}, source_bpm=60.0)
+
+    assert signature == (3, 4)
