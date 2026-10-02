@@ -158,12 +158,14 @@ def _with_half_beats(beats: list[float]) -> list[float]:
 def _beats_per_bar(time_signature: list[int] | None, detected: int | None) -> int:
     # Songsterr data is external; ignore a malformed numerator.
     tab = time_signature[0] if time_signature and time_signature[0] > 0 else None
-    # Of the tracked meters only 3/4 is trusted: a tracked 2 or 6 is as often
-    # a 4/4 or 6/8 song counted in half or double time. It also wins over a
-    # tab's 4/4: tabs fetched before the parser carried a measure's signature
-    # forward were all stored as 4/4 (see refresh_songsterr_meter).
-    if detected == 3 and tab in (None, 4):
-        return 3
+    # Of the tracked meters 3 and 6 are trusted (3/4, 6/8): a tracked 2 is as
+    # often a 4/4 song counted in half time. A tracked 6 is a compound or
+    # shuffle feel, and grouping its beats in fours cuts bars across the
+    # song's (Maggie's Farm Forever: accents every 6 beats, bars every 4).
+    # Either wins over a tab's 4/4, which is also what a failed tab lookup
+    # stores.
+    if detected in (3, 6) and tab in (None, 4):
+        return detected
     return tab or _DEFAULT_BEATS_PER_BAR
 
 

@@ -31,7 +31,7 @@ const X = directionToSymbol('miss')
  */
 export function starterPattern(beatsPerBar: number, strumAccents?: StrumAccents | null): SectionStrumPattern {
   const starter = starterStrokes(beatsPerBar)
-  const accents = recordingAccents(strumAccents, beatsPerBar, starter.pattern.length)
+  const accents = recordingAccents(strumAccents, beatsPerBar, starter.pattern.length, starter.stepsPerBeat ?? 2)
   return accents ? { ...starter, accents, accentSource: 'recording' } : starter
 }
 

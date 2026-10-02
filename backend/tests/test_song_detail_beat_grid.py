@@ -277,3 +277,17 @@ async def test_no_detected_beats_means_no_grid(settings, storage):
     assert detail.bar_starts == []
     assert detail.detected_bpm is None
     assert detail.recommended_capo == 2
+
+
+@pytest.mark.asyncio
+async def test_a_tracked_six_beat_meter_is_shown_as_six_eight_without_a_tab(settings, storage):
+    """Downbeats every six tracked beats and no tab: 6/8 bars, not 4/4 ones cutting across them."""
+    beats = [i * 0.4 for i in range(36)]
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 150.0, "beat_times": beats, "downbeat_times": beats[::6], "beats_per_bar": 6},
+        CHORDS: _chord_changes(0.0, 2.4, 4.8, 7.2),
+        SONGSTERR: {"source_bpm": 120, "time_signature": [4, 4]},  # no tab found: the stored default
+    })
+
+    assert detail.bar_starts[:3] == [0.0, 2.4, 4.8]
+    assert detail.time_signature == [6, 8]

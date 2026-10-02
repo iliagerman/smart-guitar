@@ -221,7 +221,8 @@ async def build_song_detail(
 def _time_signature(tab: list[int] | None, beat_grid: BeatGrid | None) -> list[int] | None:
     """The tab's meter, or the tracked one when the beat grid counts bars in it instead."""
     if beat_grid and beat_grid.beats_per_bar != (tab[0] if tab else 4):
-        return [beat_grid.beats_per_bar, 4]
+        # Six beats a bar is six eighths (6/8); other tracked meters count quarters.
+        return [beat_grid.beats_per_bar, 8 if beat_grid.beats_per_bar == 6 else 4]
     return tab
 
 
