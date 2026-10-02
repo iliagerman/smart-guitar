@@ -73,3 +73,27 @@ describe('patternForSection', () => {
     expect(sectionIndexAt(sections, 25)).toBe(-1)
   })
 })
+
+describe('accents measured on the recording', () => {
+  const measured = {
+    beats_per_bar: 4,
+    steps_per_beat: 2,
+    accents: [false, false, true, false, false, true, false, false],
+    strength: [0.9, 0.4, 1.2, 0.6, 1.0, 1.24, 1.0, 1.18],
+    bars: 100,
+  }
+
+  it('mark the starter pattern on the strokes the song hits hardest', () => {
+    const starter = starterPattern(4, measured)
+    expect(starter.accents).toEqual(measured.accents)
+    expect(starter.accentSource).toBe('recording')
+  })
+
+  it('stay off a pattern in another meter', () => {
+    expect(starterPattern(3, measured).accents).toBeUndefined()
+  })
+
+  it('stay off when nothing stands out', () => {
+    expect(starterPattern(4, { ...measured, accents: Array(8).fill(false) }).accents).toBeUndefined()
+  })
+})

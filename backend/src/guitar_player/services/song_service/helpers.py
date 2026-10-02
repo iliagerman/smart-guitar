@@ -22,6 +22,9 @@ STEM_DEFINITIONS: list[StemType] = [
 ]
 
 STEM_NAMES = [s.name for s in STEM_DEFINITIONS]
+# Written by the chords service's /practice-audio beside the song's stems.
+MIXER_DIR = "mixer"
+STRUM_ACCENTS_FILE = "strum_accents.json"
 
 
 # A lyric line lasts at most this long per word it contains. Measured against

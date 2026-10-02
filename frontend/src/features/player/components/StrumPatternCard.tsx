@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
+import type { StrumAccents } from '@/types/song'
 import type { SectionStrumPattern } from '../lib/strum-pattern'
 import { STRUM_SEARCH_MS, beatLabels, guessStepsPerBeat, starterPattern } from '../lib/strum-display'
 import { useBoundedLoading } from '../hooks/use-bounded-loading'
@@ -16,6 +17,8 @@ interface StrumPatternCardProps {
   loading?: boolean
   /** The song's meter; picks the starter pattern for songs without a tab pattern. */
   beatsPerBar?: number
+  /** Accents measured on the recording; marked on the starter pattern. */
+  strumAccents?: StrumAccents | null
   onOpenTutorial?: () => void
 }
 
@@ -26,13 +29,13 @@ interface SectionPatternProps {
   onPlayingChange?: (playing: boolean) => void
 }
 
-export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading = false, beatsPerBar = 4, onOpenTutorial }: StrumPatternCardProps) {
+export function StrumPatternCard({ sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, loading = false, beatsPerBar = 4, strumAccents, onOpenTutorial }: StrumPatternCardProps) {
   const hasTutorials = (tutorialLinks && tutorialLinks.length > 0) || !!tutorialUrl
   const [playingSection, setPlayingSection] = useState<string | null>(null)
   // The pattern lookup can take a while (or never land); don't spin forever.
   const searching = useBoundedLoading(loading && sectionPatterns.length === 0, STRUM_SEARCH_MS)
 
-  const starter = sectionPatterns.length === 0 ? starterPattern(beatsPerBar) : null
+  const starter = sectionPatterns.length === 0 ? starterPattern(beatsPerBar, strumAccents) : null
 
   return (
     <>
@@ -245,7 +248,10 @@ function SectionPattern({ section, bpm, disabled, onPlayingChange }: SectionPatt
       </div>
       {hasAccents && (
         <p className="mt-1.5 text-[10px] text-smoke-500">
-          <span className="font-black text-flame-300">&gt;</span> marks the snare beats: hit those strokes a little harder.
+          <span className="font-black text-flame-300">&gt;</span>{' '}
+          {section.accentSource === 'recording'
+            ? 'marks the strokes the recording hits hardest: hit those a little harder.'
+            : 'marks the snare beats: hit those strokes a little harder.'}
         </p>
       )}
     </div>

@@ -189,6 +189,7 @@ export function SongContent({
                           sectionPatterns={sectionStrumPatterns}
                           bpm={songTempoBpm(detail) ?? 120}
                           beatsPerBar={detail.time_signature?.[0]}
+                          strumAccents={detail.strum_accents}
                           beatTimes={songBeatTimes(detail)}
                           sections={detail.sections}
                           loading={!detail.songsterr_status}
@@ -259,6 +260,7 @@ export function SongContent({
                       tutorialLinks={detail.tutorial_links}
                       strumLoading={!detail.songsterr_status}
                       beatsPerBar={detail.time_signature?.[0]}
+                      strumAccents={detail.strum_accents}
                       songKey={detail.song_key}
                       onOpenTutorial={onOpenTutorial}
                     />

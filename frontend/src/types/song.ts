@@ -118,6 +118,17 @@ export interface TabRhythm {
   strum_patterns: TabStrumPattern[]
 }
 
+/** Which eighth notes of the bar the song's rhythm part hits hardest, measured on its stems. */
+export interface StrumAccents {
+  beats_per_bar: number
+  steps_per_beat: number
+  /** One per step of the bar: 1 & 2 & 3 & 4 &. */
+  accents: boolean[]
+  /** Typical strength per step; 1.0 is the bar's average. */
+  strength: number[]
+  bars: number
+}
+
 export interface SongSection {
   name: string
   start_time: number
@@ -140,6 +151,8 @@ export interface SongDetail {
   thumbnail_url: string | null
   audio_url: string | null
   stems: SongStems
+  /** Lighter stem copies for multi-stem playback; null for a stem without one yet. */
+  mixer_stems?: SongStems
   stem_types: StemType[]
   chords: ChordEntry[]
   lyrics: LyricsSegment[]
@@ -160,6 +173,7 @@ export interface SongDetail {
   bar_starts?: number[]
   beat_times?: number[]
   tab_rhythm?: TabRhythm | null
+  strum_accents?: StrumAccents | null
   strums: StrumEvent[]
   rhythm: RhythmInfo | null
   sections: SongSection[]

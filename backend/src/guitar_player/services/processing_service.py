@@ -206,6 +206,15 @@ class ProcessingService:
         url = f"{self._chords_host}/align"
         return await self._request(url, {"chords_path": chords_path, "sheet_path": sheet_path})
 
+    async def practice_audio(self, chords_path: str, stems: dict[str, str]) -> dict:
+        """POST to chords /practice-audio: mixer copies of the stems and the strum accents.
+
+        Writes mixer/<stem>.mp3 and strum_accents.json beside chords_path.
+        Returns the service's summary (mixer_stems, accents).
+        """
+        url = f"{self._chords_host}/practice-audio"
+        return await self._request(url, {"chords_path": chords_path, "stems": stems})
+
     async def enhance_chords(
         self, audio_path: str, chords_path: str, bass_path: str = "",
     ) -> EnhanceResult:

@@ -80,6 +80,17 @@ class AlignResponse(BaseModel):
     chords: list[ChordInfo] = Field(default_factory=list)
 
 
+class PracticeAudioRequest(BaseModel):
+    chords_path: str = Field(..., min_length=1, description="chords.json path / S3 key; chord_meta.json (the beat grid) sits beside it")
+    stems: dict[str, str] = Field(..., min_length=1, description="Stem name -> stem path / S3 key, e.g. {'guitar': 'song/guitar.mp3'}")
+
+
+class PracticeAudioResponse(BaseModel):
+    status: str = "done"
+    mixer_stems: list[str]  # stem names given a mixer/<name>.mp3 copy
+    accents: list[bool] | None = None  # per eighth note of the bar; None when it couldn't be measured
+
+
 class ErrorResponse(BaseModel):
     status: str = "error"
     detail: str

@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { ArrowDownUp, Pencil, Timer } from 'lucide-react'
 
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 import { resumeMetronomeAudio } from '@/features/metronome/lib/metronome-audio'
 import { songTempoBpm } from '@/features/metronome/lib/song-beat-grid'
 import { usePlaybackStore } from '@/stores/playback.store'
@@ -114,7 +113,6 @@ export function AudioStatusBanner({ message }: AudioStatusBannerProps) {
       className="flex items-center justify-center gap-2 rounded-2xl border border-flame-400/20 bg-flame-400/10 px-3 py-2 text-sm font-medium text-flame-100 shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
       aria-live="polite"
     >
-      <LoadingSpinner size="xs" inline />
       <span>{message ?? fallbackMessage}</span>
     </div>
   )
@@ -281,6 +279,7 @@ function PrimaryControls({
           tutorialLinks={detail.tutorial_links}
           strumLoading={!detail.songsterr_status}
           beatsPerBar={detail.time_signature?.[0]}
+          strumAccents={detail.strum_accents}
           iconOnly
           onOpenTutorial={onOpenTutorial}
         />

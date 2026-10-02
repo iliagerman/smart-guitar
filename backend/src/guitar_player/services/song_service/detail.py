@@ -24,6 +24,7 @@ from guitar_player.schemas.song import (
     SongSection,
     StemType,
     StemUrls,
+    StrumAccents,
     StrumEvent,
     TabNote,
     TabRhythm,
@@ -38,8 +39,10 @@ from .chord_time_snap import build_anchor_times
 from .helpers import (
     CHORD_VARIANT_PREFIX,
     CHORD_VARIANT_SUFFIX,
+    MIXER_DIR,
     STEM_DEFINITIONS,
     STEM_NAMES,
+    STRUM_ACCENTS_FILE,
     parse_lyrics_payload,
 )
 from .sheet_alignment import (
@@ -85,6 +88,7 @@ async def build_song_detail(
     audio_url = _resolve_url(storage, song.audio_key)
     thumbnail_url = _resolve_url(storage, song.thumbnail_key)
     stems = _build_stems(storage, song)
+    mixer_stems = _build_mixer_stems(storage, song)
     stem_types = _build_stem_types(stems)
     t2 = time.perf_counter()
 
@@ -170,6 +174,7 @@ async def build_song_detail(
         thumbnail_url=thumbnail_url,
         audio_url=audio_url,
         stems=stems,
+        mixer_stems=mixer_stems,
         stem_types=stem_types,
         chords=primary_chords,
         chord_options=chord_options,
@@ -194,6 +199,7 @@ async def build_song_detail(
         tutorial_url=songsterr_data.get("tutorial_url"),
         tutorial_links=songsterr_data.get("tutorial_links", []),
         tab_rhythm=songsterr_data["tab_rhythm"],
+        strum_accents=_load_strum_accents(storage, song),
         songsterr_status=songsterr_data.get("songsterr_status"),
         chord_source=primary_source,
         recommended_capo=recommended_capo,
@@ -232,6 +238,24 @@ def _build_stems(storage: StorageBackend, song: SongRecord) -> StemUrls:
         if key and storage.file_exists(key):
             setattr(stems, stem_name, storage.get_url(key))
     return stems
+
+
+def _build_mixer_stems(storage: StorageBackend, song: SongRecord) -> StemUrls:
+    """URLs of the mixer/<stem>.mp3 copies the chords service wrote (one listing)."""
+    mixer = set(storage.list_files(f"{song.song_name}/{MIXER_DIR}/"))
+    stems = StemUrls()
+    for stem_name in STEM_NAMES:
+        key = f"{song.song_name}/{MIXER_DIR}/{stem_name}.mp3"
+        if key in mixer:
+            setattr(stems, stem_name, storage.get_url(key))
+    return stems
+
+
+def _load_strum_accents(storage: StorageBackend, song: SongRecord) -> StrumAccents | None:
+    key = f"{song.song_name}/{STRUM_ACCENTS_FILE}"
+    if not storage.file_exists(key):
+        return None
+    return StrumAccents.model_validate(storage.read_json(key))
 
 
 def _build_stem_types(stems: StemUrls) -> list[StemType]:

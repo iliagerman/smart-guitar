@@ -102,6 +102,17 @@ Lines the song's community chord sheet up with its recognized beats. Needs `chor
 
 Response: `accepted`, `loss_per_beat`, `transpose` (semitones from the sheet as written to the recording), `source_url`, and the aligned `chords` when accepted. When accepted, `chords.json`, `chords.lab` and the simplified variants are rewritten with the sheet's chord names (slash basses in `bass`), stale capo variants are deleted, and `chord_meta.json` gets `chord_source: "sheet"`, `sheet_url`, `sheet_transpose`, `sheet_loss_per_beat` (and `capo` when the sheet's capo explains the transposition). Otherwise only `chord_meta.json` changes (`chord_source: "detected"`). `404` when the sheet or recognition outputs are missing.
 
+### `POST /practice-audio`
+
+Lighter stem copies for the multi-stem player, and the strum accents. Needs `chord_meta.json` (the beat grid) beside `chords_path`.
+
+| Field         | Type   | Required | Description                                              |
+| ------------- | ------ | -------- | -------------------------------------------------------- |
+| `chords_path` | string | yes      | The song's `chords.json`; outputs go beside it.          |
+| `stems`       | object | yes      | Stem name -> stem path, e.g. `{"guitar": "song/guitar.mp3"}`. |
+
+Writes `mixer/<stem>.mp3` for each stem (LAME VBR `-q:a 5`, about a third the size of the 192 kbps CBR originals; the player decodes these whole, so VBR timing is exact) and `strum_accents.json`: which eighth notes of the bar (`1 & 2 & 3 & 4 &`) the guitar + "other" stems hit hardest (`beats_per_bar`, `steps_per_beat`, `accents`, `strength`, `bars`; see `strum_accents.py`). Response: `mixer_stems` (names written) and `accents` (`null` when there were too few full bars to measure). `404` when the beat grid or a stem is missing.
+
 ## Output files
 
 Written to the same directory as the input audio file:

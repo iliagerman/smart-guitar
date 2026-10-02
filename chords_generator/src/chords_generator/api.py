@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import uuid
 from contextlib import asynccontextmanager
@@ -37,10 +38,13 @@ from chords_generator.schemas import (
     DetectBassResponse,
     EnhanceRequest,
     EnhanceResponse,
+    PracticeAudioRequest,
+    PracticeAudioResponse,
     RecognizeRequest,
     RecognizeResponse,
 )
 from chords_generator.storage import StorageBackend, create_storage
+from chords_generator.strum_accents import detect_strum_accents
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +272,72 @@ def align(request: AlignRequest):
         raise
     except Exception as e:
         logger.exception("Align failed", extra={"event_type": "align_failed"})
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        _storage.release_inputs()
+        if settings.processing.cleanup_temp and os.path.exists(job_dir):
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+
+# Stems whose strokes carry the strumming accents: strummed and picked parts.
+ACCENT_STEMS = ("guitar", "other")
+MIXER_DIR = "mixer"
+# LAME VBR quality for the mixer copies (~130 kbps): a third the size of the
+# 192 kbps CBR stems. The player decodes these whole, so VBR timing is exact;
+# the CBR originals stay for single-track streaming, where it isn't.
+MIXER_VBR_QUALITY = "5"
+
+
+@app.post("/practice-audio", response_model=PracticeAudioResponse)
+def practice_audio(request: PracticeAudioRequest):
+    """Lighter stem copies for the multi-stem player, and the strum accents.
+
+    Writes mixer/<stem>.mp3 beside chords_path for each given stem, and
+    strum_accents.json measured on the guitar and "other" stems at the beats
+    in chord_meta.json.
+    """
+    settings = get_settings()
+    job_dir = os.path.join(settings.processing.temp_dir, str(uuid.uuid4()))
+    mixer_dir = os.path.join(job_dir, MIXER_DIR)
+    os.makedirs(mixer_dir, exist_ok=True)
+    folder = os.path.dirname(request.chords_path)
+    meta_path = os.path.join(folder, "chord_meta.json")
+    try:
+        for path in (meta_path, *request.stems.values()):
+            if not _storage.file_exists(path):
+                raise HTTPException(status_code=404, detail=f"Not found: {path}")
+        with open(_storage.resolve_input(meta_path)) as f:
+            meta = json.load(f)
+        local_stems = {name: _storage.resolve_input(path) for name, path in request.stems.items()}
+
+        for name, local in local_stems.items():
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error", "-i", local, "-codec:a", "libmp3lame",
+                 "-q:a", MIXER_VBR_QUALITY, os.path.join(mixer_dir, f"{name}.mp3")],
+                check=True,
+            )
+        _storage.store_outputs(mixer_dir, os.path.join(folder, MIXER_DIR, "stems"))
+
+        accent_paths = [local_stems[name] for name in ACCENT_STEMS if name in local_stems]
+        accents = None
+        if accent_paths and meta.get("beat_times") and meta.get("downbeat_times"):
+            accents = detect_strum_accents(
+                accent_paths, meta["beat_times"], meta["downbeat_times"], int(meta.get("beats_per_bar") or 4),
+            )
+        if accents:
+            with open(os.path.join(job_dir, "strum_accents.json"), "w") as f:
+                json.dump(accents.to_json(), f, indent=2)
+            _storage.store_outputs(job_dir, request.chords_path)
+        logger.info(
+            "Practice audio: %d mixer stems, accents=%s %s",
+            len(local_stems), accents.accents if accents else None, request.chords_path,
+            extra={"event_type": "practice_audio_done"},
+        )
+        return PracticeAudioResponse(mixer_stems=sorted(local_stems), accents=accents.accents if accents else None)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Practice audio failed", extra={"event_type": "practice_audio_failed"})
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         _storage.release_inputs()

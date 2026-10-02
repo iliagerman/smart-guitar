@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { getAudioSourceGroupKey, getAudioSourceKey } from '../lib/audio-source'
+import { downloadWithProgress, overallPercent, type DownloadState } from '../lib/download-progress'
 
 interface BufferedStemMixerOptions {
   playbackRate: number
@@ -33,6 +34,8 @@ interface BufferedStemMixerResult {
   clear: () => void
   getRecordingTap: () => RecordingTap | null
   isLoading: boolean
+  /** Percent of the selected stems downloaded while loading; null when unknown or idle. */
+  loadProgress: number | null
   loadStems: (stemUrls: Map<string, string>, options: StemLoadOptions) => Promise<void>
   primeAudioContext: () => Promise<void>
   seek: (time: number) => void
@@ -103,6 +106,7 @@ export function useBufferedStemMixer({
   const recordingTapRef = useRef<GainNode | null>(null)
   const silentStartCheckRef = useRef<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadProgress, setLoadProgress] = useState<number | null>(null)
 
   const getAudioContext = useCallback(() => {
     if (audioContextRef.current) {
@@ -336,7 +340,11 @@ export function useBufferedStemMixer({
     }, 1200)
   }, [ensureRunningAudioContext, getCurrentPosition, playbackRate, setCurrentTime, setPlaying, startTimeLoop, stopSources])
 
-  const ensureStemBuffer = useCallback(async (url: string, signal: AbortSignal) => {
+  const ensureStemBuffer = useCallback(async (
+    url: string,
+    signal: AbortSignal,
+    onProgress: (received: number, total: number) => void,
+  ) => {
     const key = getAudioSourceKey(url)
     const cached = bufferCacheRef.current.get(key)
     if (cached) {
@@ -354,7 +362,7 @@ export function useBufferedStemMixer({
       if (!response.ok) {
         throw new Error(`Failed to fetch stem (${url}): ${response.status}`)
       }
-      const data = await response.arrayBuffer()
+      const data = await downloadWithProgress(response, onProgress)
       const ctx = getAudioContext()
       try {
         return await ctx.decodeAudioData(data.slice(0))
@@ -412,6 +420,12 @@ export function useBufferedStemMixer({
     const revision = loadRevisionRef.current + 1
     loadRevisionRef.current = revision
     setIsLoading(true)
+    setLoadProgress(null)
+    const downloads = new Map<string, DownloadState>()
+    const reportProgress = (name: string) => (received: number, total: number) => {
+      downloads.set(name, { received, total })
+      if (loadRevisionRef.current === revision) setLoadProgress(overallPercent([...downloads.values()]))
+    }
 
     try {
       // The await must precede the abort/revision guard below: the load can be
@@ -419,7 +433,7 @@ export function useBufferedStemMixer({
       // oxlint-disable-next-line react-doctor/async-defer-await
       const loadedEntries = await Promise.all(
         entries.map(async ([name, url]) => {
-          const loaded = await ensureStemBuffer(url, controller.signal)
+          const loaded = await ensureStemBuffer(url, controller.signal, reportProgress(name))
           return { name, key: loaded.key, buffer: loaded.buffer }
         }),
       )
@@ -478,6 +492,7 @@ export function useBufferedStemMixer({
     } finally {
       if (loadRevisionRef.current === revision) {
         setIsLoading(false)
+        setLoadProgress(null)
       }
     }
   }, [clearActiveStems, ensureStemBuffer, getAudioContext, getRecordingTapNode, pausePlayback, setCurrentTime, setDuration, setPlaying, startPlaybackFrom])
@@ -524,6 +539,7 @@ export function useBufferedStemMixer({
     loadAbortRef.current?.abort()
     loadAbortRef.current = null
     setIsLoading(false)
+    setLoadProgress(null)
     pausePlayback()
     clearActiveStems()
     durationRef.current = 0
@@ -583,5 +599,5 @@ export function useBufferedStemMixer({
     }
   }, [clearActiveStems, getCurrentPosition, onPlaybackError, setPlaying, startPlaybackFrom, stopSources, stopTimeLoop])
 
-  return { clear, getRecordingTap, isLoading, loadStems, primeAudioContext, seek, setStemVolume, togglePlay }
+  return { clear, getRecordingTap, isLoading, loadProgress, loadStems, primeAudioContext, seek, setStemVolume, togglePlay }
 }

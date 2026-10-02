@@ -76,6 +76,20 @@ function getAudioUrl(
   return detail.stems[stem] || null
 }
 
+/**
+ * A stem for multi-stem playback: its lighter mixer copy when it has one. The
+ * player downloads and decodes every selected stem before playing, so size
+ * is the wait; single-stem playback streams the full-quality file instead.
+ */
+function getMixerUrl(
+  songId: string,
+  stem: string,
+  detail: { audio_url: string | null; stems: Record<string, string | null>; mixer_stems?: Record<string, string | null> },
+): string | null {
+  if (env.isLocal) return getAudioUrl(songId, stem, detail)
+  return detail.mixer_stems?.[stem] || getAudioUrl(songId, stem, detail)
+}
+
 /** The song page sits backstage: just the follow-spots, no other worlds mounted. */
 const STAGE_SCENES: readonly SceneKind[] = ['backstage']
 
@@ -159,6 +173,7 @@ export function SongDetailPage() {
     seek,
     setStemVolume,
     isLoading: isLoadingStemAudio,
+    loadProgress: stemLoadProgress,
     prepareForPlaybackGesture,
     primeForDelayedStart,
     setInstrumentalGapSegments,
@@ -422,7 +437,7 @@ export function SongDetailPage() {
 
     const urls = new Map<string, string>()
     for (const stem of activeStems) {
-      const url = getAudioUrl(songId, stem, detail)
+      const url = getMixerUrl(songId, stem, detail)
       if (url) urls.set(stem, url)
     }
     if (urls.size === activeStems.length) {
@@ -615,7 +630,7 @@ export function SongDetailPage() {
   // Only patterns notated in the song's tab are shown; tutorial-site guesses
   // were too often the same generic pattern to be worth playing along to.
   const sectionStrumPatterns = useMemo(
-    () => (detail?.tab_rhythm ? getTabStrumPatterns(detail.tab_rhythm) : []),
+    () => (detail?.tab_rhythm ? getTabStrumPatterns(detail.tab_rhythm, detail.strum_accents) : []),
     [detail],
   )
 
@@ -795,7 +810,7 @@ export function SongDetailPage() {
   const chordsUpgrading = hasChords && detail?.chord_source === 'autochord' && !detail?.web_chords_failed
   const showAudioStatus = isLoadingStemAudio || isWaitingForSelectedStems || (!audioUrl && hasStemsProcessed)
   const audioStatusMessage = isLoadingStemAudio
-    ? 'Loading selected stems...'
+    ? `Loading selected stems…${stemLoadProgress === null ? '' : ` ${stemLoadProgress}%`}`
     : isWaitingForSelectedStems
       ? detail.active_job
         ? `Preparing ${formatStemList(missingSelectedStems)}… ${detail.active_job.progress}%`

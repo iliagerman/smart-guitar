@@ -10,6 +10,7 @@ from guitar_player.dao.song_dao import SongDAO
 from guitar_player.database import safe_session
 from guitar_player.services.processing_service import ProcessingService
 from guitar_player.services.sheet_reading_order import READING_ORDER, to_reading_order
+from guitar_player.services.song_service.helpers import STEM_NAMES
 
 from .helpers import (
     find_stem,
@@ -269,6 +270,35 @@ async def align_song_chords(storage, song_name: str) -> dict | None:
         return verdict
     except Exception as e:
         logger.warning("Chord sheet alignment failed for %s: %s", song_name, e)
+        return None
+
+
+async def practice_audio_for_song(storage, song_name: str) -> dict | None:
+    """Mixer stem copies and strum accents for the song, once its beat grid exists.
+
+    Non-fatal: returns the chords service's summary, or None when skipped or failed.
+    """
+    if not storage.file_exists(f"{song_name}/chord_meta.json"):
+        return None
+    stems = {
+        name: f"{song_name}/{name}.mp3" for name in STEM_NAMES
+        if storage.file_exists(f"{song_name}/{name}.mp3")
+    }
+    if not stems:
+        return None
+    try:
+        from guitar_player.config import get_settings
+        from guitar_player.services.processing_service import ProcessingService
+
+        summary = await ProcessingService(get_settings()).practice_audio(f"{song_name}/chords.json", stems)
+        logger.info(
+            "Practice audio for %s: mixer=%s accents=%s",
+            song_name, summary.get("mixer_stems"), summary.get("accents"),
+            extra={"event_type": "practice_audio_done", "song_name": song_name},
+        )
+        return summary
+    except Exception as e:
+        logger.warning("Practice audio failed for %s: %s", song_name, e)
         return None
 
 

@@ -3,7 +3,7 @@ import { Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { usePlaybackStore } from '@/stores/playback.store'
-import type { SongSection } from '@/types/song'
+import type { SongSection, StrumAccents } from '@/types/song'
 import type { SectionStrumPattern, StrumDirection } from '../lib/strum-pattern'
 import {
   STRUM_SEARCH_MS,
@@ -30,6 +30,8 @@ interface StrumStripProps {
   sectionPatterns: SectionStrumPattern[]
   bpm: number
   beatsPerBar?: number
+  /** Accents measured on the recording; marked on the starter pattern. */
+  strumAccents?: StrumAccents | null
   /** The song's beats (the first is a downbeat), for following the song. */
   beatTimes: readonly number[] | null
   /** The song's sections in time, so each section shows its own tab pattern. */
@@ -44,7 +46,7 @@ const NO_SECTIONS: readonly SongSection[] = []
  * each section shows the pattern the tab gives it, and the stroke being played
  * lights up. ▶ plays the pattern on its own.
  */
-export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, sections = NO_SECTIONS, loading = false }: StrumStripProps) {
+export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, strumAccents, beatTimes, sections = NO_SECTIONS, loading = false }: StrumStripProps) {
   const searching = useBoundedLoading(loading && sectionPatterns.length === 0, STRUM_SEARCH_MS)
   // Changes once per section, not on every playback tick.
   const sectionIndex = usePlaybackStore((s) => sectionIndexAt(sections, s.currentTime))
@@ -60,7 +62,7 @@ export function StrumStrip({ sectionPatterns, bpm, beatsPerBar = 4, beatTimes, s
     )
   }
 
-  const section = sectionPattern ?? mainPattern(sectionPatterns) ?? starterPattern(beatsPerBar)
+  const section = sectionPattern ?? mainPattern(sectionPatterns) ?? starterPattern(beatsPerBar, strumAccents)
   const label = sectionPattern && playingSection ? sectionLabel(playingSection.name) : sectionPatterns.length === 0 ? 'starter' : section.name
   return (
     <StripPattern

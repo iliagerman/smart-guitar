@@ -173,6 +173,16 @@ class TabRhythm(BaseModel):
     strum_patterns: list[TabStrumPattern]
 
 
+class StrumAccents(BaseModel):
+    """Which eighth notes of the bar the song's rhythm part hits hardest, measured on its stems."""
+
+    beats_per_bar: int
+    steps_per_beat: int
+    accents: list[bool]  # one per step of the bar: 1 & 2 & 3 & 4 &
+    strength: list[float]  # typical strength per step, 1.0 = the bar's average
+    bars: int  # bars measured
+
+
 class SongSection(BaseModel):
     name: str
     start_time: float
@@ -199,6 +209,9 @@ class SongDetailResponse(BaseModel):
     thumbnail_url: str | None = None
     audio_url: str | None = None
     stems: StemUrls = StemUrls()
+    # Lighter copies of the stems for multi-stem playback, where each is
+    # downloaded and decoded whole; None for a stem without one yet.
+    mixer_stems: StemUrls = StemUrls()
     stem_types: list[StemType] = []
     chords: list[ChordEntry] = []
     chord_options: list[ChordOption] = []
@@ -220,6 +233,7 @@ class SongDetailResponse(BaseModel):
     bar_starts: list[float] = []
     beat_times: list[float] = []
     tab_rhythm: TabRhythm | None = None
+    strum_accents: StrumAccents | None = None
     strums: list[StrumEvent] = []
     rhythm: RhythmInfo | None = None
     sections: list[SongSection] = []

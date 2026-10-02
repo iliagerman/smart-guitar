@@ -1,4 +1,4 @@
-import type { ChordEntry, RhythmInfo, StrumEvent, TabRhythm } from '@/types/song'
+import type { ChordEntry, RhythmInfo, StrumAccents, StrumEvent, TabRhythm } from '@/types/song'
 
 export function directionToSymbol(direction: StrumDirection): StrumSymbol {
   if (direction === 'miss') {
@@ -240,19 +240,42 @@ export interface SectionStrumPattern {
   pattern: StrumSymbol[]
   /** Steps per beat when known (tab patterns); otherwise guessed from the length. */
   stepsPerBeat?: number
-  /** Which steps land on the snare beats; tab patterns only. */
+  /** Strokes to hit harder: measured on the recording, or the tab's snare beats. */
   accents?: boolean[]
+  accentSource?: 'recording' | 'snare'
+
   /** Share of the section's strummed bars played exactly like this (0..1). */
   barShare?: number
 }
 
-/** Strum patterns notated in the song's tab, one per section, with snare-beat accents. */
-export function getTabStrumPatterns(tabRhythm: TabRhythm): SectionStrumPattern[] {
-  return tabRhythm.strum_patterns.map((tabPattern) => ({
-    name: tabPattern.name,
-    pattern: tabPattern.steps.map((step) => directionToSymbol(step.direction)),
-    stepsPerBeat: tabPattern.subdivision,
-    accents: tabPattern.steps.map((step) => step.accent),
-    barShare: tabPattern.bar_share,
-  }))
+/**
+ * The recording's measured accents for a pattern of `steps` strokes per bar,
+ * or null when they don't fit it (another meter or subdivision) or none stand out.
+ */
+export function recordingAccents(
+  strumAccents: StrumAccents | null | undefined,
+  beatsPerBar: number,
+  steps: number,
+): boolean[] | null {
+  if (!strumAccents || strumAccents.beats_per_bar !== beatsPerBar) return null
+  if (strumAccents.accents.length !== steps || !strumAccents.accents.some(Boolean)) return null
+  return strumAccents.accents
+}
+
+/**
+ * Strum patterns notated in the song's tab, one per section. Accents are the
+ * ones measured on the recording when they fit, otherwise the tab's snare beats.
+ */
+export function getTabStrumPatterns(tabRhythm: TabRhythm, strumAccents?: StrumAccents | null): SectionStrumPattern[] {
+  return tabRhythm.strum_patterns.map((tabPattern) => {
+    const measured = recordingAccents(strumAccents, tabRhythm.beats_per_bar, tabPattern.steps.length)
+    return {
+      name: tabPattern.name,
+      pattern: tabPattern.steps.map((step) => directionToSymbol(step.direction)),
+      stepsPerBeat: tabPattern.subdivision,
+      accents: measured ?? tabPattern.steps.map((step) => step.accent),
+      accentSource: measured ? 'recording' : 'snare',
+      barShare: tabPattern.bar_share,
+    }
+  })
 }

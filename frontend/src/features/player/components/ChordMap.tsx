@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { cn } from '@/lib/cn'
 import { formatChordName } from '@/lib/chord-colors'
+import type { StrumAccents } from '@/types/song'
 import { getPrimaryVoicing, normalizeChordName } from '../lib/chord-shapes'
 import { adaptVoicingToBass, noteToPitchClass, splitSlashBass } from '../lib/chord-voicings'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
@@ -66,6 +67,7 @@ interface ChordMapProps {
     strumLoading?: boolean
     /** The song's meter, for the starter strum pattern. */
     beatsPerBar?: number
+    strumAccents?: StrumAccents | null
     showHeader?: boolean
     songKey?: string | null
     className?: string
@@ -84,6 +86,7 @@ export function ChordMap({
     tutorialLinks,
     strumLoading,
     beatsPerBar,
+    strumAccents,
     showHeader = true,
     songKey,
     className,
@@ -134,6 +137,7 @@ export function ChordMap({
                     tutorialLinks={tutorialLinks}
                     loading={strumLoading}
                     beatsPerBar={beatsPerBar}
+                    strumAccents={strumAccents}
                     onOpenTutorial={onOpenTutorial}
                 />
             </div>

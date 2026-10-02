@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
+import type { StrumAccents } from '@/types/song'
 import { ChordMap } from './ChordMap'
 import type { SectionStrumPattern, StrumSymbol } from '../lib/strum-pattern'
 import { toolButtonClass } from '../lib/tool-button'
@@ -42,6 +43,7 @@ interface ChordMapDialogProps {
     chords: string[]
     representativePattern?: StrumSymbol[]
     beatsPerBar?: number
+    strumAccents?: StrumAccents | null
     sectionPatterns?: SectionStrumPattern[]
     bpm?: number
     strumNotes?: string | null
@@ -53,7 +55,7 @@ interface ChordMapDialogProps {
     onOpenTutorial?: () => void
 }
 
-export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, strumLoading, beatsPerBar, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
+export function ChordMapDialog({ chords, representativePattern, sectionPatterns, bpm, strumNotes, tutorialUrl, tutorialLinks, strumLoading, beatsPerBar, strumAccents, className, iconOnly = false, onOpenTutorial }: ChordMapDialogProps) {
     const [open, setOpen] = useState(false)
 
     // ChordMap itself will return null when there are no usable chords.
@@ -117,7 +119,7 @@ export function ChordMapDialog({ chords, representativePattern, sectionPatterns,
                     </div>
 
                     <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} tutorialLinks={tutorialLinks} strumLoading={strumLoading} beatsPerBar={beatsPerBar} showHeader={false} onOpenTutorial={handleOpenTutorial} />
+                        <ChordMap chords={chords} representativePattern={representativePattern} sectionPatterns={sectionPatterns} bpm={bpm} strumNotes={strumNotes} tutorialUrl={tutorialUrl} tutorialLinks={tutorialLinks} strumLoading={strumLoading} beatsPerBar={beatsPerBar} strumAccents={strumAccents} showHeader={false} onOpenTutorial={handleOpenTutorial} />
                     </div>
                 </Dialog.Content>
             </Dialog.Portal>

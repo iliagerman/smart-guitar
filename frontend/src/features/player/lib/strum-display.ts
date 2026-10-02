@@ -1,6 +1,6 @@
 import { beatIndexAt } from '@/features/metronome/lib/song-beat-grid'
-import type { SongSection } from '@/types/song'
-import { directionToSymbol, type SectionStrumPattern } from './strum-pattern'
+import type { SongSection, StrumAccents } from '@/types/song'
+import { directionToSymbol, recordingAccents, type SectionStrumPattern } from './strum-pattern'
 
 /** How long to show "looking for the pattern" before settling on the starter. */
 export const STRUM_SEARCH_MS = 8000
@@ -29,7 +29,13 @@ const X = directionToSymbol('miss')
  * be strummed with (4/4: down, down-up, up-down-up). Shown as a starter, never
  * as the song's own pattern.
  */
-export function starterPattern(beatsPerBar: number): SectionStrumPattern {
+export function starterPattern(beatsPerBar: number, strumAccents?: StrumAccents | null): SectionStrumPattern {
+  const starter = starterStrokes(beatsPerBar)
+  const accents = recordingAccents(strumAccents, beatsPerBar, starter.pattern.length)
+  return accents ? { ...starter, accents, accentSource: 'recording' } : starter
+}
+
+function starterStrokes(beatsPerBar: number): SectionStrumPattern {
   if (beatsPerBar === 3) return { name: 'Starter pattern', pattern: [D, X, D, U, D, U], stepsPerBeat: 2 }
   if (beatsPerBar === 6) return { name: 'Starter pattern', pattern: [D, X, U, D, X, U], stepsPerBeat: 1 }
   return { name: 'Starter pattern', pattern: [D, X, D, U, X, U, D, U], stepsPerBeat: 2 }

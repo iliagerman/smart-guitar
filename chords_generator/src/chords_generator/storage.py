@@ -74,6 +74,7 @@ class LocalStorage:
     def store_outputs(self, local_output_dir: str, input_path: str) -> str:
         """Copy output files into the parent directory of input_path."""
         dest = Path(input_path).parent
+        dest.mkdir(parents=True, exist_ok=True)
 
         for filename in os.listdir(local_output_dir):
             src = os.path.join(local_output_dir, filename)

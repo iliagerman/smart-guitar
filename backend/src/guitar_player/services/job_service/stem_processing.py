@@ -646,6 +646,7 @@ async def process_job(job_id: uuid.UUID) -> None:
             _do_tabs(processing, storage, song_name, job_id),
             _check_quick_lyrics(storage, song_name, song_id, job_id),
             _align_sheet_after(sheet_task, storage, song_name),
+            _practice_audio(storage, song_name),
         )
 
     gather_task = asyncio.create_task(_remaining_subtasks())
@@ -701,6 +702,13 @@ async def _align_sheet_after(sheet_task: asyncio.Task, storage, song_name: str) 
 
     await asyncio.gather(sheet_task, return_exceptions=True)
     await align_song_chords(storage, song_name)
+
+
+async def _practice_audio(storage, song_name: str) -> None:
+    """Lighter mixer stems and strum accents, from the stems and beats just made."""
+    from .external_data import practice_audio_for_song
+
+    await practice_audio_for_song(storage, song_name)
 
 
 def _stem_storage_candidates(song_name: str, stem_name: str) -> list[str]:
