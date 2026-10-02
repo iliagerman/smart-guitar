@@ -425,10 +425,33 @@ def refine_segments_with_onsets(
 # lands in between, so the cutoff only has to sit inside that empty band.
 _MIN_VOICED_RATIO = 0.05
 
+# A word is silent when less than this share of its frames carries vocal
+# energy, and a segment is invented when fewer than _MIN_SUNG_WORD_SHARE of its
+# words are sung -- even when its span catches some stem energy (bleed from a
+# solo). Over 2,074 segments from 80 songs that share is 0% for 20 segments,
+# all invented ("Thank you.", repeated choruses), and 10% or more for every
+# other one. Silent words inside a sung line are left alone: they are real
+# lyrics with drifted timing far more often than invented ones.
+_SILENT_WORD_RATIO = 0.05
+_MIN_SUNG_WORD_SHARE = 0.1
+
 # Below this, the vocals stem carries no usable signal at all (a failed
 # separation, or a full-mix fallback). Gating on it would delete the whole
 # song's lyrics, so we leave every segment alone instead.
 _MIN_USABLE_VOICED_RATIO = 0.02
+
+
+def _words_sung(seg: SegmentInfo, voiced: np.ndarray) -> bool:
+    """Whether enough of the segment's timed words sit on vocal energy (no words: yes)."""
+    if not seg.words:
+        return True
+    sung = 0
+    for word in seg.words:
+        first = max(0, min(int(word.start / _HOP_S), len(voiced)))
+        last = max(first + 1, min(int(max(word.end, word.start + 0.05) / _HOP_S), len(voiced)))
+        if first < len(voiced) and float(voiced[first:last].mean()) >= _SILENT_WORD_RATIO:
+            sung += 1
+    return sung / len(seg.words) >= _MIN_SUNG_WORD_SHARE
 
 
 def drop_unvoiced_segments(
@@ -466,7 +489,7 @@ def drop_unvoiced_segments(
         end_frame = max(start_frame + 1, min(int(seg.end / _HOP_S), len(voiced)))
         if start_frame >= len(voiced):
             continue
-        if float(voiced[start_frame:end_frame].mean()) >= min_voiced_ratio:
+        if float(voiced[start_frame:end_frame].mean()) >= min_voiced_ratio and _words_sung(seg, voiced):
             kept.append(seg)
         else:
             logger.info(

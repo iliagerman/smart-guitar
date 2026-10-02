@@ -86,3 +86,28 @@ def test_empty_inputs_are_handled():
     assert drop_unvoiced_segments([], _voice(5.0)) == []
     segments = [_segment(0.0, 1.0, "hello")]
     assert drop_unvoiced_segments(segments, np.array([], dtype=np.float32)) == segments
+
+
+def test_a_segment_whose_words_all_sit_on_silence_is_dropped():
+    """Motörhead - God Was Never on Your Side, 196-201s: the line's span overlaps some
+    vocal-stem energy (43% voiced), but Whisper placed every one of its 12 words where
+    the stem is silent -- it invented the chorus again over the guitar solo."""
+    audio = np.concatenate([_voice(4.0), _silence(6.0)])  # voice 0-4s, silence 4-10s
+    words = [WordInfo(word=f"w{i}", start=4.5 + i * 0.4, end=4.8 + i * 0.4) for i in range(12)]
+    invented = SegmentInfo(start=2.0, end=10.0, text="He was never on your side", words=words)
+
+    assert drop_unvoiced_segments([invented], audio) == []
+
+
+def test_a_segment_with_some_words_on_voice_is_kept():
+    """A sung line can have a few words drift into a gap; one voiced word in three keeps it."""
+    audio = np.concatenate([_voice(4.0), _silence(6.0)])
+    words = [
+        WordInfo(word="sung", start=1.0, end=1.5),
+        WordInfo(word="drifted", start=5.0, end=5.5),
+        WordInfo(word="drifted", start=6.0, end=6.5),
+    ]
+    line = SegmentInfo(start=1.0, end=6.5, text="sung drifted drifted", words=words)
+
+    assert drop_unvoiced_segments([line], audio) == [line]
+

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lyrics_generator.schemas import SegmentInfo, WordInfo
-from lyrics_generator.text_corrector import correct_lyrics, correct_lyrics_llm
+from lyrics_generator.text_corrector import _parse_llm_response, correct_lyrics, correct_lyrics_llm
 
 
 def _seg(start: float, end: float, text: str, words: list[tuple] | None = None) -> SegmentInfo:
@@ -141,3 +141,46 @@ class TestCorrectLyricsLLM:
         whisper = [_seg(10.0, 15.0, "text")]
         result = await correct_lyrics_llm(whisper, [], settings=_mock_settings())
         assert result == whisper
+
+
+def test_a_line_keeps_only_the_words_of_its_own_text():
+    """Motörhead - God Was Never on Your Side: the correction handed a line its own
+    twelve words plus the eleven of the line before, stacked over the guitar solo,
+    and the player highlighted the extra words over music nobody sings to."""
+    leaked = "is in turn away He never has a word to say".split()
+    own = "He was never on your side God was never on your side".split()
+    data = {"segments": [{
+        "start": 196.2, "end": 201.3,
+        "text": "He was never on your side, God was never on your side.",
+        "words": [{"word": w, "start": 196.5, "end": 196.5} for w in leaked]
+        + [{"word": w, "start": 197.0 + i * 0.3, "end": 197.2 + i * 0.3} for i, w in enumerate(own)],
+    }]}
+
+    [line] = _parse_llm_response(data, [])
+
+    assert [w.word for w in line.words] == own
+    assert line.words[0].start == 197.0
+
+
+def test_a_line_whose_words_fit_its_text_is_untouched():
+    data = {"segments": [{"start": 1.0, "end": 2.0, "text": "Hello, world!", "words": [
+        {"word": "Hello,", "start": 1.0, "end": 1.4}, {"word": "world!", "start": 1.5, "end": 2.0},
+    ]}]}
+
+    [line] = _parse_llm_response(data, [])
+
+    assert [w.word for w in line.words] == ["Hello,", "world!"]
+
+
+def test_words_without_letters_do_not_count_as_extra():
+    """Sting - Shape of My Heart: zero-width characters come back as their own
+    'words'; they carry no letters, so the line's real words all stay."""
+    zw = "​​"
+    data = {"segments": [{"start": 38.1, "end": 43.3, "text": f"{zw} And Those He Plays {zw} Never", "words": [
+        {"word": w, "start": 38.1 + i * 0.5, "end": 38.5 + i * 0.5}
+        for i, w in enumerate([zw, "And", "Those", "He", "Plays", zw, zw, "Never"])
+    ]}]}
+
+    [line] = _parse_llm_response(data, [])
+
+    assert [w.word for w in line.words if w.word != zw] == ["And", "Those", "He", "Plays", "Never"]

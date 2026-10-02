@@ -155,6 +155,41 @@ def _segments_to_json(segments: list[SegmentInfo]) -> list[dict[str, Any]]:
     ]
 
 
+_TOKEN = re.compile(r"[\w'’]+")
+# A window of words is the line's own when this share of its tokens match the text.
+_MIN_WORD_MATCH = 0.6
+
+
+def _tokens(text: str) -> list[str]:
+    return [t.lower() for t in _TOKEN.findall(text)]
+
+
+def fit_words_to_text(text: str, words: list[WordInfo]) -> list[WordInfo]:
+    """The line's own words when it was handed more than its text holds.
+
+    The correction sometimes gives a line the words of its neighbour too (God
+    Was Never on Your Side: a line's twelve words plus the previous line's
+    eleven, stacked on one instant). Keeps the run of consecutive words, as
+    many as the text has, that matches it best; leaves the words alone when
+    none matches well enough or there are no extra words. Words with no
+    letters (zero-width spaces, a note sign) are not counted, and stay when
+    they fall inside the kept run.
+    """
+    tokens = _tokens(text)
+    lettered = [i for i, w in enumerate(words) if _tokens(w.word)]
+    if not tokens or len(lettered) <= len(tokens):
+        return words
+    normalized = ["".join(_tokens(words[i].word)) for i in lettered]
+    best_start, best_matches = 0, -1
+    for start in range(len(lettered) - len(tokens) + 1):
+        matches = sum(a == b for a, b in zip(normalized[start:start + len(tokens)], tokens))
+        if matches > best_matches:
+            best_start, best_matches = start, matches
+    if best_matches < _MIN_WORD_MATCH * len(tokens):
+        return words
+    return words[lettered[best_start]:lettered[best_start + len(tokens) - 1] + 1]
+
+
 def _parse_llm_response(
     data: dict[str, Any],
     quick_segments: list[SegmentInfo],
@@ -183,7 +218,7 @@ def _parse_llm_response(
                 start=round(float(seg["start"]), 3),
                 end=round(float(seg["end"]), 3),
                 text=seg["text"],
-                words=words,
+                words=fit_words_to_text(seg["text"], words),
             ))
         except (KeyError, ValueError, TypeError) as e:
             logger.warning("Failed to parse LLM segment %d: %s", i, e)

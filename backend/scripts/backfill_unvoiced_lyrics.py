@@ -7,7 +7,8 @@ the player highlights those lines over music nobody is singing to.
 
 The separated vocals stem does give it away: an invented segment sits over
 frames with no vocal energy at all. This rewrites stored lyrics.json files
-with those segments removed.
+with those segments removed, and gives lines that were handed a neighbour's
+words only their own. Rerunning is safe: the original is kept once, beside it.
 
 `lyrics_generator.onset_aligner.drop_unvoiced_segments` applies the same rule
 to newly transcribed songs; this is the one-off pass over songs transcribed
@@ -22,6 +23,7 @@ Usage:
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -51,8 +53,21 @@ MIN_VOICED_RATIO = 0.05
 # full-mix fallback). Gating on it would delete the song's entire lyrics.
 MIN_USABLE_VOICED_RATIO = 0.02
 
-# Untouched copy written beside each rewritten lyrics.json.
-BACKUP_NAME = "lyrics.pre_vad.json"
+# Word-level rule, the same as lyrics_generator.onset_aligner._words_sung: a word
+# is silent below SILENT_WORD_RATIO voiced frames, and a segment with fewer than
+# MIN_SUNG_WORD_SHARE of its words sung is invented.
+SILENT_WORD_RATIO = 0.05
+MIN_SUNG_WORD_SHARE = 0.1
+
+# Lines handed their neighbour's words too keep only their own (the same as
+# lyrics_generator.text_corrector.fit_words_to_text).
+TOKEN = re.compile(r"[\w'’]+")
+MIN_WORD_MATCH = 0.6
+
+# Whisper's transcription, with the untouched copy written beside it the first
+# time it is rewritten. lyrics_quick.json is left alone: its lines are published
+# lyrics with approximate timing, real even where the timing misses the singing.
+LYRICS_FILES = {"lyrics.json": "lyrics.pre_vad.json"}
 
 
 @dataclass
@@ -116,20 +131,64 @@ def _voiced_ratio(mask: np.ndarray, start: float, end: float) -> float:
     return float(mask[first:last].mean())
 
 
-def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> SongResult:
-    song_dir = os.path.dirname(lyrics_key)
-    vocals_key = f"{song_dir}/vocals.mp3"
-    backup_key = f"{song_dir}/{BACKUP_NAME}"
+def _is_sung(mask: np.ndarray, segment: dict) -> bool:
+    if _voiced_ratio(mask, segment["start"], segment["end"]) < MIN_VOICED_RATIO:
+        return False
+    words = segment.get("words") or []
+    if not words:
+        return True
+    sung = sum(
+        _voiced_ratio(mask, w["start"], max(w["end"], w["start"] + 0.05)) >= SILENT_WORD_RATIO
+        for w in words
+    )
+    return sung / len(words) >= MIN_SUNG_WORD_SHARE
 
-    # A backup means an earlier run already rewrote this song. Skip before
-    # downloading the stem, so an interrupted pass resumes cheaply.
-    if apply and storage.file_exists(backup_key):
-        return SongResult(lyrics_key, 0, [], skipped="already done")
+
+def _tokens(text: str) -> list[str]:
+    return [t.lower() for t in TOKEN.findall(text)]
+
+
+def _fit_words_to_text(segment: dict) -> dict:
+    """The segment with only its own words when it carries more than its text holds.
+
+    Words with no letters (zero-width spaces, a note sign) are not counted.
+    """
+    tokens = _tokens(segment.get("text", ""))
+    words = segment.get("words") or []
+    lettered = [i for i, w in enumerate(words) if _tokens(w["word"])]
+    if not tokens or len(lettered) <= len(tokens):
+        return segment
+    normalized = ["".join(_tokens(words[i]["word"])) for i in lettered]
+    best_start, best_matches = 0, -1
+    for start in range(len(lettered) - len(tokens) + 1):
+        matches = sum(a == b for a, b in zip(normalized[start:start + len(tokens)], tokens))
+        if matches > best_matches:
+            best_start, best_matches = start, matches
+    if best_matches < MIN_WORD_MATCH * len(tokens):
+        return segment
+    return {**segment, "words": words[lettered[best_start]:lettered[best_start + len(tokens) - 1] + 1]}
+
+
+def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> SongResult:
+    """Drop invented segments from a song's lyrics.json, and fit words to their lines."""
+    song_dir, name = os.path.split(lyrics_key)
+    vocals_key = f"{song_dir}/vocals.mp3"
+    backup_key = f"{song_dir}/{LYRICS_FILES[name]}"
 
     if not storage.file_exists(vocals_key):
         return SongResult(lyrics_key, 0, [], skipped="no vocals stem")
 
+    # From the untouched transcription when lyrics.json was derived from it, so
+    # a rerun after a rule change redoes the song instead of compounding on the
+    # last pass. A song re-transcribed since its backup has lines the backup
+    # lacks; then the current file is the original.
     payload = storage.read_json(lyrics_key)
+    original_key = lyrics_key
+    if storage.file_exists(backup_key):
+        backup = storage.read_json(backup_key)
+        backup_texts = {seg.get("text") for seg in backup.get("segments") or []}
+        if all(seg.get("text") in backup_texts for seg in payload.get("segments") or []):
+            payload, original_key = backup, backup_key
     if not isinstance(payload, dict) or not payload.get("segments"):
         return SongResult(lyrics_key, 0, [], skipped="no segments")
     segments = payload["segments"]
@@ -149,17 +208,22 @@ def _process_song(storage: StorageBackend, lyrics_key: str, apply: bool) -> Song
     kept = []
     dropped = []
     for segment in segments:
-        if _voiced_ratio(mask, segment["start"], segment["end"]) >= MIN_VOICED_RATIO:
-            kept.append(segment)
+        fitted = _fit_words_to_text(segment)
+        if fitted is not segment:
+            dropped.append((segment["start"], segment["end"], f"[words fitted to text] {segment['text']}"))
+        if _is_sung(mask, fitted):
+            kept.append(fitted)
         else:
             dropped.append((segment["start"], segment["end"], segment["text"]))
 
-    if dropped and apply:
-        # The audio bucket is not versioned, so keep the original alongside —
-        # restoring a song is then a copy, not a re-transcription.
-        storage.write_json(backup_key, payload)
-        payload["segments"] = kept
-        storage.write_json(lyrics_key, payload)
+    current = storage.read_json(lyrics_key)
+    if apply and (dropped or original_key != lyrics_key) and current.get("segments") != kept:
+        # The audio bucket is not versioned, so keep the original alongside --
+        # restoring a song is then a copy, not a re-transcription. A later pass
+        # keeps the first backup: it is the transcription as it came.
+        if not storage.file_exists(backup_key):
+            storage.write_json(backup_key, payload)
+        storage.write_json(lyrics_key, {**payload, "segments": kept})
 
     return SongResult(lyrics_key, len(segments), dropped)
 
@@ -178,14 +242,14 @@ def main() -> int:
 
     # Storage, not the song table: the prod database sits inside the VPC and
     # is unreachable from a developer machine, while the bucket is not.
-    keys = sorted(k for k in storage.list_files("") if k.endswith("/lyrics.json"))
+    keys = sorted(k for k in storage.list_files("") if k.rsplit("/", 1)[-1] in LYRICS_FILES and not k.startswith("backups/"))
     if args.song:
         keys = [k for k in keys if args.song in k]
     if args.limit:
         keys = keys[: args.limit]
 
     mode = "APPLY" if args.apply else "DRY RUN"
-    logger.info("%s: %d songs with lyrics.json", mode, len(keys))
+    logger.info("%s: %d lyrics files", mode, len(keys))
 
     songs_changed = 0
     total_dropped = 0
