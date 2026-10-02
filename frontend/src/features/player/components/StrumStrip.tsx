@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Loader2, Play, Square } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -17,6 +17,7 @@ import {
   strumStepAt,
 } from '../lib/strum-display'
 import { useBoundedLoading } from '../hooks/use-bounded-loading'
+import { useLoopScroll } from '../hooks/use-loop-scroll'
 import { useStrumPlayback } from '../hooks/use-strum-playback'
 
 const GLYPH: Record<StrumDirection, { symbol: string; className: string }> = {
@@ -97,6 +98,8 @@ function StripPattern({ section, label: sectionName, bpm, beatTimes, starter }: 
     s.isPlaying && beatTimes ? strumStepAt(beatTimes, s.currentTime, directions.length, stepsPerBeat) : -1,
   )
   const lit = previewing ? currentBeatIndex : songStep
+  const listRef = useRef<HTMLOListElement>(null)
+  const copies = useLoopScroll(listRef, directions.length, lit)
   const hasAccents = section.accents?.some(Boolean) ?? false
 
   // The song and the preview never strum over each other.
@@ -117,23 +120,27 @@ function StripPattern({ section, label: sectionName, bpm, beatTimes, starter }: 
         </span>
       </div>
       <ol
-        className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto scrollbar-hide"
+        ref={listRef}
+        className="relative flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto scrollbar-hide"
         aria-label={`Strumming pattern: ${section.pattern.map((step) => step.title).join(', ')}`}
       >
-        {section.pattern.map((step, index) => {
+        {Array.from({ length: copies }, (_, copy) => section.pattern.map((step, index) => {
+          // With copies (a pattern wider than the strip), the middle one is the real strip.
+          const real = copies === 1 || copy === 1
           const glyph = GLYPH[step.direction]
           const label = labels[index] ?? ''
-          const on = index === lit
+          const on = real && index === lit
           const accent = section.accents?.[index] ?? false
           return (
             // Steps are positional and never reorder.
             // oxlint-disable-next-line react-doctor/no-array-index-key
-            <li key={index}
+            <li key={`${copy}-${index}`}
+              aria-hidden={real ? undefined : true}
               className={cn(
                 'flex min-w-[1.15rem] flex-col items-center rounded-md px-0.5 pt-0.5 transition-[background-color,transform] duration-100 motion-reduce:transition-none lg:min-w-[1.75rem] lg:py-0.5',
                 on && 'scale-110 bg-flame-400/20',
               )}
-              data-testid="strum-strip-step"
+              data-testid={real ? 'strum-strip-step' : 'strum-strip-step-copy'}
               data-direction={step.direction}
               data-accent={accent}
               data-on={on}
@@ -158,7 +165,7 @@ function StripPattern({ section, label: sectionName, bpm, beatTimes, starter }: 
               </span>
             </li>
           )
-        })}
+        }))}
       </ol>
       <button
         type="button"

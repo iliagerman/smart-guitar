@@ -207,3 +207,64 @@ test('chord sheet marks each bar and fills it with exactly one bar of chords', a
   await expect(sheet.getByTestId('bar-line')).toHaveCount(2)
   await expect(sheet.locator('[data-chord-index]').nth(2)).toHaveAttribute('title', 'Keep holding for ½ bar')
 })
+
+test('the chord being played shows its played and its remaining beats', async ({ authenticatedPage: page }) => {
+  // 0.5 s beats; the C holds two of them (1.5-2.5 s).
+  const holdChords = [
+    { start_time: 0.5, end_time: 1.5, chord: 'G', bass: null },
+    { start_time: 1.5, end_time: 2.5, chord: 'C', bass: null },
+    { start_time: 2.5, end_time: 4.5, chord: 'D', bass: null },
+  ]
+  // No count-in, so playback starts on the click.
+  await page.addInitScript(() => {
+    localStorage.setItem('player-prefs', JSON.stringify({ state: { countInEnabled: false }, version: 20 }))
+  })
+  // A real short media file, so the player has a duration and seeking moves the playhead.
+  const media = new URL('../../../public/guitar.mp4', import.meta.url).pathname
+  await page.route(`**/api/v1/songs/${SONG_ID}/stream*`, (route) =>
+    route.fulfill({ path: media, contentType: 'video/mp4', headers: { 'Accept-Ranges': 'bytes' } }),
+  )
+  await mockSong(page, {
+    ...syncedBeats,
+    audio_url: 'synthetic',
+    chords: holdChords,
+    chord_options: [{ name: 'Detected', description: 'Synthetic chords', capo: 0, hidden: false, is_variant: false, chords: holdChords, lyrics: [], lyrics_source: 'detected' }],
+  })
+  await expect(page.getByTestId('transport-duration')).not.toHaveText('0:00', { timeout: 10000 })
+  const sheet = page.getByTestId('chord-sheet')
+  // Move the playhead to the C: it sits on its first beat.
+  await sheet.locator('[data-chord-index]').nth(1).click()
+  await page.getByRole('button', { name: 'Play from here' }).click()
+  const blocks = sheet.locator('[data-chord-index]').nth(1).getByTestId('chord-hold').locator('span')
+  await expect(blocks).toHaveCount(2)
+  await expect(blocks.nth(0)).toHaveAttribute('data-played', 'true')
+  await expect(blocks.nth(1)).toHaveAttribute('data-played', 'false')
+})
+
+test('a strum pattern wider than the strip keeps the stroke being played in view', async ({ authenticatedPage: page }) => {
+  // Sixteen strokes a bar don't fit a phone's strip: it scrolls along as the song plays.
+  const sixteenths = { name: 'Verse', subdivision: 4, bar_share: 0.8, steps: Array.from({ length: 16 }, (_, i) => ({ direction: i % 2 ? 'up' : 'down', accent: false })) }
+  await page.addInitScript(() => {
+    localStorage.setItem('player-prefs', JSON.stringify({ state: { countInEnabled: false }, version: 20 }))
+  })
+  const media = new URL('../../../public/guitar.mp4', import.meta.url).pathname
+  await page.route(`**/api/v1/songs/${SONG_ID}/stream*`, (route) =>
+    route.fulfill({ path: media, contentType: 'video/mp4', headers: { 'Accept-Ranges': 'bytes' } }),
+  )
+  await mockSong(page, { ...syncedBeats, audio_url: 'synthetic', songsterr_status: 'ready', tab_rhythm: { ...tabRhythm, strum_patterns: [sixteenths] } })
+  await expect(page.getByTestId('transport-duration')).not.toHaveText('0:00', { timeout: 10000 })
+  const strip = page.getByTestId('strum-strip')
+  await expect(strip.getByTestId('strum-strip-step')).toHaveCount(16)
+  const narrow = (page.viewportSize()?.width ?? 1000) < 500
+  // Copies of the pattern on either side make the loop; only where it overflows.
+  await expect(strip.getByTestId('strum-strip-step-copy')).toHaveCount(narrow ? 32 : 0)
+
+  await page.getByRole('button', { name: 'Play', exact: true }).locator('visible=true').first().click()
+  const list = strip.locator('ol')
+  await expect.poll(async () => {
+    const on = strip.locator('[data-testid="strum-strip-step"][data-on="true"]')
+    if (await on.count() === 0) return 'not playing yet'
+    const [box, view] = [await on.boundingBox(), await list.boundingBox()]
+    return box && view && box.x >= view.x - 1 && box.x + box.width <= view.x + view.width + 1 ? 'in view' : 'out of view'
+  }, { timeout: 10000 }).toBe('in view')
+})

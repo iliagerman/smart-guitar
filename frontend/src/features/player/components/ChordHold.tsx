@@ -34,10 +34,16 @@ function Pill({ beats, beatsPerBar, rtl, played }: PillProps) {
             // Beats are positional and never reorder.
             // oxlint-disable-next-line react-doctor/no-array-index-key
             key={beat}
+            data-played={beat <= played}
             className={cn(
-              'h-2 w-2.5 rounded-[3px] transition-colors sm:h-2.5 sm:w-3',
+              'h-2.5 w-3 rounded-[3px] transition-colors sm:h-3 sm:w-3.5',
               beat > 0 && (beat % beatsPerBar === 0 ? (rtl ? 'mr-2' : 'ml-2') : rtl ? 'mr-[3px]' : 'ml-[3px]'),
-              beat <= played ? 'bg-flame-400' : live ? 'bg-flame-200/45' : 'bg-smoke-300/70',
+              // Live: played beats solid, the ones still to play hollow, so you can count what's left.
+              beat <= played
+                ? 'bg-flame-300 shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                : live
+                  ? 'bg-black/45 ring-[1.5px] ring-inset ring-smoke-100/80'
+                  : 'bg-smoke-300/70',
             )}
           />
         ))
