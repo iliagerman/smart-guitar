@@ -148,6 +148,29 @@ def test_real_chant_runs_are_preserved():
     assert out[0].text == " ".join(["la"] * n)
 
 
+def test_hallucination_loops_are_dropped():
+    """Whisper decoder loops (same phrase in impossible time) must be dropped.
+
+    This catches the "Wicked Game" bug: Whisper repeating the same line 8 times
+    in quick succession, cramming 9 words into 0.06 seconds.
+    """
+    # First segment is valid (9 words in ~4 seconds = 2.3 words/sec)
+    good_words = [WordInfo("w", 17.88 + i * 0.4, 17.88 + (i + 1) * 0.4) for i in range(9)]
+    # Second segment is a hallucination loop (9 words in 0.06 seconds = 150 words/sec)
+    bad_words = [WordInfo("w", 22.14 + i * 0.006, 22.14 + (i + 1) * 0.006) for i in range(9)]
+
+    segments = [
+        seg(17.88, 21.84, "This world is only gonna break your heart", good_words),
+        seg(22.14, 22.20, "This world is only gonna break your heart", bad_words),
+    ]
+    out = sanitize_segments(segments)
+
+    # Only the first (valid) segment should survive.
+    assert len(out) == 1
+    assert out[0].text == "This world is only gonna break your heart"
+    assert out[0].start == 17.88
+
+
 def test_sanitize_is_idempotent():
     segments = [
         seg(10.0, 12.0, "later"),

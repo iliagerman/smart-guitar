@@ -30,9 +30,33 @@ _MAX_TOKEN_RATE_HZ = 5.0
 _THINNED_TOKEN_DURATION_S = 0.3
 _MIN_RUN_TO_THIN = 10
 
+# Maximum words-per-second for a segment to be considered valid. Segments
+# exceeding this rate are Whisper hallucination loops (decoder gets stuck
+# repeating the same phrase in microsecond windows). Normal singing peaks
+# around 4 words/sec in rap; 8 w/s is a conservative threshold that catches
+# "9 words in 0.06s" hallucinations without touching real lyrics.
+_MAX_SEGMENT_WORD_RATE_HZ = 8.0
+
 
 def _normalize_text(text: str) -> str:
     return " ".join(text.lower().split())
+
+
+def _is_hallucination_loop(s: SegmentInfo) -> bool:
+    """Detect Whisper hallucination loops (decoder repeating a phrase too fast).
+
+    When the decoder gets stuck, it repeats the same words in impossibly short
+    time windows — like "9 words in 0.06 seconds". These segments are always
+    wrong and must be dropped.
+    """
+    duration = s.end - s.start
+    if duration <= 0:
+        return True
+    word_count = len(s.words) if s.words else len(s.text.split())
+    if word_count == 0:
+        return False
+    word_rate = word_count / duration
+    return word_rate > _MAX_SEGMENT_WORD_RATE_HZ
 
 
 def _overlap_ratio(a: SegmentInfo, b: SegmentInfo) -> float:
@@ -117,6 +141,10 @@ def sanitize_segments(segments: list[SegmentInfo]) -> list[SegmentInfo]:
         if s.text and s.text.strip()
     ]
     valid.sort(key=lambda s: (s.start, s.end))
+
+    # Drop hallucination loops: Whisper sometimes gets stuck repeating a phrase
+    # in impossibly short time windows (e.g. 9 words in 0.06 seconds).
+    valid = [s for s in valid if not _is_hallucination_loop(s)]
 
     deduped: list[SegmentInfo] = []
     for s in valid:
