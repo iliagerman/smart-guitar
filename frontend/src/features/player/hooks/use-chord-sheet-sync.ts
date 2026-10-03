@@ -88,12 +88,16 @@ function computeSync(
   // the active lyric line. Chords near lyric boundaries can render on the
   // previous/next line; tying chord highlight to the lyric line makes those
   // chords get skipped during playback.
-  const activeFlatIndex = scanForwardMostRecentStarted(
+  let activeFlatIndex = scanForwardMostRecentStarted(
     flatChords.length,
     audioTime,
     (i) => flatChords[i].startTime,
     chordCursor,
   )
+  // Before the first chord starts, show it so the player knows what's coming.
+  if (activeFlatIndex < 0 && flatChords.length > 0) {
+    activeFlatIndex = 0
+  }
   const activeChordLineIndex = activeFlatIndex >= 0 ? flatChords[activeFlatIndex].lineIndex : -1
   const activeChordIndex = activeFlatIndex >= 0 ? flatChords[activeFlatIndex].chordIndex : -1
 
