@@ -93,7 +93,14 @@ def main() -> int:
     if args.song:
         songs = [args.song]
     else:
-        songs = storage.list_songs()
+        # List all lyrics.json files and extract song paths
+        files = storage.list_files("")
+        songs = set()
+        for f in files:
+            if f.endswith("/lyrics.json"):
+                song = f.replace("/lyrics.json", "")
+                songs.add(song)
+        songs = sorted(songs)
 
     fixed = 0
     total_removed = 0
