@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from guitar_player.dao.base import BaseDAO
 from guitar_player.models.analytics_event import AnalyticsEvent
+from guitar_player.models.song import Song
 from guitar_player.schemas.records import AnalyticsEventRecord
 
 
@@ -306,7 +307,10 @@ class AnalyticsDAO(BaseDAO[AnalyticsEvent, AnalyticsEventRecord]):
         tenant_id: str | None = None,
         aws_account_id: str | None = None,
     ) -> list[AnalyticsEventRecord]:
-        stmt = select(AnalyticsEvent)
+        # Client player events carry the song id only; name the song from the catalog.
+        stmt = select(AnalyticsEvent, Song.title).outerjoin(
+            Song, Song.id == AnalyticsEvent.song_id
+        )
         stmt = self._apply_filters(
             stmt,
             event_type=event_type,
@@ -318,7 +322,12 @@ class AnalyticsDAO(BaseDAO[AnalyticsEvent, AnalyticsEventRecord]):
         )
         stmt = stmt.order_by(AnalyticsEvent.created_at.desc()).limit(limit)
         result = await self._session.execute(stmt)
-        return [self._to_record(obj) for obj in result.scalars().all()]
+        return [
+            self._to_record(event).model_copy(
+                update={"song_title": event.song_title or catalog_title}
+            )
+            for event, catalog_title in result.all()
+        ]
 
     async def distinct_user_emails(
         self,

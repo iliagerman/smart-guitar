@@ -70,8 +70,21 @@ export interface TrackingEvent {
     properties?: Record<string, unknown>
 }
 
+/** The device, browser and app build a batch of events was sent from. */
+export interface ClientInfo {
+    device: string
+    os: string
+    browser: string
+    /** Launched from the home screen as an installed app. */
+    standalone: boolean
+    viewport: string
+    /** Build stamp of the running bundle; an old one means a stale cached app. */
+    app_version: string
+}
+
 export interface TrackEventsRequest {
     events: TrackingEvent[]
+    client?: ClientInfo
 }
 
 export interface TrackEventsResponse {

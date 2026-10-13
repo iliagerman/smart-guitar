@@ -25,7 +25,7 @@ from guitar_player.dao.subscription_dao import SubscriptionDAO
 from guitar_player.dao.user_dao import UserDAO
 from guitar_player.database import close_db, init_db
 from guitar_player.exceptions import NotFoundError
-from guitar_player.routers import admin, favorites, jobs, practice, setlists, songs, subscription
+from guitar_player.routers import admin, analytics, favorites, jobs, practice, setlists, songs, subscription
 from guitar_player.schemas.records import SongRecord
 from guitar_player.storage import StorageBackend
 
@@ -46,7 +46,7 @@ def build_app(api_prefix: str) -> FastAPI:
     async def _not_found(_request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
-    for module in (setlists, songs, practice, jobs, favorites, admin, subscription):
+    for module in (setlists, songs, practice, jobs, favorites, analytics, admin, subscription):
         app.include_router(module.router, prefix=api_prefix)
     return app
 

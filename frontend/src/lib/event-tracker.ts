@@ -1,4 +1,5 @@
 import { env } from '@/config/env'
+import { getClientInfo } from '@/lib/client-info'
 import { useAuthStore } from '@/stores/auth.store'
 import type { TrackingEvent } from '@/types/analytics'
 
@@ -75,7 +76,7 @@ class EventTracker {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ events }),
+                body: JSON.stringify({ client: getClientInfo(), events }),
                 keepalive: options?.keepalive ?? false,
             })
         } catch {

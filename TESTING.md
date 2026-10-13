@@ -28,3 +28,16 @@ Checks cover:
 - The trial countdown banner opening the paywall.
 
 The path logic (step completion, shape order, verse loop) is covered by `just test-frontend src/features/practice/lib/practice-steps.test.ts`. Backend setlists, practice progress, the free tier and song retagging are covered by the backend suite (`just test-backend`).
+
+# Isolated analytics checks
+
+Run `just test-analytics`. It uses the same sandboxed harness and `frontend/playwright.capo.config.ts` as `just test-capo`: disposable HOME, XDG and TMP directories; a dedicated loopback server on port 5187; synthetic auth and song data; and all non-loopback traffic blocked. The analytics endpoint is mocked, so nothing is recorded anywhere.
+
+Checks cover:
+
+- Playing a song as a free member sends `playback_started` with the player setup (plan, audio engine, sheet and whether its timing is aligned to the audio or estimated, lyrics mode, source and offset) and `playback_stopped` with wall-clock time next to how far the audio clock moved.
+- Every batch carries the device, browser, screen size and app build.
+- Switching to a community sheet with estimated timing, then turning highlighting on, sends `player_settings_changed` each time.
+- The analytics dashboard timeline shows each event's device and details, and still renders events recorded before the device was tracked.
+
+Device detection is covered by `just test-frontend src/lib/client-info.test.ts`, the player setup by `just test-frontend src/features/player/lib/playback-snapshot.test.ts`, and the dashboard formatting by `just test-frontend src/features/analytics/lib/event-details.test.ts`. Storing the device on each event, naming the song for events that only carry its id, and the longer per-user timeline are covered by `just test-backend-file tests/test_analytics.py`.

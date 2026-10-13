@@ -7,6 +7,7 @@ import { useAudioPlayer } from '../../hooks/use-audio-player'
 import { useWakeLock } from '../../hooks/use-wake-lock'
 import { useLyricsSync } from '../../hooks/use-lyrics-sync'
 import { useCountIn } from '../../hooks/use-count-in'
+import { usePlaybackAnalytics } from '../../hooks/use-playback-analytics'
 import { CountInOverlay } from '../../components/CountInOverlay'
 import { resumeTickContext } from '../../lib/count-in-audio'
 import { formatChordWithBass } from '@/lib/chord-colors'
@@ -712,6 +713,18 @@ export function SongDetailPage() {
     [activeLyricsOption],
   )
   const activeLyricsSource = activeLyricsOption?.source ?? null
+
+  usePlaybackAnalytics({
+    songId,
+    songTitle: detail?.song.title,
+    sheet: activeVersion,
+    sheetIndex: selectedVersionIndex,
+    lyricsChoice: selectedLyricsSource,
+    lyricsSource: activeLyricsSource,
+    lyricsOffsetMs,
+    transposeSemitones,
+    stemsLocked: !!detail?.stems_locked,
+  })
 
   // Unsynced community sheets only have estimated word timing, so treating
   // gaps between them as real instrumental sections would be unreliable —

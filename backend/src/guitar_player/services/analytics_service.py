@@ -19,6 +19,10 @@ from guitar_player.schemas.analytics import (
 
 Granularity = Literal["day", "week", "month"]
 
+# The dashboard timeline: a sample across everyone, or what one user did.
+RECENT_EVENTS_LIMIT = 25
+USER_TIMELINE_LIMIT = 200
+
 
 class AnalyticsService:
     def __init__(self, session: AsyncSession) -> None:
@@ -271,7 +275,7 @@ class AnalyticsService:
             aws_account_id=aws_account_id,
         )
         recent_events = await self.get_recent_events(
-            limit=25,
+            limit=USER_TIMELINE_LIMIT if user_email else RECENT_EVENTS_LIMIT,
             since=since,
             until=until,
             user_email=user_email,

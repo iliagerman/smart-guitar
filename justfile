@@ -1403,6 +1403,18 @@ test-practice:
     cd "{{project_dir}}/frontend"
     npx playwright test --config playwright.capo.config.ts practice-path trial-countdown-banner favorites-sort
 
+# Isolated analytics checks: what a play reports, and the dashboard timeline (see TESTING.md).
+test-analytics:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sandbox="$(mktemp -d)"
+    trap 'rm -rf "$sandbox"' EXIT
+    export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    export HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" XDG_CACHE_HOME="$sandbox/cache" TMPDIR="$sandbox/tmp"
+    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
+    cd "{{project_dir}}/frontend"
+    npx playwright test --config playwright.capo.config.ts playback-analytics
+
 test-frontend *args:
     cd {{project_dir}}/frontend && npm run test -- {{args}}
 

@@ -266,6 +266,8 @@ async def track_batch(
     user: CurrentUser = Depends(get_current_user),
 ) -> TrackEventsResponse:
     identity = analytics_identity_from_user(user)
+    # Stored on every event so one row answers "which device was this?".
+    client = body.client.model_dump(exclude_none=True) if body.client else None
     events = [
         {
             **identity,
@@ -275,7 +277,7 @@ async def track_batch(
             "song_id": item.song_id,
             "song_title": item.song_title,
             "session_id": item.session_id,
-            "properties": item.properties,
+            "properties": {**(item.properties or {}), "client": client} if client else item.properties,
         }
         for item in body.events
     ]

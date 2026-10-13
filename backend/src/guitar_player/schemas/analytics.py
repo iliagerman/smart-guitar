@@ -16,8 +16,22 @@ class TrackEventRequest(BaseModel):
     properties: dict[str, Any] | None = None
 
 
+class ClientInfo(BaseModel):
+    """The device and browser a batch of events was sent from."""
+
+    device: str | None = Field(default=None, max_length=40)
+    os: str | None = Field(default=None, max_length=40)
+    browser: str | None = Field(default=None, max_length=40)
+    # Launched from the home screen as an installed app.
+    standalone: bool | None = None
+    viewport: str | None = Field(default=None, max_length=20)
+    # Frontend build stamp; an old one means a stale cached app.
+    app_version: str | None = Field(default=None, max_length=60)
+
+
 class TrackEventsRequest(BaseModel):
     events: list[TrackEventRequest] = Field(default_factory=list, max_length=50)
+    client: ClientInfo | None = None
 
 
 class TrackEventsResponse(BaseModel):
