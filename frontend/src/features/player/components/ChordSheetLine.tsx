@@ -64,7 +64,7 @@ function computeWordData(line: ChordSheetLineType): WordLayoutData[] {
       (isLastWord ? true : chord.charOffset < nextOffset)
     )
     const reservedWidthCh = Math.max(
-      word.word.length + 1,
+      word.word.length + 2,
       wordChords.reduce((total, chord) => total + estimateChordLabelWidth(chord.chord), 0)
     )
     currentOffset = nextOffset

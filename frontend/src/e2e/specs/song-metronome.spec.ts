@@ -80,12 +80,15 @@ test('bars view shows the song meter and detected tempo', async ({ authenticated
 
 test('chord sheet keeps a visible space between lyric word columns', async ({ authenticatedPage: page }) => {
   await mockSong(page, {})
-  const columns = page.getByTestId('chord-sheet').locator('.chord-sheet-ltr .relative.inline-flex.align-top')
-  await expect(columns).toHaveCount(3)
-  const gap = await columns.evaluateAll(([first, second]) =>
-    second.getBoundingClientRect().left - first.getBoundingClientRect().right
-  )
-  expect(gap).toBeGreaterThanOrEqual(4)
+  const words = page.getByTestId('chord-sheet').locator('.chord-sheet-ltr span[role="button"]')
+  await expect(words).toHaveCount(3)
+  const gap = await words.evaluateAll(([first, second]) => {
+    const firstRect = first.getBoundingClientRect()
+    const secondRect = second.getBoundingClientRect()
+    return secondRect.left - firstRect.right
+  })
+  const fontSize = await words.first().evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+  expect(gap).toBeGreaterThanOrEqual(fontSize * 0.5)
 })
 
 // From the tab: D . D U . U D U with the snare on 2 and 4.
