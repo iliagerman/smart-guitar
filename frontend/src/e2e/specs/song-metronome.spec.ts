@@ -78,6 +78,16 @@ test('bars view shows the song meter and detected tempo', async ({ authenticated
   await expect(page.getByTestId('bars-sheet-tempo')).toHaveText('120 BPM · 3/4')
 })
 
+test('chord sheet keeps a visible space between lyric word columns', async ({ authenticatedPage: page }) => {
+  await mockSong(page, {})
+  const columns = page.getByTestId('chord-sheet').locator('.chord-sheet-ltr .relative.inline-flex.align-top')
+  await expect(columns).toHaveCount(3)
+  const gap = await columns.evaluateAll(([first, second]) =>
+    second.getBoundingClientRect().left - first.getBoundingClientRect().right
+  )
+  expect(gap).toBeGreaterThanOrEqual(4)
+})
+
 // From the tab: D . D U . U D U with the snare on 2 and 4.
 const tabRhythm = {
   beats_per_bar: 4,

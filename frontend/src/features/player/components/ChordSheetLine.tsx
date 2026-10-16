@@ -424,7 +424,7 @@ function WordColumn({
   return (
     <div
       ref={isActiveWord ? activeWordRef : undefined}
-      className="relative inline-flex flex-col align-top gap-1 px-1 pb-1"
+      className="relative inline-flex flex-col align-top gap-1 px-1 pb-1 me-1"
       style={{ minWidth: `${reservedWidthCh}ch` }}
     >
       {wordChords[0]?.barStart && <BarLine className={isRtl ? 'right-0' : 'left-0'} />}
