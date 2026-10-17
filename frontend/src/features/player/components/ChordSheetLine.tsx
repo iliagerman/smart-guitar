@@ -72,6 +72,24 @@ function computeWordData(line: ChordSheetLineType): WordLayoutData[] {
   })
 }
 
+function displayWord(word: string, lineText: string): string {
+  const sourceWords = lineText.trim().split(/\s+/)
+  const normalize = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+  const target = normalize(word)
+  const normalizedSource = sourceWords.map(normalize)
+  if (normalizedSource.includes(target)) return word
+
+  for (let start = 0; start < sourceWords.length; start++) {
+    let combined = ''
+    for (let end = start; end < sourceWords.length; end++) {
+      combined += normalizedSource[end]
+      if (combined === target && end > start) return sourceWords.slice(start, end + 1).join(' ')
+      if (!target.startsWith(combined)) break
+    }
+  }
+  return word
+}
+
 /**
  * Renders a single line of the chord sheet (instrumental or lyrics line).
  * Extracted from ChordSheet to keep the main component render under 200 lines.
@@ -336,6 +354,7 @@ function WordsWithChords({
           // oxlint-disable-next-line react-doctor/no-array-index-key
           <WordColumn key={wi}
             word={word}
+            displayWord={displayWord(word.word, line.text)}
             wordIndex={wi}
             wordChords={wordChords}
             reservedWidthCh={reservedWidthCh}
@@ -364,6 +383,7 @@ function WordsWithChords({
 
 interface WordColumnProps {
   word: LyricsWord
+  displayWord: string
   wordIndex: number
   wordChords: PositionedChord[]
   reservedWidthCh: number
@@ -401,6 +421,7 @@ interface WordColumnProps {
 // oxlint-disable-next-line react-doctor/no-many-boolean-props
 function WordColumn({
   word,
+  displayWord,
   wordIndex,
   wordChords,
   reservedWidthCh,
@@ -498,7 +519,7 @@ function WordColumn({
           }}
           title={`${word.start.toFixed(2)}s \u2013 ${word.end.toFixed(2)}s`}
         >
-          {word.word}
+          {displayWord}
         </span>
       )}
     </div>

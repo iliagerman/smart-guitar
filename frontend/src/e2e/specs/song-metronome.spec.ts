@@ -6,9 +6,9 @@ const chords = [
   { start_time: 0.5, end_time: 4.7, chord: 'G', bass: null },
   { start_time: 4.7, end_time: 8.9, chord: 'C', bass: null },
 ]
-const lyrics = [{ start: 0.5, end: 8.9, text: 'Synthetic metronome fixture', words: [
+const lyrics = [{ start: 0.5, end: 8.9, text: 'Synthetic me With fixture', words: [
   { word: 'Synthetic', start: 0.5, end: 3 },
-  { word: 'metronome', start: 3, end: 6 },
+  { word: 'meWith', start: 3, end: 6 },
   { word: 'fixture', start: 6, end: 8.9 },
 ] }]
 
@@ -89,6 +89,7 @@ test('chord sheet keeps a visible space between lyric word columns', async ({ au
   })
   const fontSize = await words.first().evaluate(element => parseFloat(getComputedStyle(element).fontSize))
   expect(gap).toBeGreaterThanOrEqual(fontSize * 0.5)
+  await expect(words.nth(1)).toHaveText('me With')
 })
 
 // From the tab: D . D U . U D U with the snare on 2 and 4.
