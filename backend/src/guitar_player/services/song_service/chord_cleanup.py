@@ -2,9 +2,12 @@
 
 Two kinds of detection noise are removed:
 
-- Flashes: a chord that lasts less than two beats. Detected chord changes sit
-  on beats, so this is a single-beat chord, and it is absorbed into a
-  neighbour.
+- Flashes, only for chords recognized without a beat grid: a chord shorter
+  than a second is absorbed into a neighbour. Chords decided on the tracked
+  beats keep their one-beat chords: the decoder already smooths flickers
+  away, so the ones left are passing chords, and absorbing one would move
+  the next chord change a beat early or late (on 14 songs with published
+  annotations: changes within 0.15 s 53% with the absorption, 58% without).
 - Lone wrong chords: a chord outside the song's key that appears at most
   twice, sitting between two chords that elsewhere in the song repeatedly
   surround the same in-key chord. It is replaced by that in-key chord,
@@ -17,15 +20,13 @@ repeated context to copy from are left alone.
 from __future__ import annotations
 
 import re
-import statistics
 from collections import Counter
 
 from guitar_player.schemas.song import ChordEntry
 
 NO_CHORD = "N"
 # Without a beat grid, treat anything shorter than this as a flash.
-_FALLBACK_MIN_DURATION_S = 1.0
-_MIN_DURATION_BEATS = 1.5
+_FLASH_MAX_S = 1.0
 # An out-of-key chord is only suspect when it is this rare in the song...
 _RARE_MAX_OCCURRENCES = 2
 # ...and is only replaced when its surroundings repeat at least this often.
@@ -38,18 +39,15 @@ _MAJOR_KEY_TRIADS = ((0, False), (2, True), (4, True), (5, False), (7, False), (
 
 
 def clean_detected_chords(chords: list[ChordEntry], beat_times: list[float]) -> list[ChordEntry]:
-    """Return ``chords`` without single-beat flashes and lone out-of-key chords."""
+    """Return ``chords`` without lone out-of-key chords, and without flashes when they had no beat grid.
+
+    ``beat_times`` are the beats the chords were recognized on (chord_meta.json).
+    """
     if len(chords) < 2:
         return chords
-    cleaned = _absorb_flashes(chords, _min_duration(beat_times))
-    return _merge_repeats(_correct_lone_outliers(cleaned))
-
-
-def _min_duration(beat_times: list[float]) -> float:
     if len(beat_times) < 2:
-        return _FALLBACK_MIN_DURATION_S
-    beat_s = statistics.median(b - a for a, b in zip(beat_times, beat_times[1:]))
-    return beat_s * _MIN_DURATION_BEATS
+        chords = _absorb_flashes(chords, _FLASH_MAX_S)
+    return _merge_repeats(_correct_lone_outliers(chords))
 
 
 def _duration(chord: ChordEntry) -> float:

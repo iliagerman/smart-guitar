@@ -115,16 +115,15 @@ async def build_song_detail(
         notated_bpm=songsterr_data["source_bpm"],
     )
     # The player's grid may read a fast tempo in half time; the chords were
-    # detected on the beats as tracked, so they are cleaned and aligned on those.
+    # detected on the beats as tracked, so they are aligned on those.
     beat_grid = build_beat_grid(grid_source)
     tracked_grid = build_beat_grid(grid_source, half_time=False)
     grid_beats = beat_grid.beat_times if beat_grid else []
     tracked_bars = tracked_grid.bar_starts if tracked_grid else []
-    tracked_beats = tracked_grid.beat_times if tracked_grid else []
     # Sheet chords are what the song plays; cleanup would undo deliberate
     # passing chords (a one-beat Am/B walking down).
     if not chord_data.from_sheet:
-        autochord_chords = clean_detected_chords(autochord_chords, tracked_beats)
+        autochord_chords = clean_detected_chords(autochord_chords, chord_data.beat_times)
     t6 = time.perf_counter()
 
     # Load community chord versions (converts to ChordOption objects)
@@ -138,7 +137,7 @@ async def build_song_detail(
     chord_options = await _assemble_chord_options(
         storage, song, song_id, chord_vote_dao,
         autochord_chords, recommended_capo, lyrics_data,
-        community_options, tracked_beats, chord_data.from_sheet,
+        community_options, chord_data.beat_times, chord_data.from_sheet,
     )
     t8 = time.perf_counter()
 

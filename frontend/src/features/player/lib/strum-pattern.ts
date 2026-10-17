@@ -249,24 +249,25 @@ export interface SectionStrumPattern {
 }
 
 /**
- * The recording's measured accents placed on a pattern of `steps` strokes a
- * bar, `stepsPerBeat` to the beat: a stroke is accented when an accented
- * eighth falls on it. A measurement over fewer beats (2 for a 4-beat bar)
- * repeats across the bar. Null when the measurement doesn't divide the bar,
- * or no accent lands on a stroke of the pattern.
+ * The recording's measured accents placed on a bar's pattern, `stepsPerBeat`
+ * steps to the beat: a stroke is accented when an accented eighth falls on
+ * it. A rest is never accented: there is nothing to hit harder. A measurement
+ * over fewer beats (2 for a 4-beat bar) repeats across the bar. Null when the
+ * measurement doesn't divide the bar, or no accent lands on a stroke of the
+ * pattern.
  */
 export function recordingAccents(
   strumAccents: StrumAccents | null | undefined,
   beatsPerBar: number,
-  steps: number,
+  pattern: readonly StrumDirection[],
   stepsPerBeat: number,
 ): boolean[] | null {
   if (!strumAccents || beatsPerBar % strumAccents.beats_per_bar !== 0) return null
   const measured = strumAccents.beats_per_bar
   const accentBeats = strumAccents.accents.flatMap((on, i) => (on ? [i / strumAccents.steps_per_beat] : []))
-  const accents = Array.from({ length: steps }, (_, step) => {
+  const accents = pattern.map((direction, step) => {
     const beat = (step / stepsPerBeat) % measured
-    return accentBeats.some((accentBeat) => Math.abs(accentBeat - beat) < 1e-6)
+    return direction !== 'miss' && accentBeats.some((accentBeat) => Math.abs(accentBeat - beat) < 1e-6)
   })
   return accents.some(Boolean) ? accents : null
 }
@@ -277,7 +278,9 @@ export function recordingAccents(
  */
 export function getTabStrumPatterns(tabRhythm: TabRhythm, strumAccents?: StrumAccents | null): SectionStrumPattern[] {
   return tabRhythm.strum_patterns.map((tabPattern) => {
-    const measured = recordingAccents(strumAccents, tabRhythm.beats_per_bar, tabPattern.steps.length, tabPattern.subdivision)
+    const measured = recordingAccents(
+      strumAccents, tabRhythm.beats_per_bar, tabPattern.steps.map((step) => step.direction), tabPattern.subdivision,
+    )
     return {
       name: tabPattern.name,
       pattern: tabPattern.steps.map((step) => directionToSymbol(step.direction)),

@@ -89,6 +89,11 @@ describe('accents measured on the recording', () => {
     expect(starter.accentSource).toBe('recording')
   })
 
+  it('stay off the rests of the starter pattern', () => {
+    // When I Come Around: the "&" of 1, where the starter pattern rests.
+    expect(starterPattern(4, { ...measured, accents: [false, true, false, false, false, false, false, false] }).accents).toBeUndefined()
+  })
+
   it('stay off a pattern in another meter', () => {
     expect(starterPattern(3, measured).accents).toBeUndefined()
   })

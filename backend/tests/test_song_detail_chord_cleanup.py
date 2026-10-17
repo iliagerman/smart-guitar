@@ -1,4 +1,9 @@
-"""Song detail cleans detected chords: no one-beat flashes, no lone wrong chords."""
+"""Song detail cleans detected chords: no lone wrong chords, and no flashes when there is no beat grid.
+
+Chords decided on the tracked beats keep their one-beat chords: the decoder
+already smooths flickers away, so the ones left are passing chords, and
+absorbing them moves the next chord change a beat early or late.
+"""
 
 from __future__ import annotations
 
@@ -28,28 +33,39 @@ def _autochord_option(detail):
 
 
 @pytest.mark.asyncio
-async def test_one_beat_chord_is_absorbed_into_its_longer_neighbour(settings, storage):
-    """A chord lasting a single beat is a detection flash and is merged away."""
+async def test_one_beat_chord_on_the_beat_grid_is_kept_where_it_was_heard(settings, storage):
+    """A one-beat chord decided on the tracked beats is a passing chord: it and the next change stay put."""
     detail = await _fetch_detail(settings, storage, {
         CHORD_META: {"bpm": 120.0, "beat_times": BEATS},
+        CHORDS: _timeline(("C:maj", 4.0), ("D:min", 0.5), ("A:min", 3.5)),
+    })
+
+    assert _names(detail.chords) == ["C:maj", "D:min", "A:min"]
+    assert [c.start_time for c in detail.chords] == [0.0, 4.0, 4.5]
+
+
+@pytest.mark.asyncio
+async def test_one_beat_chord_between_the_same_chord_is_kept_on_the_beat_grid(settings, storage):
+    """C - G(1 beat) - C on the tracked beats stays as heard."""
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0, "beat_times": BEATS},
+        CHORDS: _timeline(("C:maj", 2.0), ("G:maj", 0.5), ("C:maj", 1.5), ("F:maj", 2.0)),
+    })
+
+    assert _names(detail.chords) == ["C:maj", "G:maj", "C:maj", "F:maj"]
+
+
+@pytest.mark.asyncio
+async def test_flash_without_a_beat_grid_is_absorbed_into_its_longer_neighbour(settings, storage):
+    """Chords recognized without tracked beats can flicker: a chord shorter than a second is merged away."""
+    detail = await _fetch_detail(settings, storage, {
+        CHORD_META: {"bpm": 120.0},
         CHORDS: _timeline(("C:maj", 4.0), ("D:min", 0.5), ("A:min", 3.5)),
     })
 
     assert _names(detail.chords) == ["C:maj", "A:min"]
     assert detail.chords[0].end_time == 4.5
     assert detail.chords[1].start_time == 4.5
-
-
-@pytest.mark.asyncio
-async def test_one_beat_chord_between_the_same_chord_joins_them(settings, storage):
-    """C - G(1 beat) - C becomes one continuous C."""
-    detail = await _fetch_detail(settings, storage, {
-        CHORD_META: {"bpm": 120.0, "beat_times": BEATS},
-        CHORDS: _timeline(("C:maj", 2.0), ("G:maj", 0.5), ("C:maj", 1.5), ("F:maj", 2.0)),
-    })
-
-    assert _names(detail.chords) == ["C:maj", "F:maj"]
-    assert detail.chords[0].end_time == 4.0
 
 
 @pytest.mark.asyncio

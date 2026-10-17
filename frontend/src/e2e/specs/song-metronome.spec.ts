@@ -169,6 +169,27 @@ test('without a tab pattern the card offers the starter pattern, not tutorial-si
   await expect(steps.nth(4)).toHaveAttribute('data-direction', 'miss')
 })
 
+test('accents measured on the recording are only marked on strokes, never on rests', async ({ authenticatedPage: page }) => {
+  // The recording hits the "&" of 1 and beat 2 hardest; the starter pattern rests on the "&" of 1.
+  await mockSong(page, {
+    ...syncedBeats,
+    songsterr_status: 'ready',
+    strum_accents: {
+      beats_per_bar: 4, steps_per_beat: 2, bars: 40,
+      accents: [false, true, true, false, false, false, false, false],
+      strength: [1, 1.3, 1.2, 1, 1, 1, 1, 1],
+    },
+  })
+  const card = await openStrumCard(page)
+  const steps = card.getByTestId('strum-step')
+  await expect(steps.nth(1)).toHaveAttribute('data-direction', 'miss')
+  await expect(steps.nth(1)).toHaveAttribute('data-accent', 'false')
+  await expect(steps.nth(2)).toHaveAttribute('data-accent', 'true')
+  const stripSteps = page.getByTestId('strum-strip').getByTestId('strum-strip-step')
+  await expect(stripSteps.nth(1)).toHaveAttribute('data-accent', 'false')
+  await expect(stripSteps.nth(2)).toHaveAttribute('data-accent', 'true')
+})
+
 test('the strum strip above the chords shows the pattern of the section being played', async ({ authenticatedPage: page }) => {
   // The tab plays the verse one way (most bars) and the chorus another; the song opens on the chorus.
   const chorusSteps = ['down', 'down', 'down', 'down'].map((direction) => ({ direction, accent: false }))
