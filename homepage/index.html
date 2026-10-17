@@ -46,7 +46,8 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" /></noscript>
 
   <!-- Favicon (same set as the app) -->
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -56,6 +57,8 @@
 
   <!-- Demo stage data (small; the six stems are fetched after load) -->
   <link rel="preload" href="assets/demo/wonderwall-chords.json" as="fetch" crossorigin />
+  <!-- The burning-guitar art every flame logo draws, starting with the hero's -->
+  <link rel="preload" href="assets/logo-flame.jpg" as="image" fetchpriority="high" />
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/variables.css?v=2909-5a" />
@@ -512,11 +515,35 @@
   <script src="js/flame-logo.min.js?v=2609-3f1"></script>
   <script src="js/nav.js?v=2909-5a"></script>
   <script src="js/scroll-reveal.js?v=2909-5a"></script>
-  <script src="js/demo-stage.js?v=2909-5a"></script>
+  <script src="js/demo-stage.js?v=0610-1"></script>
   <script src="js/motion.js?v=2909-5a"></script>
   <script src="js/embers.js?v=2909-5a"></script>
   <script src="js/video-player.js?v=2909-5a"></script>
-  <script type="module" src="js/world.min.js?v=2909-5a"></script>
+  <!-- The hero has its own backdrop, so the 3D worlds (three.js, ~700 KB, heavy
+       shader compiles) start only when the visitor begins to move down the page.
+       Once the page is idle the module is downloaded and compiled (not run) ahead of that. -->
+  <script>
+    (function () {
+      var WORLD = "js/world.min.js?v=0610-1";
+      var events = ["scroll", "wheel", "touchstart", "keydown"];
+      function loadWorld() {
+        events.forEach(function (e) { window.removeEventListener(e, loadWorld); });
+        import("./" + WORLD);
+      }
+      function preloadWorld() {
+        var link = document.createElement("link");
+        link.rel = "modulepreload";
+        link.href = WORLD;
+        document.head.appendChild(link);
+      }
+      if (window.scrollY > 0) loadWorld();
+      else events.forEach(function (e) { window.addEventListener(e, loadWorld, { passive: true }); });
+      window.addEventListener("load", function () {
+        if (window.requestIdleCallback) requestIdleCallback(preloadWorld, { timeout: 3000 });
+        else setTimeout(preloadWorld, 1000);
+      });
+    })();
+  </script>
 
 </body>
 </html>

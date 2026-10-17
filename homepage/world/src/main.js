@@ -130,7 +130,7 @@ else root.classList.add("world-off");
 
 function start() {
   const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: false, powerPreference: "high-performance", alpha: false });
-  const maxRatio = coarse ? 1.5 : 2;
+  const maxRatio = 1.5;
   let ratio = Math.min(window.devicePixelRatio || 1, maxRatio);
   renderer.setPixelRatio(ratio);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -350,12 +350,12 @@ function start() {
   let slowFrames = 0;
   function adapt(dt) {
     slowFrames = dt > 1 / 38 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
-    if (slowFrames > 90 && ratio > 0.75) {
+    if (slowFrames > 45 && ratio > 0.75) {
       ratio = Math.max(0.75, ratio - 0.25);
       renderer.setPixelRatio(ratio);
       resize();
       slowFrames = 0;
-    } else if (slowFrames > 90 && bloom.enabled) {
+    } else if (slowFrames > 45 && bloom.enabled) {
       bloom.enabled = false;
       slowFrames = 0;
     }
@@ -377,6 +377,8 @@ function start() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     t += dt;
+    // At the very top the opaque hero covers the canvas; don't draw unseen frames.
+    if (!firstFrame && window.scrollY <= 0) return;
     const w = scrollIndex();
     ws = reduce ? w : damp(ws, w, 5.5, dt);
     const shot = direct(ws);
@@ -434,8 +436,8 @@ function start() {
   room.group.visible = true;
   scene.fog = room.fog;
   camera.position.set(0, 1, 3);
-  renderer.compile(scene, camera);
-  requestAnimationFrame(frame);
+  // Compile without blocking the page (KHR_parallel_shader_compile); draw once ready.
+  renderer.compileAsync(scene, camera).then(() => requestAnimationFrame(frame));
 
   // Build the other worlds in the background, then draw each one once into a
   // small off-screen target. That uploads its textures and compiles its
@@ -443,11 +445,26 @@ function start() {
   // scroll into it there is nothing left to stall on.
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 60));
   const warmTarget = new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType });
-  function warm(s) {
+  // Runs fn with only set s visible (and its fog and background), then restores the scene.
+  function alone(s, fn) {
     const others = order.filter((n) => n !== s.name && sets[n]).map((n) => [n, sets[n].group.visible]);
-    const culled = [];
     const fog = scene.fog;
     const bg = scene.background;
+    others.forEach(([n]) => { sets[n].group.visible = false; });
+    s.group.visible = true;
+    scene.fog = s.fog;
+    scene.background = s.background;
+    const result = fn();
+    s.group.visible = false;
+    scene.fog = fog;
+    scene.background = bg;
+    others.forEach(([n, v]) => { sets[n].group.visible = v; });
+    return result;
+  }
+  // Uploads the set's textures and draws it once off-screen, which compiles the
+  // shadow shaders too (its main shaders are compiled in parallel beforehand).
+  function warm(s) {
+    const culled = [];
     s.group.traverse((o) => {
       if (o.frustumCulled) {
         o.frustumCulled = false;
@@ -459,17 +476,11 @@ function start() {
         if (m.uniforms) Object.values(m.uniforms).forEach((u) => { if (u.value && u.value.isTexture) renderer.initTexture(u.value); });
       });
     });
-    others.forEach(([n]) => { sets[n].group.visible = false; });
-    s.group.visible = true;
-    scene.fog = s.fog;
-    scene.background = s.background;
-    renderer.setRenderTarget(warmTarget);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    s.group.visible = false;
-    scene.fog = fog;
-    scene.background = bg;
-    others.forEach(([n, v]) => { sets[n].group.visible = v; });
+    alone(s, () => {
+      renderer.setRenderTarget(warmTarget);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+    });
     culled.forEach((o) => { o.frustumCulled = true; });
   }
   let k = 1;
@@ -478,10 +489,12 @@ function start() {
     const s = build(order[k++]);
     capShadows(s.group);
     measure();
-    idle(() => {
-      warm(s);
-      idle(next, { timeout: 800 });
-    }, { timeout: 800 });
+    alone(s, () => renderer.compileAsync(scene, camera)).then(() => {
+      idle(() => {
+        warm(s);
+        idle(next, { timeout: 800 });
+      }, { timeout: 800 });
+    });
   }
   idle(next, { timeout: 800 });
 }

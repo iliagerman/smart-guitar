@@ -454,16 +454,16 @@
     if (document.hidden && st.playing) { stop(); st.wantPlay = false; render(); }
   });
 
-  // Fetch the stems (about 1.2 MB) once the page has loaded, unless the visitor asked to save data.
-  function idlePrefetch() {
-    var saveData = navigator.connection && navigator.connection.saveData;
-    if (saveData) return;
-    var go = function () { prefetch().catch(function () {}); };
-    if (window.requestIdleCallback) window.requestIdleCallback(go, { timeout: 2500 });
-    else setTimeout(go, 800);
+  // Fetch the stems (about 1.2 MB) when the demo is a screen or two away, unless the visitor asked to save data.
+  var saveData = navigator.connection && navigator.connection.saveData;
+  if (!saveData && window.IntersectionObserver) {
+    var near = new IntersectionObserver(function (entries) {
+      if (!entries[0].isIntersecting) return;
+      near.disconnect();
+      prefetch().catch(function () {});
+    }, { rootMargin: "150% 0px" });
+    near.observe(root);
   }
-  if (document.readyState === "complete") idlePrefetch();
-  else window.addEventListener("load", idlePrefetch);
 
   render();
 
