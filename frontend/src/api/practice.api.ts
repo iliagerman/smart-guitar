@@ -7,6 +7,9 @@ import type {
 } from '../types/practice'
 
 export const practiceApi = {
+  recordActivity: () =>
+    api.post<void>('/api/v1/practice/activity').then((r) => r.data),
+
   summary: () =>
     api.get<PracticeSummary>('/api/v1/practice/summary').then((r) => r.data),
 

@@ -163,7 +163,24 @@ export function SubscriptionSection() {
           </div>
         )}
 
-        {!trialActive && !sub && (
+        {!trialActive && !sub && status.has_access && (
+          <div className="space-y-3">
+            <span className="rounded-full bg-green-500/20 px-2.5 py-1 text-xs font-bold tracking-wide text-green-400">
+              PRO ACCESS
+            </span>
+            <p className="text-smoke-400 text-sm">You have Pro access with no trial or subscription required.</p>
+            <ul className="grid gap-1.5 text-sm text-smoke-300">
+              {PRO_PERKS.map((perk) => (
+                <li key={perk} className="flex items-center gap-2">
+                  <span className="grid size-4 place-items-center rounded-full bg-fire-500/20 text-[10px] text-fire-300" aria-hidden="true">✓</span>
+                  {perk}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!status.has_access && !trialActive && !sub && (
           <div className="space-y-3">
             <p className="text-smoke-400 text-sm">You’re on the free plan: every song in the library with chords, lyrics, the full mix and the guitar track.</p>
             <ul className="grid gap-1.5 text-sm text-smoke-300">

@@ -8,7 +8,7 @@ export interface SubscriptionDetail {
 export type SubscriptionTier = 'trial' | 'pro' | 'free'
 
 export interface SubscriptionStatus {
-  /** True for Pro access: an active trial or a paid subscription. */
+  /** True for Pro access: an active trial, paid subscription, or bypass account. */
   has_access: boolean
   tier: SubscriptionTier
   trial_ends_at: string | null

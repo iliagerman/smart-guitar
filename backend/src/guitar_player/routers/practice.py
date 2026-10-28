@@ -36,6 +36,14 @@ async def get_practice_summary(
     return await service.get_summary(access.user.sub, access.user.email)
 
 
+@router.post("/activity", status_code=204)
+async def record_practice_activity(
+    access: MemberAccess = Depends(get_member_access),
+    service: PracticeService = Depends(get_practice_service),
+) -> None:
+    await service.record_activity(access.user.sub, access.user.email)
+
+
 @router.put("/level", response_model=SkillLevelResponse)
 async def set_skill_level(
     body: SkillLevelRequest,

@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
+import { practiceApi } from '@/api/practice.api'
+import { queryKeys } from '@/api/query-keys'
 import { analyticsTracker } from '@/lib/event-tracker'
 import { usePlaybackStore } from '@/stores/playback.store'
 import { usePlayerPrefsStore, type LyricsSourceMode } from '@/stores/player-prefs.store'
@@ -75,6 +78,7 @@ function trackPlayerEvent(
  * analytics dashboard can explain a "the highlight was out of sync" report.
  */
 export function usePlaybackAnalytics(options: UsePlaybackAnalyticsOptions): void {
+  const queryClient = useQueryClient()
   const { songId, sheetIndex, lyricsChoice, lyricsOffsetMs } = options
   const sheetName = options.sheet?.name
   const lyricsMode = usePlayerPrefsStore((s) => s.lyricsMode)
@@ -110,6 +114,9 @@ export function usePlaybackAnalytics(options: UsePlaybackAnalyticsOptions): void
           position: Math.round(state.currentTime * 10) / 10,
           ...currentSnapshot(optionsRef.current),
         })
+        void practiceApi.recordActivity()
+          .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.practice.summary() }))
+          .catch(() => console.error('Failed to record practice activity'))
         return
       }
       if (!state.isPlaying && prev.isPlaying) {
@@ -129,7 +136,7 @@ export function usePlaybackAnalytics(options: UsePlaybackAnalyticsOptions): void
       // Leaving the page mid-song.
       stopRun()
     }
-  }, [songId])
+  }, [songId, queryClient])
 
   // Setup changes made once the song has been played; before that, `playback_started` carries the setup.
   const reportedSetupRef = useRef<string | null>(null)

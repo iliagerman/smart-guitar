@@ -87,6 +87,18 @@ class PracticeService:
             ],
         )
 
+    async def record_activity(self, user_sub: str, user_email: str) -> None:
+        """Count a song playback toward the user's daily streak once per UTC day."""
+        user = await self._user_dao.get_or_create(user_sub, user_email)
+        today = datetime.now(timezone.utc).date()
+        if user.last_practice_date == today:
+            return
+        await self._user_dao.update_by_id(
+            user.id,
+            streak_days=next_streak(user.streak_days, user.last_practice_date, today),
+            last_practice_date=today,
+        )
+
     async def set_skill_level(
         self, user_sub: str, user_email: str, level: SkillLevel,
     ) -> SkillLevelResponse:
