@@ -9,6 +9,7 @@ from guitar_player.dao.user_dao import UserDAO
 from tests.api_harness import create_member
 
 SUMMARY_URL = "/api/v1/practice/summary"
+ACTIVITY_URL = "/api/v1/practice/activity"
 
 
 def _progress_url(song_id: uuid.UUID) -> str:
@@ -136,6 +137,28 @@ async def test_first_practice_starts_a_streak_and_same_day_practice_keeps_it(api
 
     await api.client.put(_progress_url(song.id), json=_step_body(current_step=3))
     assert (await _summary(api))["streak_days"] == 1
+
+
+async def test_playback_activity_starts_and_keeps_the_daily_streak(api, member):
+    first = await api.client.post(ACTIVITY_URL)
+    assert first.status_code == 204
+    summary = await _summary(api)
+    assert summary["streak_days"] == 1
+    assert summary["practiced_today"] is True
+
+    second = await api.client.post(ACTIVITY_URL)
+    assert second.status_code == 204
+    assert (await _summary(api))["streak_days"] == 1
+
+
+async def test_playback_activity_extends_a_streak_from_yesterday(api, member, session_factory):
+    await _set_streak(session_factory, member, streak=3, days_ago=1)
+
+    response = await api.client.post(ACTIVITY_URL)
+    assert response.status_code == 204
+    summary = await _summary(api)
+    assert summary["streak_days"] == 4
+    assert summary["practiced_today"] is True
 
 
 async def test_practicing_the_day_after_extends_the_streak(api, member, song_factory, session_factory):
