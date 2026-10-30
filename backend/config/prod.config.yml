@@ -44,6 +44,7 @@ subscription_bypass_emails:
   - "iliagerman@gmail.com"
   - "Shmulik.segal@gmail.com"
   - "iliag@sela.co.il"
+  - "eitan.shak@gmail.com"
 
 cors:
   allowed_origins:
